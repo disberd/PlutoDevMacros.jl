@@ -10,4 +10,6 @@ This is useful especially when you want to create and test a functionality in a 
 
 The code was inspired and heavily based on the `@skip_as_script` and `@only_as_script` macros that are found [inside the Pluto main package](https://github.com/fonsp/Pluto.jl/blob/main/src/webserver/Firebasey.jl) and in [PlutoTest](https://github.com/JuliaPluto/PlutoTest.jl).
 
-The need for this separate macros is only due to an issue I had making the original Pluto macros work together with @requires from [Requires](https://github.com/JuliaPackaging/Requires.jl)
+The need for this separate macros is for two reasons:
+- The original Pluto macros are not limiting execution to in or out of the specific notebook, but in or out of a Pluto session (if you `include` a notebook from another notebook, all the `@skip_as_script` macros are executed
+- I had an issue making the original Pluto macros work together with @requires from [Requires](https://github.com/JuliaPackaging/Requires.jl) while developing a personal package and this macro seems to solve the issue

@@ -1,6 +1,6 @@
 # PlutoDevMacros
 
-This is a super lightweight package (currently containing only two macros) to help develop Packages using [Pluto](https://github.com/fonsp/Pluto.jl) notebooks as building blocks
+This is a package containing macros/functions to help develop Packages using [Pluto](https://github.com/fonsp/Pluto.jl) notebooks as building blocks
 
 The exported macro `@only_in_nb` ensures that the content of a cell are only executed when ran from the notebook where they are defined.
 

@@ -152,7 +152,7 @@ function ingredients(path::String,exprmap::Function=include_mapexpr())
              :(eval(x) = $(Expr(:core, :eval))($name, x)),
              :(include(x) = $(Expr(:top, :include))($name, x)),
              :(include(mapexpr::Function, x) = $(Expr(:top, :include))(mapexpr, $name, x)),
-			 :(using PlutoDevMacros: @ingredients), # This is needed for nested @ingredients calls
+			 :(using PlutoDevMacros: @ingredients, @skip_as_script), # This is needed for nested @ingredients calls
              :(include($exprmap,$path))))
 	m
 end
@@ -171,6 +171,7 @@ function include_expr(m::Module,kwargstrs::String...)
 			:include,
 			Symbol("@bind"),
 			Symbol("@ingredients"), # Since we included this in the module
+			Symbol("@skip_as_script"), # Since we included this in the module
 		)
 	name = repr(m) |> Symbol
 	# push!(ex.args,:($m))

@@ -44,7 +44,7 @@ To try out the <i>exclusive</i> parts of the notebook, press this <button>button
 You will then have to use <i>Ctrl-S</i> to execute all modified cells (where the block comments were removed)
 <br>
 <br>
-<b>You still need to use at least version 0.17 of Pluto as the @ingredients macro only works properly with the macro analysis functionality that was added in that version (PlutoHooks)</b>
+<b>You still need to use at least version 0.17 of Pluto as the @plutoinclude macro only works properly with the macro analysis functionality that was added in that version (PlutoHooks)</b>
 <br>
 <br>
 <b>The automatic reload of the macro when re-executing the cell is broken with CM6 so the whole cell should add/delete empty spaces after the macro before re-executing</b>
@@ -152,10 +152,63 @@ function ingredients(path::String,exprmap::Function=include_mapexpr())
              :(eval(x) = $(Expr(:core, :eval))($name, x)),
              :(include(x) = $(Expr(:top, :include))($name, x)),
              :(include(mapexpr::Function, x) = $(Expr(:top, :include))(mapexpr, $name, x)),
-			 :(using PlutoDevMacros: @ingredients, @skip_as_script), # This is needed for nested @ingredients calls
+			 :(using PlutoDevMacros: @plutoinclude, @skip_as_script), # This is needed for nested @plutoinclude calls
              :(include($exprmap,$path))))
 	m
 end
+
+# ╔═╡ aa28b5d8-e0d7-4b97-9220-b61a0c5f4fc4
+html_reload_button() = html"""
+<div class="plutoinclude_banner">
+	Reload @pluto_include
+</div>
+<script>
+	const cell = currentScript.closest('pluto-cell')
+
+	const onClick = (e) => {
+		console.log(e)
+		if (e.ctrlKey) {
+			history.pushState({},'')			
+			cell.scrollIntoView({
+				behavior: 'smooth',
+				block: 'center',				
+			})
+		} else {
+			cell.querySelector('button.runcell').click()
+		}
+	}
+	const banner = cell.querySelector(".plutoinclude_banner")
+
+	banner.addEventListener('click',onClick)
+	invalidation.then(() => banner.removeEventListener('click',onClick))
+</script>
+<style>
+	.plutoinclude_banner {
+	    height: 20px;
+	    position: fixed;
+	    top: 40px;
+		right: 10px;
+	    margin-top: 5px;
+	    padding-right: 5px;
+	    z-index: 200;
+		background: #ffffff;
+	    padding: 5px 8px;
+	    border: 3px solid #e3e3e3;
+	    border-radius: 12px;
+	    height: 35px;
+	    font-family: "Segoe UI Emoji", "Roboto Mono", monospace;
+	    font-size: 0.75rem;
+	}
+	.plutoinclude_banner:hover {
+	    font-weight: 800;
+		cursor: pointer;
+	}
+	body.disable_ui .plutoinclude_banner {
+		display: none;
+	}
+	main 
+</style>
+"""
 
 # ╔═╡ 98b1fa0d-fad1-4c4f-88a0-9452d492c4cb
 function include_expr(m::Module,kwargstrs::String...)
@@ -170,7 +223,7 @@ function include_expr(m::Module,kwargstrs::String...)
 			:eval,
 			:include,
 			Symbol("@bind"),
-			Symbol("@ingredients"), # Since we included this in the module
+			Symbol("@plutoinclude"), # Since we included this in the module
 			Symbol("@skip_as_script"), # Since we included this in the module
 		)
 	name = repr(m) |> Symbol
@@ -180,13 +233,15 @@ function include_expr(m::Module,kwargstrs::String...)
 			push!(ex.args,:($(esc(s)) = $(getfield(m,s))))
 		end
 	end
+	# Add the html to re-run the cell
+	push!(ex.args,:($(html_reload_button())))
 	ex
 end
 
 # ╔═╡ 872bd88e-dded-4789-85ef-145f16003351
 """
-	@ingredients path nameskwargs...
-	@ingredients modname=path namekwargs...
+	@plutoinclude path nameskwargs...
+	@plutoinclude modname=path namekwargs...
 
 This macro is used to include external julia files inside a pluto notebook and is inspired by the discussion on [this Pluto issue](https://github.com/fonsp/Pluto.jl/issues/1101).
 
@@ -196,7 +251,7 @@ The macro relies on the use of [`names`](@ref) to get the variable names to be e
 
 When called from outside Pluto, it simply returns nothing
 """
-macro ingredients(ex,kwargstrs...)
+macro plutoinclude(ex,kwargstrs...)
 	path = ex isa String ? ex : Base.eval(__module__,ex)
 	@skip_as_script begin
 		m = ingredients(path)
@@ -205,7 +260,7 @@ macro ingredients(ex,kwargstrs...)
 end
 
 # ╔═╡ 63e2bd00-63b8-43f9-b8d3-b5d336744f3a
-export @ingredients, ingredients
+export @plutoinclude
 
 # ╔═╡ 1f291bd2-9ab1-4fd2-bf50-49253726058f
 #=╠═╡ notebook_exclusive
@@ -223,34 +278,34 @@ The cells below assume to also have the test notebook `ingredients_include_test.
 
 # ╔═╡ bd3b021f-db44-4aa1-97b2-04002f76aeff
 #=╠═╡ notebook_exclusive
-notebook_path = "./ingredients_include_test.jl"
+notebook_path = "./plutoinclude_test.jl"
   ╠═╡ notebook_exclusive =#
 
 # ╔═╡ 0e3eb73f-091a-4683-8ccb-592b8ccb1bee
 #=╠═╡ notebook_exclusive
 md"""
-Try changing the content of the included notebook by removing some exported variables and re-execute (**using Shift-Enter**) the cell below containing the @ingredients call to see that variables are correctly updated.
+Try changing the content of the included notebook by removing some exported variables and re-execute (**using Shift-Enter**) the cell below containing the @plutoinclude call to see that variables are correctly updated.
 
 You can also try leaving some variable unexported and still export all that is defined in the notebook by using 
 ```julia
-@ingredients notebook_path "all"
+@plutoinclude notebook_path "all"
 ```
 
 Finally, you can also assign the full imported module in a specific variable by doing
 ```julia
-@ingredients varname = notebook_path
+@plutoinclude varname = notebook_path
 ```
 """
   ╠═╡ notebook_exclusive =#
 
 # ╔═╡ d2ac4955-d2a0-48b5-afcb-32baa59ade21
 #=╠═╡ notebook_exclusive
-@ingredients notebook_path
+@plutoinclude notebook_path
   ╠═╡ notebook_exclusive =#
 
 # ╔═╡ 0d1f5079-a886-4a07-9e99-d73e0b8a2eec
 #=╠═╡ notebook_exclusive
-@macroexpand @ingredients notebook_path "all"
+@macroexpand @plutoinclude notebook_path "all"
   ╠═╡ notebook_exclusive =#
 
 # ╔═╡ 4cec781b-c6d7-4fd7-bbe3-f7db0f973698
@@ -290,6 +345,7 @@ TestStruct()
 # ╠═98b1fa0d-fad1-4c4f-88a0-9452d492c4cb
 # ╠═872bd88e-dded-4789-85ef-145f16003351
 # ╠═63e2bd00-63b8-43f9-b8d3-b5d336744f3a
+# ╠═aa28b5d8-e0d7-4b97-9220-b61a0c5f4fc4
 # ╟─1f291bd2-9ab1-4fd2-bf50-49253726058f
 # ╟─cf0d13ea-7562-4b8c-b7e6-fb2f1de119a7
 # ╠═bd3b021f-db44-4aa1-97b2-04002f76aeff

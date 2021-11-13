@@ -10,7 +10,7 @@ export @only_in_nb, @only_out_nb, include_mapexpr, @skip_as_script
 export notebook_to_source
 
 include("mapexpr.jl")
-include(include_mapexpr([default_exprlist..., :InteractiveUtils]),"ingredients_macro.jl")
+include(include_mapexpr([default_exprlist..., :InteractiveUtils]),"plutoinclude_macro.jl")
 
 function is_notebook_local(filesrc)
 	if isdefined(Main,:PlutoRunner)

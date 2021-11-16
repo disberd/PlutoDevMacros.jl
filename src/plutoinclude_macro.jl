@@ -19,7 +19,7 @@ end
 begin
 	import Pkg
 	Pkg.activate("..")
-	using PlutoDevMacros: @skip_as_script, include_mapexpr
+	using PlutoDevMacros: @skip_as_script, include_mapexpr, default_exprlist
 end
   ╠═╡ notebook_exclusive =#
 
@@ -99,6 +99,11 @@ but.addEventListener('click',onClick)
 </script>
 """
 
+# ╔═╡ 2501c935-10c4-4dbb-ae35-0b310fcb3bfe
+#=╠═╡ notebook_exclusive
+default_exprlist
+  ╠═╡ notebook_exclusive =#
+
 # ╔═╡ 5089d8dd-6587-4172-9ffd-13cf43e8c341
 #=╠═╡ notebook_exclusive
 md"""
@@ -155,6 +160,41 @@ function ingredients(path::String,exprmap::Function=include_mapexpr())
 			 :(using PlutoDevMacros: @plutoinclude, @skip_as_script), # This is needed for nested @plutoinclude calls
              :(include($exprmap,$path))))
 	m
+end
+
+# ╔═╡ c45aa1a5-47a2-4218-a8f0-b3202ffb2f28
+function _method_expr(m::Module, s::Symbol, mtd::Method)
+	lhs = Expr(:call)
+	# Add the function name
+	push!(lhs.args, s)
+	# Get the variable names
+	nms = map(Base.method_argnames(mtd)[2:end]) do nm
+		nm === Symbol("#unused#") ? gensym() : nm
+	end
+	# Get the types
+	tps = mtd.sig.parameters[2:end]
+	for (nm,sig) ∈ zip(nms,tps)
+		push!(lhs.args, :($nm::$sig))
+	end
+	# Add the function call
+	rhs = :($(getfield(m,s))())
+	# Push the variables
+	for nm ∈ nms
+		push!(rhs.args, nm)
+	end
+	rhs = Expr(:block, rhs)
+	Expr(:(=), lhs, rhs)
+	# lhs
+end
+
+# ╔═╡ 96b95882-97b8-48c2-97c9-1418a69b6a88
+function _copymethods!(ex::Expr, m::Module, s::Symbol)
+	f = getfield(m,s)
+	ml = methods(f,m)
+	for mtd ∈ ml
+		push!(ex.args, esc(_method_expr(m, s, mtd)))
+	end
+	ex
 end
 
 # ╔═╡ aa28b5d8-e0d7-4b97-9220-b61a0c5f4fc4
@@ -230,7 +270,11 @@ function include_expr(m::Module,kwargstrs::String...)
 	# push!(ex.args,:($m))
 	for s ∈ varnames
 		if s ∉ exclude_names
-			push!(ex.args,:($(esc(s)) = $(getfield(m,s))))
+			if getfield(m,s) isa Function
+				_copymethods!(ex, m, s)
+			else
+				push!(ex.args,:($(esc(s)) = $(getfield(m,s))))
+			end
 		end
 	end
 	# Add the html to re-run the cell
@@ -300,7 +344,7 @@ Finally, you can also assign the full imported module in a specific variable by 
 
 # ╔═╡ d2ac4955-d2a0-48b5-afcb-32baa59ade21
 #=╠═╡ notebook_exclusive
-@plutoinclude notebook_path
+@plutoinclude notebook_path "all"
   ╠═╡ notebook_exclusive =#
 
 # ╔═╡ 0d1f5079-a886-4a07-9e99-d73e0b8a2eec
@@ -328,14 +372,15 @@ c
 d
   ╠═╡ notebook_exclusive =#
 
-# ╔═╡ 584c8631-a2aa-425c-a6cd-99b7df1d857d
+# ╔═╡ d1fbe484-dcd0-456e-8ec1-c68acd708a08
 #=╠═╡ notebook_exclusive
-TestStruct()
+asd(TestStruct())
   ╠═╡ notebook_exclusive =#
 
 # ╔═╡ Cell order:
 # ╠═f5486f67-7bfc-44e2-91b9-9401d81666da
 # ╟─fcbd82ae-c04d-4f87-bbb7-5f73bdbf8bd0
+# ╠═2501c935-10c4-4dbb-ae35-0b310fcb3bfe
 # ╟─5089d8dd-6587-4172-9ffd-13cf43e8c341
 # ╠═e3e5510d-d1aa-442f-8d51-e42fe942f295
 # ╟─4a10255c-3a99-4939-ac29-65ef13b2c252
@@ -343,6 +388,8 @@ TestStruct()
 # ╠═f41c1fa8-bd01-443c-bdeb-c49e5ff7127c
 # ╠═b87d12be-a37b-4202-9426-3eef14d8253c
 # ╠═98b1fa0d-fad1-4c4f-88a0-9452d492c4cb
+# ╠═96b95882-97b8-48c2-97c9-1418a69b6a88
+# ╠═c45aa1a5-47a2-4218-a8f0-b3202ffb2f28
 # ╠═872bd88e-dded-4789-85ef-145f16003351
 # ╠═63e2bd00-63b8-43f9-b8d3-b5d336744f3a
 # ╠═aa28b5d8-e0d7-4b97-9220-b61a0c5f4fc4
@@ -356,4 +403,4 @@ TestStruct()
 # ╠═a7e7123f-0e7a-4771-9b9b-d0da97fefcef
 # ╠═2c41234e-e1b8-4ad8-9134-85cd65a75a2d
 # ╠═ce2a2025-a6e0-44ab-8631-8d308be734a9
-# ╠═584c8631-a2aa-425c-a6cd-99b7df1d857d
+# ╠═d1fbe484-dcd0-456e-8ec1-c68acd708a08

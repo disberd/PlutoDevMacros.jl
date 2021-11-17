@@ -45,6 +45,9 @@ asd(::Real, c::Int64) = "DUAL"
 # ╔═╡ d5d563a1-cde7-407a-8863-689f7dfd1a1e
 asd(t::TestStruct) = "THIS IS A TESTSTRUCT"
 
+# ╔═╡ 8bb2f880-d650-4c0f-afe8-536e75fcce5b
+asd(t::TestStruct, args...) = "TESTSTRUCT WITH VARARGS"
+
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
@@ -74,5 +77,6 @@ manifest_format = "2.0"
 # ╠═58ddadeb-1032-41c9-be45-0087671b1524
 # ╠═9ebec3d9-4809-46ae-8d9f-f55f3b4323a3
 # ╠═d5d563a1-cde7-407a-8863-689f7dfd1a1e
+# ╠═8bb2f880-d650-4c0f-afe8-536e75fcce5b
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

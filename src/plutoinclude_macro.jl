@@ -179,8 +179,12 @@ function _method_expr(m::Module, s::Symbol, mtd::Method)
 	# Add the function call
 	rhs = :($(getfield(m,s))())
 	# Push the variables
-	for nm ∈ nms
-		push!(rhs.args, nm)
+	for (nm,sig) ∈ zip(nms,tps)
+		if sig isa Core.TypeofVararg
+			push!(rhs.args, Expr(:(...),nm))
+		else
+			push!(rhs.args, nm)
+		end
 	end
 	rhs = Expr(:block, rhs)
 	Expr(:(=), lhs, rhs)
@@ -377,6 +381,9 @@ d
 asd(TestStruct())
   ╠═╡ notebook_exclusive =#
 
+# ╔═╡ 8df0f262-faf2-4f99-98e2-6b2a47e5ca31
+asd(TestStruct(),3,4)
+
 # ╔═╡ Cell order:
 # ╠═f5486f67-7bfc-44e2-91b9-9401d81666da
 # ╟─fcbd82ae-c04d-4f87-bbb7-5f73bdbf8bd0
@@ -404,3 +411,4 @@ asd(TestStruct())
 # ╠═2c41234e-e1b8-4ad8-9134-85cd65a75a2d
 # ╠═ce2a2025-a6e0-44ab-8631-8d308be734a9
 # ╠═d1fbe484-dcd0-456e-8ec1-c68acd708a08
+# ╠═8df0f262-faf2-4f99-98e2-6b2a47e5ca31

@@ -25,9 +25,9 @@ uuid = "d6f4376e-aef5-505a-96c1-9c027394607a"
 
 [[deps.PlutoHooks]]
 deps = ["FileWatching", "InteractiveUtils", "Markdown", "UUIDs"]
-git-tree-sha1 = "d551bccd095218255fae60ab3305ca4f3e4d2968"
+git-tree-sha1 = "f297787f7d7507dada25f6769fe3f08f6b9b8b12"
 uuid = "0ff47ea0-7a50-410d-8455-4348d5de0774"
-version = "0.0.2"
+version = "0.0.3"
 
 [[deps.Random]]
 deps = ["SHA", "Serialization"]

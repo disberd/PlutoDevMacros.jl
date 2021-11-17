@@ -382,7 +382,9 @@ asd(TestStruct())
   ╠═╡ notebook_exclusive =#
 
 # ╔═╡ 8df0f262-faf2-4f99-98e2-6b2a47e5ca31
+#=╠═╡ notebook_exclusive
 asd(TestStruct(),3,4)
+  ╠═╡ notebook_exclusive =#
 
 # ╔═╡ Cell order:
 # ╠═f5486f67-7bfc-44e2-91b9-9401d81666da

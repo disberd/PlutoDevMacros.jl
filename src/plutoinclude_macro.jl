@@ -17,14 +17,9 @@ end
 # ╔═╡ f5486f67-7bfc-44e2-91b9-9401d81666da
 #=╠═╡ notebook_exclusive
 begin
-	import Pkg
-	Pkg.activate("..")
 	using PlutoDevMacros: @skip_as_script, include_mapexpr, default_exprlist
 end
   ╠═╡ notebook_exclusive =#
-
-# ╔═╡ a1096039-5a3d-4af7-b310-dd4b9104a5e2
-using Base: SimpleVector, show_can_elide, isgensym, unwrap_unionall
 
 # ╔═╡ fcbd82ae-c04d-4f87-bbb7-5f73bdbf8bd0
 html"""
@@ -165,198 +160,10 @@ function ingredients(path::String,exprmap::Function=include_mapexpr())
 	m
 end
 
-# ╔═╡ d42c118d-f1cd-4c0b-b84d-b7bd463d89b9
-function stripmodules(s::Symbol)
-	split(string(s),'.')[end]  |> Symbol
-end
-
-# ╔═╡ 46cccf51-f18e-4e81-8f74-4e47e8136dc7
-md"""
-# \_toexpr
-"""
-
-# ╔═╡ 1899cc1d-c2b6-49e4-96a6-7937ba568cb1
-md"""
-The function `_toexpr` is used to process the components of a method signature to reconstruct an expression that could be used to bring the method into scope from the parent module (loaded with `@plutoinclude`) to the current module 
-"""
-
-# ╔═╡ 72a712c8-a772-4ff6-be26-91169f78aa5c
-# This function is basicaly copied and adapted from https://github.com/JuliaLang/julia/blob/743a37898d447d047002efcc19ce59825ef63cc1/base/show.jl#L604-L648
-function _toexpr(v::Val, env::SimpleVector, orig::SimpleVector, wheres::Vector; to::Module, from::Module, importedlist::Vector{Symbol}, fromname::Symbol)
-	ex = Expr(:curly)
-	n = length(env)
-    elide = length(wheres)
-    function egal_var(p::TypeVar, @nospecialize o)
-        return o isa TypeVar &&
-            ccall(:jl_types_egal, Cint, (Any, Any), p.ub, o.ub) != 0 &&
-            ccall(:jl_types_egal, Cint, (Any, Any), p.lb, o.lb) != 0
-    end
-    for i = n:-1:1
-        p = env[i]
-        if p isa TypeVar
-            if i == n && egal_var(p, orig[i]) && show_can_elide(p, wheres, elide, env, i)
-                n -= 1
-                elide -= 1
-            elseif p.lb === Union{} && isgensym(p.name) && show_can_elide(p, wheres, elide, env, i)
-                elide -= 1
-            elseif p.ub === Any && isgensym(p.name) && show_can_elide(p, wheres, elide, env, i)
-                elide -= 1
-            end
-        end
-    end
-	if n > 0
-        for i = 1:n
-            p = env[i]
-            if p isa TypeVar
-                if p.lb === Union{} && something(findfirst(@nospecialize(w) -> w === p, wheres), 0) > elide
-                    push!(ex.args, Expr(:(<:), _toexpr(v, p.ub;to, from, importedlist, fromname)))
-                elseif p.ub === Any && something(findfirst(@nospecialize(w) -> w === p, wheres), 0) > elide
-                    push!(ex.args, Expr(:(>:), _toexpr(v, p.lb; to, from, importedlist, fromname)))
-                else
-                    push!(ex.args, _toexpr(v, p; to, from, importedlist, fromname))
-                end
-            else
-               push!(ex.args, _toexpr(v, p; to, from, importedlist, fromname))
-            end
-        end
-    end
-    resize!(wheres, elide)
-    ex
-end
-
-# ╔═╡ c3c980a9-d4e1-4a67-b866-661bb10ae419
-function _toexpr(v::Val, x::DataType, wheres::Vector = TypeVar[]; to::Module, from::Module, importedlist::Vector{Symbol}, fromname::Symbol)
-	parameters = x.parameters::SimpleVector
-    name = x.name.wrapper |> Symbol |> stripmodules
-	# println("name = $name, stripped = $(stripmodules(name))")
-	val = (isdefined(to,name) || name ∈ importedlist) ? name : :($fromname.$name)
-	if isempty(parameters)
-		return val
-	end
-	orig = if v isa Val{:wheres}
-		unwrap_unionall(x.name.wrapper).parameters
-	elseif v isa Val{:types}
-		parameters
-	else
-		error("Unsupported Val direction")
-	end
-	ex = _toexpr(v, parameters, orig, wheres; to, from, importedlist, fromname)
-	if isempty(ex.args)
-		return val
-	else
-		pushfirst!(ex.args, val)
-	end
-	return ex
-end
-
-# ╔═╡ 981fc8df-12a0-4c06-a0be-a39809702196
-function _toexpr(v::Val, x::UnionAll; to::Module, from::Module, importedlist::Vector{Symbol}, fromname::Symbol)
-	wheres = TypeVar[]
-	while x isa UnionAll
-		push!(wheres,x.var)
-		x = x.body
-	end
-	ex = _toexpr(v, x, wheres; to, from, importedlist, fromname)
-end
-
-# ╔═╡ 21d5b59c-f3a4-4404-8bed-a4e6e326f85e
-function _toexpr(v::Val, x; to::Module, from::Module, importedlist::Vector{Symbol}, fromname::Symbol)
-	return x
-end
-
-# ╔═╡ 198a00af-84f4-40a4-acf8-e5a4c460f51a
-function _toexpr(v::Val{:types},x::TypeVar; to::Module, from::Module, importedlist::Vector{Symbol}, fromname::Symbol)
-	# If this has a name, return the name
-	isgensym(x.name) || return x.name
-end
-
-# ╔═╡ 40feef85-4eae-4c65-8264-327ed86394bb
-function _toexpr(v::Val{:wheres},x::TypeVar; to::Module, from::Module, importedlist::Vector{Symbol}, fromname::Symbol)
-	if isgensym(x.name)
-		if x.lb === Union{}
-			ex = Expr(:(<:), _toexpr(v,x.ub; to, from, importedlist, fromname))
-		elseif x.ub === Any
-			ex = Expr(:(:>), _toexpr(v,x.lb; to, from, importedlist, fromname))
-		else
-			ex = ()
-		end
-	else
-		if x.lb === Union{} && x.ub === Any
-			ex = x.name
-		elseif x.lb === Union{}
-			ex = Expr(:(<:), x.name, _toexpr(v,x.ub; to, from, importedlist, fromname))
-		elseif x.ub === Any
-			ex = Expr(:(:>), x.name, _toexpr(v,x.lb; to, from, importedlist, fromname))
-		else
-			ex = Expr(:comparison,_toexpr(v,x.lb; to, from, importedlist, fromname),:(<:),x.name,:(<:),_toexpr(v,x.ub; to, from, importedlist, fromname))
-		end
-	end
-	return ex
-end
-
-# ╔═╡ 0dc5d00e-4211-4b9c-a07c-bf2035edb49c
-function _toexpr(v::Val,u::Union; to::Module, from::Module, importedlist::Vector{Symbol}, fromname::Symbol)
-	ex = Expr(:curly)
-	push!(ex.args,:Union)
-	push!(ex.args, _toexpr(v,u.a; to, from, importedlist, fromname))
-	push!(ex.args, _toexpr(v,u.b; to, from, importedlist, fromname))
-	ex
-end
-
 # ╔═╡ 57efc195-6a2f-4ad3-94fd-53e884838789
 md"""
 # Other Ingredients Helpers
 """
-
-# ╔═╡ c45aa1a5-47a2-4218-a8f0-b3202ffb2f28
-function _method_expr(mtd::Method; to::Module, from::Module, importedlist::Vector{Symbol}, fromname::Symbol)
-	s = mtd.name
-	lhs = Expr(:call)
-	# Add the method name
-	# push!(lhs.args,mtd.name)
-	push!(lhs.args,s)
-	nms = map(Base.method_argnames(mtd)[2:end]) do nm
-		nm === Symbol("#unused#") ? gensym() : nm
-	end
-	tv = Any[]
-    sig = mtd.sig
-    while isa(sig, UnionAll)
-        push!(tv, sig.var)
-        sig = sig.body
-    end
-	# Get the argument types, stripped from TypeVars
-	tps = sig.parameters[2:end]
-	for (nm,sig) ∈ zip(nms,tps)
-		push!(lhs.args, Expr(:(::),_toexpr(Val(:types), nm; to, from, importedlist, fromname),_toexpr(Val(:types), sig; to, from, importedlist, fromname)))
-	end
-	if !isempty(tv)
-		lhs = Expr(:where,lhs,map(x -> _toexpr(Val(:wheres),x; to, from, importedlist, fromname),tv)...)
-		# lhs = Expr(:where,lhs,tv...)
-	end
-	lhs
-	# Add the function call
-	rhs = :($fromname.$s())
-	# Push the variables
-	for (nm,sig) ∈ zip(nms,tps)
-		if sig isa Core.TypeofVararg
-			push!(rhs.args, Expr(:(...),nm))
-		else
-			push!(rhs.args, nm)
-		end
-	end
-	rhs = Expr(:block, rhs)
-	Expr(:(=), lhs, rhs)
-end
-
-# ╔═╡ 96b95882-97b8-48c2-97c9-1418a69b6a88
-function _copymethods!(ex::Expr, s::Symbol; to::Module, from::Module, importedlist::Vector{Symbol}, fromname::Symbol)
-	f = getfield(from,s)
-	ml = methods(f,from)
-	for mtd ∈ ml
-		push!(ex.args, _method_expr(mtd; to, from, importedlist, fromname))
-	end
-	ex
-end
 
 # ╔═╡ aa28b5d8-e0d7-4b97-9220-b61a0c5f4fc4
 html_reload_button() = html"""
@@ -413,12 +220,12 @@ html_reload_button() = html"""
 
 # ╔═╡ 98b1fa0d-fad1-4c4f-88a0-9452d492c4cb
 function include_expr(from::Module,kwargstrs::String...; to::Module)
-	modname = gensym()
+	modname = Base.gensym()
 	ex = Expr(:block, :($modname = $from))
 	kwargs = (Symbol(s) => true for s ∈ kwargstrs if s ∈ ("all","imported"))
 	varnames = names(from;kwargs...)
 	# Remove the symbols that start with a '#' (still to check what is the impact)
-	filter!(!isgensym,varnames)
+	filter!(!Base.isgensym,varnames)
 	# Symbols to always exclude from imports
 	exclude_names = (
 			nameof(from),
@@ -431,7 +238,8 @@ function include_expr(from::Module,kwargstrs::String...; to::Module)
 	for s ∈ varnames
 		if s ∉ exclude_names
 			if getfield(from,s) isa Function
-				_copymethods!(ex, s; to, from, importedlist = varnames, fromname = modname)
+				# _copymethods!(ex, s; to, from, importedlist = varnames, fromname = modname)
+				push!(ex.args, :($s(args...) = $modname.$s(args...)))
 			else
 				push!(ex.args,:($s = $modname.$s))
 			end
@@ -552,7 +360,7 @@ asd(s::String) = "STRING"
 
 # ╔═╡ 8090dd72-a47b-4d9d-85df-ceb0c1bcedf5
 #=╠═╡ notebook_exclusive
-asd(2.0)
+asd(3)
   ╠═╡ notebook_exclusive =#
 
 # ╔═╡ d1fbe484-dcd0-456e-8ec1-c68acd708a08
@@ -575,9 +383,71 @@ methods(asd)
 asd("S")
   ╠═╡ notebook_exclusive =#
 
+# ╔═╡ 00000000-0000-0000-0000-000000000001
+PLUTO_PROJECT_TOML_CONTENTS = """
+[deps]
+PlutoDevMacros = "a0499f29-c39b-4c5c-807c-88074221b949"
+
+[compat]
+PlutoDevMacros = "~0.3.6"
+"""
+
+# ╔═╡ 00000000-0000-0000-0000-000000000002
+PLUTO_MANIFEST_TOML_CONTENTS = """
+# This file is machine-generated - editing it directly is not advised
+
+julia_version = "1.7.0-rc2"
+manifest_format = "2.0"
+
+[[deps.Base64]]
+uuid = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
+
+[[deps.FileWatching]]
+uuid = "7b1f6079-737a-58dc-b8bc-7a2ca5c1b5ee"
+
+[[deps.InteractiveUtils]]
+deps = ["Markdown"]
+uuid = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
+
+[[deps.MacroTools]]
+deps = ["Markdown", "Random"]
+git-tree-sha1 = "3d3e902b31198a27340d0bf00d6ac452866021cf"
+uuid = "1914dd2f-81c6-5fcd-8719-6d5c9610ff09"
+version = "0.5.9"
+
+[[deps.Markdown]]
+deps = ["Base64"]
+uuid = "d6f4376e-aef5-505a-96c1-9c027394607a"
+
+[[deps.PlutoDevMacros]]
+deps = ["MacroTools", "PlutoHooks"]
+git-tree-sha1 = "5d6d3c0f37bd5a635e0795943e33fc863b430035"
+uuid = "a0499f29-c39b-4c5c-807c-88074221b949"
+version = "0.3.6"
+
+[[deps.PlutoHooks]]
+deps = ["FileWatching", "InteractiveUtils", "Markdown", "UUIDs"]
+git-tree-sha1 = "f297787f7d7507dada25f6769fe3f08f6b9b8b12"
+uuid = "0ff47ea0-7a50-410d-8455-4348d5de0774"
+version = "0.0.3"
+
+[[deps.Random]]
+deps = ["SHA", "Serialization"]
+uuid = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+
+[[deps.SHA]]
+uuid = "ea8e919c-243c-51af-8825-aaa63cd721ce"
+
+[[deps.Serialization]]
+uuid = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
+
+[[deps.UUIDs]]
+deps = ["Random", "SHA"]
+uuid = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
+"""
+
 # ╔═╡ Cell order:
 # ╠═f5486f67-7bfc-44e2-91b9-9401d81666da
-# ╠═a1096039-5a3d-4af7-b310-dd4b9104a5e2
 # ╟─fcbd82ae-c04d-4f87-bbb7-5f73bdbf8bd0
 # ╠═2501c935-10c4-4dbb-ae35-0b310fcb3bfe
 # ╟─5089d8dd-6587-4172-9ffd-13cf43e8c341
@@ -586,20 +456,8 @@ asd("S")
 # ╠═a6f31a58-18ad-44d2-a6a2-f46e970f195a
 # ╠═f41c1fa8-bd01-443c-bdeb-c49e5ff7127c
 # ╠═b87d12be-a37b-4202-9426-3eef14d8253c
-# ╠═d42c118d-f1cd-4c0b-b84d-b7bd463d89b9
-# ╟─46cccf51-f18e-4e81-8f74-4e47e8136dc7
-# ╟─1899cc1d-c2b6-49e4-96a6-7937ba568cb1
-# ╠═72a712c8-a772-4ff6-be26-91169f78aa5c
-# ╠═c3c980a9-d4e1-4a67-b866-661bb10ae419
-# ╠═981fc8df-12a0-4c06-a0be-a39809702196
-# ╠═21d5b59c-f3a4-4404-8bed-a4e6e326f85e
-# ╠═198a00af-84f4-40a4-acf8-e5a4c460f51a
-# ╠═40feef85-4eae-4c65-8264-327ed86394bb
-# ╠═0dc5d00e-4211-4b9c-a07c-bf2035edb49c
 # ╟─57efc195-6a2f-4ad3-94fd-53e884838789
 # ╠═98b1fa0d-fad1-4c4f-88a0-9452d492c4cb
-# ╠═96b95882-97b8-48c2-97c9-1418a69b6a88
-# ╠═c45aa1a5-47a2-4218-a8f0-b3202ffb2f28
 # ╠═872bd88e-dded-4789-85ef-145f16003351
 # ╠═63e2bd00-63b8-43f9-b8d3-b5d336744f3a
 # ╠═aa28b5d8-e0d7-4b97-9220-b61a0c5f4fc4
@@ -621,3 +479,5 @@ asd("S")
 # ╠═7e606056-860b-458d-a394-a2ae07771d55
 # ╠═d8be6b4c-a02b-43ec-b176-de6f64fefd87
 # ╠═1754fdcf-de3d-4d49-a2f0-9e3f4aa3498e
+# ╟─00000000-0000-0000-0000-000000000001
+# ╟─00000000-0000-0000-0000-000000000002

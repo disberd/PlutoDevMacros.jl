@@ -165,6 +165,11 @@ function ingredients(path::String,exprmap::Function=include_mapexpr())
 	m
 end
 
+# ╔═╡ d42c118d-f1cd-4c0b-b84d-b7bd463d89b9
+function stripmodules(s::Symbol)
+	split(string(s),'.')[end]  |> Symbol
+end
+
 # ╔═╡ 46cccf51-f18e-4e81-8f74-4e47e8136dc7
 md"""
 # \_toexpr
@@ -177,7 +182,7 @@ The function `_toexpr` is used to process the components of a method signature t
 
 # ╔═╡ 72a712c8-a772-4ff6-be26-91169f78aa5c
 # This function is basicaly copied and adapted from https://github.com/JuliaLang/julia/blob/743a37898d447d047002efcc19ce59825ef63cc1/base/show.jl#L604-L648
-function _toexpr(v::Val, env::SimpleVector, orig::SimpleVector, wheres::Vector; to::Module, from::Module, importedlist::Vector{Symbol})
+function _toexpr(v::Val, env::SimpleVector, orig::SimpleVector, wheres::Vector; to::Module, from::Module, importedlist::Vector{Symbol}, fromname::Symbol)
 	ex = Expr(:curly)
 	n = length(env)
     elide = length(wheres)
@@ -204,14 +209,14 @@ function _toexpr(v::Val, env::SimpleVector, orig::SimpleVector, wheres::Vector; 
             p = env[i]
             if p isa TypeVar
                 if p.lb === Union{} && something(findfirst(@nospecialize(w) -> w === p, wheres), 0) > elide
-                    push!(ex.args, Expr(:(<:), _toexpr(v, p.ub;to, from, importedlist)))
+                    push!(ex.args, Expr(:(<:), _toexpr(v, p.ub;to, from, importedlist, fromname)))
                 elseif p.ub === Any && something(findfirst(@nospecialize(w) -> w === p, wheres), 0) > elide
-                    push!(ex.args, Expr(:(>:), _toexpr(v, p.lb; to, from, importedlist)))
+                    push!(ex.args, Expr(:(>:), _toexpr(v, p.lb; to, from, importedlist, fromname)))
                 else
-                    push!(ex.args, _toexpr(v, p; to, from, importedlist))
+                    push!(ex.args, _toexpr(v, p; to, from, importedlist, fromname))
                 end
             else
-               push!(ex.args, _toexpr(v, p; to, from, importedlist))
+               push!(ex.args, _toexpr(v, p; to, from, importedlist, fromname))
             end
         end
     end
@@ -220,14 +225,22 @@ function _toexpr(v::Val, env::SimpleVector, orig::SimpleVector, wheres::Vector; 
 end
 
 # ╔═╡ c3c980a9-d4e1-4a67-b866-661bb10ae419
-function _toexpr(v::Val, x::DataType, wheres::Vector = TypeVar[]; to::Module, from::Module, importedlist::Vector{Symbol})
+function _toexpr(v::Val, x::DataType, wheres::Vector = TypeVar[]; to::Module, from::Module, importedlist::Vector{Symbol}, fromname::Symbol)
 	parameters = x.parameters::SimpleVector
-    name = x.name.wrapper |> Symbol
-	val = (isdefined(to,name) || name ∈ importedlist) ? name : x.name.wrapper
+    name = x.name.wrapper |> Symbol |> stripmodules
+	# println("name = $name, stripped = $(stripmodules(name))")
+	val = (isdefined(to,name) || name ∈ importedlist) ? name : :($fromname.$name)
 	if isempty(parameters)
 		return val
 	end
-	ex = _toexpr(v, parameters, unwrap_unionall(x.name.wrapper).parameters, wheres; to, from, importedlist)
+	orig = if v isa Val{:wheres}
+		unwrap_unionall(x.name.wrapper).parameters
+	elseif v isa Val{:types}
+		parameters
+	else
+		error("Unsupported Val direction")
+	end
+	ex = _toexpr(v, parameters, orig, wheres; to, from, importedlist, fromname)
 	if isempty(ex.args)
 		return val
 	else
@@ -237,33 +250,33 @@ function _toexpr(v::Val, x::DataType, wheres::Vector = TypeVar[]; to::Module, fr
 end
 
 # ╔═╡ 981fc8df-12a0-4c06-a0be-a39809702196
-function _toexpr(v::Val, x::UnionAll; to::Module, from::Module, importedlist::Vector{Symbol})
+function _toexpr(v::Val, x::UnionAll; to::Module, from::Module, importedlist::Vector{Symbol}, fromname::Symbol)
 	wheres = TypeVar[]
 	while x isa UnionAll
 		push!(wheres,x.var)
 		x = x.body
 	end
-	ex = _toexpr(v, x, wheres; to, from, importedlist)
+	ex = _toexpr(v, x, wheres; to, from, importedlist, fromname)
 end
 
 # ╔═╡ 21d5b59c-f3a4-4404-8bed-a4e6e326f85e
-function _toexpr(v::Val, x; to::Module, from::Module, importedlist::Vector{Symbol})
+function _toexpr(v::Val, x; to::Module, from::Module, importedlist::Vector{Symbol}, fromname::Symbol)
 	return x
 end
 
 # ╔═╡ 198a00af-84f4-40a4-acf8-e5a4c460f51a
-function _toexpr(v::Val{:types},x::TypeVar; to::Module, from::Module, importedlist::Vector{Symbol})
+function _toexpr(v::Val{:types},x::TypeVar; to::Module, from::Module, importedlist::Vector{Symbol}, fromname::Symbol)
 	# If this has a name, return the name
 	isgensym(x.name) || return x.name
 end
 
 # ╔═╡ 40feef85-4eae-4c65-8264-327ed86394bb
-function _toexpr(v::Val{:wheres},x::TypeVar; to::Module, from::Module, importedlist::Vector{Symbol})
+function _toexpr(v::Val{:wheres},x::TypeVar; to::Module, from::Module, importedlist::Vector{Symbol}, fromname::Symbol)
 	if isgensym(x.name)
 		if x.lb === Union{}
-			ex = Expr(:(<:), _toexpr(v,x.ub; to, from, importedlist))
+			ex = Expr(:(<:), _toexpr(v,x.ub; to, from, importedlist, fromname))
 		elseif x.ub === Any
-			ex = Expr(:(:>), _toexpr(v,x.lb; to, from, importedlist))
+			ex = Expr(:(:>), _toexpr(v,x.lb; to, from, importedlist, fromname))
 		else
 			ex = ()
 		end
@@ -271,22 +284,22 @@ function _toexpr(v::Val{:wheres},x::TypeVar; to::Module, from::Module, importedl
 		if x.lb === Union{} && x.ub === Any
 			ex = x.name
 		elseif x.lb === Union{}
-			ex = Expr(:(<:), x.name, _toexpr(v,x.ub; to, from, importedlist))
+			ex = Expr(:(<:), x.name, _toexpr(v,x.ub; to, from, importedlist, fromname))
 		elseif x.ub === Any
-			ex = Expr(:(:>), x.name, _toexpr(v,x.lb; to, from, importedlist))
+			ex = Expr(:(:>), x.name, _toexpr(v,x.lb; to, from, importedlist, fromname))
 		else
-			ex = Expr(:comparison,_toexpr(v,x.lb; to, from, importedlist),:(<:),x.name,:(<:),_toexpr(v,x.ub; to, from, importedlist))
+			ex = Expr(:comparison,_toexpr(v,x.lb; to, from, importedlist, fromname),:(<:),x.name,:(<:),_toexpr(v,x.ub; to, from, importedlist, fromname))
 		end
 	end
 	return ex
 end
 
 # ╔═╡ 0dc5d00e-4211-4b9c-a07c-bf2035edb49c
-function _toexpr(v::Val,u::Union; to::Module, from::Module, importedlist::Vector{Symbol})
+function _toexpr(v::Val,u::Union; to::Module, from::Module, importedlist::Vector{Symbol}, fromname::Symbol)
 	ex = Expr(:curly)
 	push!(ex.args,:Union)
-	push!(ex.args, _toexpr(v,u.a; to, from, importedlist))
-	push!(ex.args, _toexpr(v,u.b; to, from, importedlist))
+	push!(ex.args, _toexpr(v,u.a; to, from, importedlist, fromname))
+	push!(ex.args, _toexpr(v,u.b; to, from, importedlist, fromname))
 	ex
 end
 
@@ -296,7 +309,7 @@ md"""
 """
 
 # ╔═╡ c45aa1a5-47a2-4218-a8f0-b3202ffb2f28
-function _method_expr(mtd::Method; to::Module, from::Module, importedlist::Vector{Symbol})
+function _method_expr(mtd::Method; to::Module, from::Module, importedlist::Vector{Symbol}, fromname::Symbol)
 	s = mtd.name
 	lhs = Expr(:call)
 	# Add the method name
@@ -314,15 +327,15 @@ function _method_expr(mtd::Method; to::Module, from::Module, importedlist::Vecto
 	# Get the argument types, stripped from TypeVars
 	tps = sig.parameters[2:end]
 	for (nm,sig) ∈ zip(nms,tps)
-		push!(lhs.args, Expr(:(::),_toexpr(Val(:types), nm; to, from, importedlist),_toexpr(Val(:types), sig; to, from, importedlist)))
+		push!(lhs.args, Expr(:(::),_toexpr(Val(:types), nm; to, from, importedlist, fromname),_toexpr(Val(:types), sig; to, from, importedlist, fromname)))
 	end
 	if !isempty(tv)
-		lhs = Expr(:where,lhs,map(x -> _toexpr(Val(:wheres),x; to, from, importedlist),tv)...)
+		lhs = Expr(:where,lhs,map(x -> _toexpr(Val(:wheres),x; to, from, importedlist, fromname),tv)...)
 		# lhs = Expr(:where,lhs,tv...)
 	end
 	lhs
 	# Add the function call
-	rhs = :($(getfield(from,s))())
+	rhs = :($fromname.$s())
 	# Push the variables
 	for (nm,sig) ∈ zip(nms,tps)
 		if sig isa Core.TypeofVararg
@@ -336,11 +349,11 @@ function _method_expr(mtd::Method; to::Module, from::Module, importedlist::Vecto
 end
 
 # ╔═╡ 96b95882-97b8-48c2-97c9-1418a69b6a88
-function _copymethods!(ex::Expr, s::Symbol; to::Module, from::Module, importedlist::Vector{Symbol})
+function _copymethods!(ex::Expr, s::Symbol; to::Module, from::Module, importedlist::Vector{Symbol}, fromname::Symbol)
 	f = getfield(from,s)
 	ml = methods(f,from)
 	for mtd ∈ ml
-		push!(ex.args, esc(_method_expr(mtd; to, from, importedlist)))
+		push!(ex.args, _method_expr(mtd; to, from, importedlist, fromname))
 	end
 	ex
 end
@@ -400,11 +413,12 @@ html_reload_button() = html"""
 
 # ╔═╡ 98b1fa0d-fad1-4c4f-88a0-9452d492c4cb
 function include_expr(from::Module,kwargstrs::String...; to::Module)
-	ex = Expr(:block)
+	modname = gensym()
+	ex = Expr(:block, :($modname = $from))
 	kwargs = (Symbol(s) => true for s ∈ kwargstrs if s ∈ ("all","imported"))
 	varnames = names(from;kwargs...)
 	# Remove the symbols that start with a '#' (still to check what is the impact)
-	filter!(x -> first(String(x)) !== '#',varnames)
+	filter!(!isgensym,varnames)
 	# Symbols to always exclude from imports
 	exclude_names = (
 			nameof(from),
@@ -417,9 +431,9 @@ function include_expr(from::Module,kwargstrs::String...; to::Module)
 	for s ∈ varnames
 		if s ∉ exclude_names
 			if getfield(from,s) isa Function
-				_copymethods!(ex, s; to, from, importedlist = varnames)
+				_copymethods!(ex, s; to, from, importedlist = varnames, fromname = modname)
 			else
-				push!(ex.args,:($(esc(s)) = $(getfield(from,s))))
+				push!(ex.args,:($s = $modname.$s))
 			end
 		end
 	end
@@ -445,7 +459,7 @@ macro plutoinclude(ex,kwargstrs...)
 	path = ex isa String ? ex : Base.eval(__module__,ex)
 	@skip_as_script begin
 		m = ingredients(path)
-		include_expr(m,kwargstrs...; to = __module__)
+		esc(include_expr(m,kwargstrs...; to = __module__))
 	end
 end
 
@@ -468,8 +482,7 @@ The cells below assume to also have the test notebook `ingredients_include_test.
 
 # ╔═╡ bd3b021f-db44-4aa1-97b2-04002f76aeff
 #=╠═╡ notebook_exclusive
-# notebook_path = "./plutoinclude_test.jl"
-notebook_path = raw"C:\Users\Alberto Mengali\Repos\SPATIAL\notebooks\payload_generic_types.jl"
+notebook_path = "./plutoinclude_test.jl"
   ╠═╡ notebook_exclusive =#
 
 # ╔═╡ 0e3eb73f-091a-4683-8ccb-592b8ccb1bee
@@ -496,32 +509,12 @@ Finally, you can also assign the full imported module in a specific variable by 
 
 # ╔═╡ 0d1f5079-a886-4a07-9e99-d73e0b8a2eec
 #=╠═╡ notebook_exclusive
-(@macroexpand @plutoinclude notebook_path "all")
+@macroexpand @plutoinclude notebook_path "all"
   ╠═╡ notebook_exclusive =#
 
 # ╔═╡ 50759ca2-45ca-4005-9182-058a5cb68359
 #=╠═╡ notebook_exclusive
 mm = ingredients(notebook_path)
-  ╠═╡ notebook_exclusive =#
-
-# ╔═╡ d80b92e5-e582-46ad-a819-6c3f73a08494
-#=╠═╡ notebook_exclusive
-mtd = methods(mm.payloadside)[2]
-  ╠═╡ notebook_exclusive =#
-
-# ╔═╡ a928974c-bc90-416c-bf79-5cbdf956912b
-#=╠═╡ notebook_exclusive
-ua = mtd.sig.body.parameters[end]
-  ╠═╡ notebook_exclusive =#
-
-# ╔═╡ a51cf40e-7d67-4000-9157-34ae9ff019f0
-#=╠═╡ notebook_exclusive
-_toexpr(Val(:types),ua; to = @__MODULE__, from = mm, importedlist = Symbol[])
-  ╠═╡ notebook_exclusive =#
-
-# ╔═╡ b9a55888-ec07-495f-85ba-0a1d58d19722
-#=╠═╡ notebook_exclusive
-_method_expr(mtd; to=@__MODULE__, from=mm, importedlist=Symbol[])
   ╠═╡ notebook_exclusive =#
 
 # ╔═╡ 0a28b1e8-e9f9-4f1e-96c3-daf7112df8fd
@@ -551,6 +544,17 @@ c
 d
   ╠═╡ notebook_exclusive =#
 
+# ╔═╡ d8be6b4c-a02b-43ec-b176-de6f64fefd87
+#=╠═╡ notebook_exclusive
+# Extending the method
+asd(s::String) = "STRING"
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ 8090dd72-a47b-4d9d-85df-ceb0c1bcedf5
+#=╠═╡ notebook_exclusive
+asd(2.0)
+  ╠═╡ notebook_exclusive =#
+
 # ╔═╡ d1fbe484-dcd0-456e-8ec1-c68acd708a08
 #=╠═╡ notebook_exclusive
 asd(TestStruct())
@@ -559,6 +563,16 @@ asd(TestStruct())
 # ╔═╡ 8df0f262-faf2-4f99-98e2-6b2a47e5ca31
 #=╠═╡ notebook_exclusive
 asd(TestStruct(),3,4)
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ 7e606056-860b-458d-a394-a2ae07771d55
+#=╠═╡ notebook_exclusive
+methods(asd)
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ 1754fdcf-de3d-4d49-a2f0-9e3f4aa3498e
+#=╠═╡ notebook_exclusive
+asd("S")
   ╠═╡ notebook_exclusive =#
 
 # ╔═╡ Cell order:
@@ -572,6 +586,7 @@ asd(TestStruct(),3,4)
 # ╠═a6f31a58-18ad-44d2-a6a2-f46e970f195a
 # ╠═f41c1fa8-bd01-443c-bdeb-c49e5ff7127c
 # ╠═b87d12be-a37b-4202-9426-3eef14d8253c
+# ╠═d42c118d-f1cd-4c0b-b84d-b7bd463d89b9
 # ╟─46cccf51-f18e-4e81-8f74-4e47e8136dc7
 # ╟─1899cc1d-c2b6-49e4-96a6-7937ba568cb1
 # ╠═72a712c8-a772-4ff6-be26-91169f78aa5c
@@ -581,10 +596,6 @@ asd(TestStruct(),3,4)
 # ╠═198a00af-84f4-40a4-acf8-e5a4c460f51a
 # ╠═40feef85-4eae-4c65-8264-327ed86394bb
 # ╠═0dc5d00e-4211-4b9c-a07c-bf2035edb49c
-# ╠═d80b92e5-e582-46ad-a819-6c3f73a08494
-# ╠═a928974c-bc90-416c-bf79-5cbdf956912b
-# ╠═a51cf40e-7d67-4000-9157-34ae9ff019f0
-# ╠═b9a55888-ec07-495f-85ba-0a1d58d19722
 # ╟─57efc195-6a2f-4ad3-94fd-53e884838789
 # ╠═98b1fa0d-fad1-4c4f-88a0-9452d492c4cb
 # ╠═96b95882-97b8-48c2-97c9-1418a69b6a88
@@ -598,6 +609,7 @@ asd(TestStruct(),3,4)
 # ╟─0e3eb73f-091a-4683-8ccb-592b8ccb1bee
 # ╠═d2ac4955-d2a0-48b5-afcb-32baa59ade21
 # ╠═0d1f5079-a886-4a07-9e99-d73e0b8a2eec
+# ╠═8090dd72-a47b-4d9d-85df-ceb0c1bcedf5
 # ╠═50759ca2-45ca-4005-9182-058a5cb68359
 # ╠═0a28b1e8-e9f9-4f1e-96c3-daf7112df8fd
 # ╠═4cec781b-c6d7-4fd7-bbe3-f7db0f973698
@@ -606,3 +618,6 @@ asd(TestStruct(),3,4)
 # ╠═ce2a2025-a6e0-44ab-8631-8d308be734a9
 # ╠═d1fbe484-dcd0-456e-8ec1-c68acd708a08
 # ╠═8df0f262-faf2-4f99-98e2-6b2a47e5ca31
+# ╠═7e606056-860b-458d-a394-a2ae07771d55
+# ╠═d8be6b4c-a02b-43ec-b176-de6f64fefd87
+# ╠═1754fdcf-de3d-4d49-a2f0-9e3f4aa3498e

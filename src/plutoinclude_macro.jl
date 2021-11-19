@@ -220,7 +220,7 @@ html_reload_button() = html"""
 
 # ╔═╡ 98b1fa0d-fad1-4c4f-88a0-9452d492c4cb
 function include_expr(from::Module,kwargstrs::String...; to::Module)
-	modname = Base.gensym()
+	modname = Symbol("#plutoincluded_module")
 	ex = Expr(:block, :($modname = $from))
 	kwargs = (Symbol(s) => true for s ∈ kwargstrs if s ∈ ("all","imported"))
 	varnames = names(from;kwargs...)

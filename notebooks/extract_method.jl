@@ -157,9 +157,6 @@ function _toexpr(v::Val,u::Union; to::Module, from::Module, importedlist::Vector
 	ex
 end
 
-# ╔═╡ b59e74e6-f2d9-4548-872d-e53b33031f01
-_toexpr(Val(:types), StaticVector{2}; to = @__MODULE__, from = @__MODULE__, importedlist = Symbol[], fromname = :asd)
-
 # ╔═╡ 6c270dd6-4f9d-49cb-8b09-ff30d1dc4bd6
 md"""
 # Other Helper Funcs
@@ -236,7 +233,6 @@ manifest_format = "2.0"
 # ╠═2ae5b44c-678a-42da-934f-7ff057704381
 # ╠═69c2a190-0a1b-4b87-a143-ab9b890a065b
 # ╠═4fcb74bc-f9ed-4969-b9cb-44c0991a2788
-# ╠═b59e74e6-f2d9-4548-872d-e53b33031f01
 # ╠═bc123a56-31b7-4599-8acb-19cdd2934f30
 # ╠═6d20a40c-7407-4bbe-ba97-b05a541efb46
 # ╠═3b18e1ce-9b6a-4c81-b78c-d1618a2fd4cb

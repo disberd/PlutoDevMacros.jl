@@ -239,7 +239,7 @@ function include_expr(from::Module,kwargstrs::String...; to::Module)
 		if s ∉ exclude_names
 			if getfield(from,s) isa Function
 				# _copymethods!(ex, s; to, from, importedlist = varnames, fromname = modname)
-				push!(ex.args, :($s(args...) = $modname.$s(args...)))
+				push!(ex.args, :($s(args...; kwargs...) = $modname.$s(args...; kwargs...)))
 			else
 				push!(ex.args,:($s = $modname.$s))
 			end

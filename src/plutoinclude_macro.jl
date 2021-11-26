@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.17.1
+# v0.17.2
 
 using Markdown
 using InteractiveUtils
@@ -19,6 +19,11 @@ end
 begin
 	using PlutoDevMacros: @skip_as_script, include_mapexpr, default_exprlist
 end
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ e3d5c718-d98c-4d53-8fc9-911be34c9f2d
+#=╠═╡ notebook_exclusive
+using BenchmarkTools
   ╠═╡ notebook_exclusive =#
 
 # ╔═╡ fcbd82ae-c04d-4f87-bbb7-5f73bdbf8bd0
@@ -221,7 +226,7 @@ html_reload_button() = html"""
 # ╔═╡ 98b1fa0d-fad1-4c4f-88a0-9452d492c4cb
 function include_expr(from::Module,kwargstrs::String...; to::Module)
 	modname = Symbol("#plutoincluded_module")
-	ex = Expr(:block, :($modname = $from))
+	ex = Expr(:block, :(const $modname = $from))
 	kwargs = (Symbol(s) => true for s ∈ kwargstrs if s ∈ ("all","imported"))
 	varnames = names(from;kwargs...)
 	# Remove the symbols that start with a '#' (still to check what is the impact)
@@ -240,13 +245,14 @@ function include_expr(from::Module,kwargstrs::String...; to::Module)
 			if getfield(from,s) isa Function
 				# _copymethods!(ex, s; to, from, importedlist = varnames, fromname = modname)
 				ret_types = Base.return_types(getfield(from,s))
-				if all(x -> x === Bool, ret_types)
-					push!(ex.args, :($s(args...; kwargs...)::Bool = $modname.$s(args...; kwargs...)))
+				candidate_type = ret_types[1]
+				if all(x -> x === candidate_type, ret_types) && candidate_type !== Nothing && Base.isconcretetype(candidate_type)
+					push!(ex.args, :($s(args...; kwargs...)::$candidate_type = $modname.$s(args...; kwargs...)))
 				else
 					push!(ex.args, :($s(args...; kwargs...) = $modname.$s(args...; kwargs...)))
 				end
 			else
-				push!(ex.args,:($s = $modname.$s))
+				push!(ex.args,:(const $s = $modname.$s))
 			end
 		end
 	end
@@ -325,9 +331,19 @@ Finally, you can also assign the full imported module in a specific variable by 
 @macroexpand @plutoinclude notebook_path "all"
   ╠═╡ notebook_exclusive =#
 
+# ╔═╡ 61924e22-f052-43a5-84b1-5512d222af26
+#=╠═╡ notebook_exclusive
+@benchmark asd(TestStruct())
+  ╠═╡ notebook_exclusive =#
+
 # ╔═╡ 50759ca2-45ca-4005-9182-058a5cb68359
 #=╠═╡ notebook_exclusive
-mm = ingredients(notebook_path)
+const mm = ingredients(notebook_path)
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ 3702cd59-bb04-4e89-92b9-583ac846416f
+#=╠═╡ notebook_exclusive
+@benchmark $(mm.asd)((mm.TestStruct)())
   ╠═╡ notebook_exclusive =#
 
 # ╔═╡ 0a28b1e8-e9f9-4f1e-96c3-daf7112df8fd
@@ -391,9 +407,11 @@ asd("S")
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
+BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 PlutoDevMacros = "a0499f29-c39b-4c5c-807c-88074221b949"
 
 [compat]
+BenchmarkTools = "~1.2.0"
 PlutoDevMacros = "~0.3.6"
 """
 
@@ -404,8 +422,25 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 julia_version = "1.7.0-rc2"
 manifest_format = "2.0"
 
+[[deps.Artifacts]]
+uuid = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
+
 [[deps.Base64]]
 uuid = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
+
+[[deps.BenchmarkTools]]
+deps = ["JSON", "Logging", "Printf", "Profile", "Statistics", "UUIDs"]
+git-tree-sha1 = "61adeb0823084487000600ef8b1c00cc2474cd47"
+uuid = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
+version = "1.2.0"
+
+[[deps.CompilerSupportLibraries_jll]]
+deps = ["Artifacts", "Libdl"]
+uuid = "e66e0078-7015-5450-92f7-15fbd957f2ae"
+
+[[deps.Dates]]
+deps = ["Printf"]
+uuid = "ade2ca70-3891-5945-98fb-dc099432e06a"
 
 [[deps.FileWatching]]
 uuid = "7b1f6079-737a-58dc-b8bc-7a2ca5c1b5ee"
@@ -413,6 +448,22 @@ uuid = "7b1f6079-737a-58dc-b8bc-7a2ca5c1b5ee"
 [[deps.InteractiveUtils]]
 deps = ["Markdown"]
 uuid = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
+
+[[deps.JSON]]
+deps = ["Dates", "Mmap", "Parsers", "Unicode"]
+git-tree-sha1 = "8076680b162ada2a031f707ac7b4953e30667a37"
+uuid = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
+version = "0.21.2"
+
+[[deps.Libdl]]
+uuid = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
+
+[[deps.LinearAlgebra]]
+deps = ["Libdl", "libblastrampoline_jll"]
+uuid = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+
+[[deps.Logging]]
+uuid = "56ddb016-857b-54e1-b83d-db4d58db5568"
 
 [[deps.MacroTools]]
 deps = ["Markdown", "Random"]
@@ -423,6 +474,19 @@ version = "0.5.9"
 [[deps.Markdown]]
 deps = ["Base64"]
 uuid = "d6f4376e-aef5-505a-96c1-9c027394607a"
+
+[[deps.Mmap]]
+uuid = "a63ad114-7e13-5084-954f-fe012c677804"
+
+[[deps.OpenBLAS_jll]]
+deps = ["Artifacts", "CompilerSupportLibraries_jll", "Libdl"]
+uuid = "4536629a-c528-5b80-bd46-f80d51c5b363"
+
+[[deps.Parsers]]
+deps = ["Dates"]
+git-tree-sha1 = "ae4bbcadb2906ccc085cf52ac286dc1377dceccc"
+uuid = "69de0a69-1ddd-5017-9359-2bf0b02dc9f0"
+version = "2.1.2"
 
 [[deps.PlutoDevMacros]]
 deps = ["MacroTools", "PlutoHooks"]
@@ -436,6 +500,14 @@ git-tree-sha1 = "f297787f7d7507dada25f6769fe3f08f6b9b8b12"
 uuid = "0ff47ea0-7a50-410d-8455-4348d5de0774"
 version = "0.0.3"
 
+[[deps.Printf]]
+deps = ["Unicode"]
+uuid = "de0858da-6303-5e67-8744-51eddeeeb8d7"
+
+[[deps.Profile]]
+deps = ["Printf"]
+uuid = "9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"
+
 [[deps.Random]]
 deps = ["SHA", "Serialization"]
 uuid = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
@@ -446,13 +518,29 @@ uuid = "ea8e919c-243c-51af-8825-aaa63cd721ce"
 [[deps.Serialization]]
 uuid = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
 
+[[deps.SparseArrays]]
+deps = ["LinearAlgebra", "Random"]
+uuid = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
+
+[[deps.Statistics]]
+deps = ["LinearAlgebra", "SparseArrays"]
+uuid = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
+
 [[deps.UUIDs]]
 deps = ["Random", "SHA"]
 uuid = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
+
+[[deps.Unicode]]
+uuid = "4ec0a83e-493e-50e2-b9ac-8f72acf5a8f5"
+
+[[deps.libblastrampoline_jll]]
+deps = ["Artifacts", "Libdl", "OpenBLAS_jll"]
+uuid = "8e850b90-86db-534c-a0d3-1478176c7d93"
 """
 
 # ╔═╡ Cell order:
 # ╠═f5486f67-7bfc-44e2-91b9-9401d81666da
+# ╠═e3d5c718-d98c-4d53-8fc9-911be34c9f2d
 # ╟─fcbd82ae-c04d-4f87-bbb7-5f73bdbf8bd0
 # ╠═2501c935-10c4-4dbb-ae35-0b310fcb3bfe
 # ╟─5089d8dd-6587-4172-9ffd-13cf43e8c341
@@ -473,6 +561,8 @@ uuid = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
 # ╠═d2ac4955-d2a0-48b5-afcb-32baa59ade21
 # ╠═0d1f5079-a886-4a07-9e99-d73e0b8a2eec
 # ╠═8090dd72-a47b-4d9d-85df-ceb0c1bcedf5
+# ╠═61924e22-f052-43a5-84b1-5512d222af26
+# ╠═3702cd59-bb04-4e89-92b9-583ac846416f
 # ╠═50759ca2-45ca-4005-9182-058a5cb68359
 # ╠═0a28b1e8-e9f9-4f1e-96c3-daf7112df8fd
 # ╠═4cec781b-c6d7-4fd7-bbe3-f7db0f973698

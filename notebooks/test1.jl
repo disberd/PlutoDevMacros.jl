@@ -1,8 +1,8 @@
 ### A Pluto.jl notebook ###
 # v0.17.2
 
-using Markdown
-using InteractiveUtils
+# using Markdown
+# using InteractiveUtils
 
 # ╔═╡ bb26cad0-4720-11ec-20c0-6538c8fcc18f
 #=╠═╡ notebook_exclusive
@@ -22,7 +22,7 @@ using PlutoDevMacros
 struct TestStruct1 end
 
 # ╔═╡ 8145c16e-0a16-4e8b-a073-8e1774273bb4
-asd(x::Int) = "INT"
+asd(x::Int) = "INTSSS"
 
 # ╔═╡ 354605a3-297e-4647-b4cf-f0aea4987f9e
 asd(::TestStruct1) = "TESTSTRUCT1"

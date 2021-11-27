@@ -1,7 +1,6 @@
 module PlutoDevMacros
 
 using MacroTools
-using PlutoHooks: @skip_as_script
 using Requires
 
 # This hack is the only way I found to access @skip_as_script as PlutoDevMacros.@skip_as_script

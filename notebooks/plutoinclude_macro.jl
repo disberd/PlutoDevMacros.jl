@@ -17,13 +17,18 @@ end
 # ╔═╡ f5486f67-7bfc-44e2-91b9-9401d81666da
 #=╠═╡ notebook_exclusive
 begin
-	using PlutoDevMacros: @skip_as_script, include_mapexpr, default_exprlist
+	using PlutoDevMacros
 end
   ╠═╡ notebook_exclusive =#
 
 # ╔═╡ e3d5c718-d98c-4d53-8fc9-911be34c9f2d
 #=╠═╡ notebook_exclusive
 using BenchmarkTools
+  ╠═╡ notebook_exclusive =#
+
+# ╔═╡ 47c42d27-88f1-4a27-bda9-54a2439b09a1
+#=╠═╡ notebook_exclusive
+include("basics.jl")
   ╠═╡ notebook_exclusive =#
 
 # ╔═╡ fcbd82ae-c04d-4f87-bbb7-5f73bdbf8bd0
@@ -102,11 +107,6 @@ but.addEventListener('click',onClick)
 </script>
 """
 
-# ╔═╡ 2501c935-10c4-4dbb-ae35-0b310fcb3bfe
-#=╠═╡ notebook_exclusive
-default_exprlist
-  ╠═╡ notebook_exclusive =#
-
 # ╔═╡ 5089d8dd-6587-4172-9ffd-13cf43e8c341
 #=╠═╡ notebook_exclusive
 md"""
@@ -115,18 +115,18 @@ md"""
   ╠═╡ notebook_exclusive =#
 
 # ╔═╡ b87d12be-a37b-4202-9426-3eef14d8253c
-function ingredients(path::String,exprmap::Function=include_mapexpr())
+function ingredients(path::String)
 	# this is from the Julia source code (evalfile in base/loading.jl)
 	# but with the modification that it returns the module instead of the last object
-	name = Symbol(basename(path))
+	name = Symbol("#plutoinclude_",basename(path))
 	m = Module(name)
 	Core.eval(m,
         Expr(:toplevel,
              :(eval(x) = $(Expr(:core, :eval))($name, x)),
              :(include(x) = $(Expr(:top, :include))($name, x)),
              :(include(mapexpr::Function, x) = $(Expr(:top, :include))(mapexpr, $name, x)),
-			 :(using PlutoDevMacros: @plutoinclude, @skip_as_script), # This is needed for nested @plutoinclude calls
-             :(include($exprmap,$path))))
+			 :(using PlutoDevMacros: @plutoinclude), # This is needed for nested @plutoinclude calls
+             :(include($path))))
 	m
 end
 
@@ -205,7 +205,6 @@ function include_expr(from::Module,kwargstrs::String...; to::Module)
 			:include,
 			Symbol("@bind"),
 			Symbol("@plutoinclude"), # Since we included this in the module
-			Symbol("@skip_as_script"), # Since we included this in the module
 		)
 	for s ∈ varnames
 		if s ∉ exclude_names
@@ -213,7 +212,7 @@ function include_expr(from::Module,kwargstrs::String...; to::Module)
 				# _copymethods!(ex, s; to, from, importedlist = varnames, fromname = modname)
 				ret_types = Base.return_types(getfield(from,s))
 				candidate_type = ret_types[1]
-				if all(x -> x === candidate_type, ret_types) && candidate_type !== Nothing && Base.isconcretetype(candidate_type)
+				if all(x -> x === candidate_type, ret_types) && Base.isconcretetype(candidate_type)
 					push!(ex.args, :($s(args...; kwargs...)::$candidate_type = $modname.$s(args...; kwargs...)))
 				else
 					push!(ex.args, :($s(args...; kwargs...) = $modname.$s(args...; kwargs...)))
@@ -243,13 +242,20 @@ When called from outside Pluto, it simply returns nothing
 """
 macro plutoinclude(ex,kwargstrs...)
 	path = ex isa String ? ex : Base.eval(__module__,ex)
-	@skip_as_script begin
+	if is_notebook_local(__source__.file::Symbol |> String)
+		# If this is called directly from the notebook, do the hack to export the various variables from the module
 		m = ingredients(path)
 		esc(include_expr(m,kwargstrs...; to = __module__))
+	elseif first(nameof(__module__) |> String, 13) == "#plutoinclude"
+		# We are in a chained plutoinclude, simply include the subfile	
+		:(include($path)) |> esc
+	else
+		# We are not in the notebook and not in a chained include, so do nothing
+		nothing
 	end
 end
 
-# ╔═╡ bd91be23-9ce6-4742-a0c6-44efea14623a
+# ╔═╡ 748b8eab-2f3d-4afd-bfb4-fee3240d391b
 export @plutoinclude
 
 # ╔═╡ 1f291bd2-9ab1-4fd2-bf50-49253726058f
@@ -306,11 +312,6 @@ Finally, you can also assign the full imported module in a specific variable by 
 # ╔═╡ 50759ca2-45ca-4005-9182-058a5cb68359
 #=╠═╡ notebook_exclusive
 const mm = ingredients(notebook_path)
-  ╠═╡ notebook_exclusive =#
-
-# ╔═╡ 3702cd59-bb04-4e89-92b9-583ac846416f
-#=╠═╡ notebook_exclusive
-@benchmark $(mm.asd)((mm.TestStruct)())
   ╠═╡ notebook_exclusive =#
 
 # ╔═╡ 4cec781b-c6d7-4fd7-bbe3-f7db0f973698
@@ -496,9 +497,9 @@ uuid = "8e850b90-86db-534c-a0d3-1478176c7d93"
 # ╔═╡ Cell order:
 # ╠═f5486f67-7bfc-44e2-91b9-9401d81666da
 # ╠═e3d5c718-d98c-4d53-8fc9-911be34c9f2d
-# ╠═bd91be23-9ce6-4742-a0c6-44efea14623a
+# ╠═748b8eab-2f3d-4afd-bfb4-fee3240d391b
+# ╠═47c42d27-88f1-4a27-bda9-54a2439b09a1
 # ╟─fcbd82ae-c04d-4f87-bbb7-5f73bdbf8bd0
-# ╠═2501c935-10c4-4dbb-ae35-0b310fcb3bfe
 # ╟─5089d8dd-6587-4172-9ffd-13cf43e8c341
 # ╠═b87d12be-a37b-4202-9426-3eef14d8253c
 # ╟─57efc195-6a2f-4ad3-94fd-53e884838789
@@ -513,7 +514,6 @@ uuid = "8e850b90-86db-534c-a0d3-1478176c7d93"
 # ╠═0d1f5079-a886-4a07-9e99-d73e0b8a2eec
 # ╠═8090dd72-a47b-4d9d-85df-ceb0c1bcedf5
 # ╠═61924e22-f052-43a5-84b1-5512d222af26
-# ╠═3702cd59-bb04-4e89-92b9-583ac846416f
 # ╠═50759ca2-45ca-4005-9182-058a5cb68359
 # ╠═4cec781b-c6d7-4fd7-bbe3-f7db0f973698
 # ╠═a7e7123f-0e7a-4771-9b9b-d0da97fefcef

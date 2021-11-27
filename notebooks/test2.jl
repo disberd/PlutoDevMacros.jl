@@ -1,8 +1,8 @@
 ### A Pluto.jl notebook ###
 # v0.17.2
 
-using Markdown
-using InteractiveUtils
+# using Markdown
+# using InteractiveUtils
 
 # ╔═╡ f9eff180-3c4d-49c2-9f4e-e3f425a96966
 #=╠═╡ notebook_exclusive
@@ -14,9 +14,14 @@ end
 
 # ╔═╡ 941fa912-61d4-4847-8bb2-5e83eb31ca34
 begin
+	using Revise
 	using PlutoDevMacros
-	using BenchmarkTools
 end
+
+# ╔═╡ f73c9b70-4c68-4d3b-be3e-067a118681e8
+#=╠═╡ notebook_exclusive
+using BenchmarkTools
+  ╠═╡ notebook_exclusive =#
 
 # ╔═╡ e2ac5a43-d683-486b-a2a1-f26f48313c47
 @plutoinclude "test1.jl" "all"
@@ -48,6 +53,7 @@ asd(3)
 # ╔═╡ Cell order:
 # ╠═f9eff180-3c4d-49c2-9f4e-e3f425a96966
 # ╠═941fa912-61d4-4847-8bb2-5e83eb31ca34
+# ╠═f73c9b70-4c68-4d3b-be3e-067a118681e8
 # ╠═e2ac5a43-d683-486b-a2a1-f26f48313c47
 # ╠═f5b8ccdd-ad66-4ae4-b3e9-82452464168b
 # ╠═f3287e4b-c92a-4eef-8b79-78346a55803b

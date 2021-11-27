@@ -1,8 +1,8 @@
 ### A Pluto.jl notebook ###
 # v0.17.2
 
-using Markdown
-using InteractiveUtils
+# using Markdown
+# using InteractiveUtils
 
 # This Pluto notebook uses @bind for interactivity. When running this notebook outside of Pluto, the following 'mock version' of @bind gives bound variables a default value (instead of an error).
 macro bind(def, element)
@@ -114,41 +114,6 @@ md"""
 """
   ╠═╡ notebook_exclusive =#
 
-# ╔═╡ e3e5510d-d1aa-442f-8d51-e42fe942f295
-#=╠═╡ notebook_exclusive
-@__FILE__
-  ╠═╡ notebook_exclusive =#
-
-# ╔═╡ 4a10255c-3a99-4939-ac29-65ef13b2c252
-#=╠═╡ notebook_exclusive
-md"""
-### called from notebook 
-"""
-  ╠═╡ notebook_exclusive =#
-
-# ╔═╡ a6f31a58-18ad-44d2-a6a2-f46e970f195a
-#=╠═╡ notebook_exclusive
-Main.PlutoRunner.cell_results.keys
-  ╠═╡ notebook_exclusive =#
-
-# ╔═╡ f41c1fa8-bd01-443c-bdeb-c49e5ff7127c
-"""
-	_called_from_notebook(filesrc::AbstractString)
-
-Given the result of `@__FILE__` (or `string(__source__.file)` from a macro), check whether the macro was called directly from a Pluto notebook.
-
-This works because the `@__FILE__` information contains the name of the Pluto notebook followed by the cell UUID in case this is called directly in a notebook (and not included from outside)
-"""
-function _called_from_notebook(filesrc)
-	if isdefined(Main,:PlutoRunner)
-		cell_id = tryparse(Base.UUID,last(filesrc,36))
-		println("cell_id = $cell_id")
-		println("currently_running = $(Main.PlutoRunner.currently_running_cell_id[])")
-		cell_id !== nothing && cell_id === Main.PlutoRunner.currently_running_cell_id[] && return true
-	end
-	return false
-end
-
 # ╔═╡ b87d12be-a37b-4202-9426-3eef14d8253c
 function ingredients(path::String,exprmap::Function=include_mapexpr())
 	# this is from the Julia source code (evalfile in base/loading.jl)
@@ -166,9 +131,11 @@ function ingredients(path::String,exprmap::Function=include_mapexpr())
 end
 
 # ╔═╡ 57efc195-6a2f-4ad3-94fd-53e884838789
+#=╠═╡ notebook_exclusive
 md"""
 # Other Ingredients Helpers
 """
+  ╠═╡ notebook_exclusive =#
 
 # ╔═╡ aa28b5d8-e0d7-4b97-9220-b61a0c5f4fc4
 html_reload_button() = html"""
@@ -282,7 +249,7 @@ macro plutoinclude(ex,kwargstrs...)
 	end
 end
 
-# ╔═╡ 63e2bd00-63b8-43f9-b8d3-b5d336744f3a
+# ╔═╡ bd91be23-9ce6-4742-a0c6-44efea14623a
 export @plutoinclude
 
 # ╔═╡ 1f291bd2-9ab1-4fd2-bf50-49253726058f
@@ -346,13 +313,6 @@ const mm = ingredients(notebook_path)
 @benchmark $(mm.asd)((mm.TestStruct)())
   ╠═╡ notebook_exclusive =#
 
-# ╔═╡ 0a28b1e8-e9f9-4f1e-96c3-daf7112df8fd
-function plutodump(x::Union{Symbol, Expr})
-	i = IOBuffer()
-	Meta.dump(i, x)
-	String(take!(i)) |> Text
-end
-
 # ╔═╡ 4cec781b-c6d7-4fd7-bbe3-f7db0f973698
 #=╠═╡ notebook_exclusive
 a
@@ -392,11 +352,6 @@ asd(TestStruct())
 # ╔═╡ 8df0f262-faf2-4f99-98e2-6b2a47e5ca31
 #=╠═╡ notebook_exclusive
 asd(TestStruct(),3,4)
-  ╠═╡ notebook_exclusive =#
-
-# ╔═╡ 7e606056-860b-458d-a394-a2ae07771d55
-#=╠═╡ notebook_exclusive
-methods(asd)
   ╠═╡ notebook_exclusive =#
 
 # ╔═╡ 1754fdcf-de3d-4d49-a2f0-9e3f4aa3498e
@@ -541,18 +496,14 @@ uuid = "8e850b90-86db-534c-a0d3-1478176c7d93"
 # ╔═╡ Cell order:
 # ╠═f5486f67-7bfc-44e2-91b9-9401d81666da
 # ╠═e3d5c718-d98c-4d53-8fc9-911be34c9f2d
+# ╠═bd91be23-9ce6-4742-a0c6-44efea14623a
 # ╟─fcbd82ae-c04d-4f87-bbb7-5f73bdbf8bd0
 # ╠═2501c935-10c4-4dbb-ae35-0b310fcb3bfe
 # ╟─5089d8dd-6587-4172-9ffd-13cf43e8c341
-# ╠═e3e5510d-d1aa-442f-8d51-e42fe942f295
-# ╟─4a10255c-3a99-4939-ac29-65ef13b2c252
-# ╠═a6f31a58-18ad-44d2-a6a2-f46e970f195a
-# ╠═f41c1fa8-bd01-443c-bdeb-c49e5ff7127c
 # ╠═b87d12be-a37b-4202-9426-3eef14d8253c
 # ╟─57efc195-6a2f-4ad3-94fd-53e884838789
 # ╠═98b1fa0d-fad1-4c4f-88a0-9452d492c4cb
 # ╠═872bd88e-dded-4789-85ef-145f16003351
-# ╠═63e2bd00-63b8-43f9-b8d3-b5d336744f3a
 # ╠═aa28b5d8-e0d7-4b97-9220-b61a0c5f4fc4
 # ╟─1f291bd2-9ab1-4fd2-bf50-49253726058f
 # ╟─cf0d13ea-7562-4b8c-b7e6-fb2f1de119a7
@@ -564,14 +515,12 @@ uuid = "8e850b90-86db-534c-a0d3-1478176c7d93"
 # ╠═61924e22-f052-43a5-84b1-5512d222af26
 # ╠═3702cd59-bb04-4e89-92b9-583ac846416f
 # ╠═50759ca2-45ca-4005-9182-058a5cb68359
-# ╠═0a28b1e8-e9f9-4f1e-96c3-daf7112df8fd
 # ╠═4cec781b-c6d7-4fd7-bbe3-f7db0f973698
 # ╠═a7e7123f-0e7a-4771-9b9b-d0da97fefcef
 # ╠═2c41234e-e1b8-4ad8-9134-85cd65a75a2d
 # ╠═ce2a2025-a6e0-44ab-8631-8d308be734a9
 # ╠═d1fbe484-dcd0-456e-8ec1-c68acd708a08
 # ╠═8df0f262-faf2-4f99-98e2-6b2a47e5ca31
-# ╠═7e606056-860b-458d-a394-a2ae07771d55
 # ╠═d8be6b4c-a02b-43ec-b176-de6f64fefd87
 # ╠═1754fdcf-de3d-4d49-a2f0-9e3f4aa3498e
 # ╟─00000000-0000-0000-0000-000000000001

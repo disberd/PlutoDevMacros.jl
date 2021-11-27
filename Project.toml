@@ -6,3 +6,4 @@ version = "0.3.10"
 [deps]
 MacroTools = "1914dd2f-81c6-5fcd-8719-6d5c9610ff09"
 PlutoHooks = "0ff47ea0-7a50-410d-8455-4348d5de0774"
+Requires = "ae029012-a4dd-5104-9daa-d747884805df"

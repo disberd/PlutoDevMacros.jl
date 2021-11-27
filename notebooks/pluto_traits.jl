@@ -4,24 +4,23 @@
 # using Markdown
 # using InteractiveUtils
 
-# ╔═╡ 0ba0aae0-5c29-449a-81db-a389baddf0dc
+# ╔═╡ ea96e5d7-7bc0-45cf-8bf1-4acfaf5507c9
 #=╠═╡ notebook_exclusive
-using PlutoDevMacros
+include("basics.jl")
   ╠═╡ notebook_exclusive =#
 
-# ╔═╡ 9b6c7d3b-b70a-4cd4-9a77-f9b8d8501b9e
-using MacroTools: splitdef
-
-# ╔═╡ ea96e5d7-7bc0-45cf-8bf1-4acfaf5507c9
-using PlutoHooks: @use_is_pluto_cell
+# ╔═╡ 0ba0aae0-5c29-449a-81db-a389baddf0dc
+#=╠═╡ notebook_exclusive
+#using PlutoDevMacros
+  ╠═╡ notebook_exclusive =#
 
 # ╔═╡ 2307b8e6-6308-4902-9921-135b85273f65
 #=╠═╡ notebook_exclusive
 import WhereTraits
   ╠═╡ notebook_exclusive =#
 
-# ╔═╡ b5ba492f-5909-4b0a-925d-5537a506d1c8
-@plutoinclude "basics.jl" "all"
+# ╔═╡ 9b6c7d3b-b70a-4cd4-9a77-f9b8d8501b9e
+import MacroTools
 
 # ╔═╡ 4495c328-5bff-41ec-97f3-2422ee8c7339
 function _plutotraits(ex::Expr)
@@ -32,7 +31,7 @@ function _plutotraits(ex::Expr)
 		return ex, fname
 	else
 		# We try to see if this expression is a function definition
-		defdict = splitdef(ex)
+		defdict = MacroTools.splitdef(ex)
 		# If we reach this point, the expression is a funcdef or splitdef would error
 		# Extract the linenumbernode from the definition
 		body = defdict[:body]
@@ -114,14 +113,10 @@ g(1)
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
 MacroTools = "1914dd2f-81c6-5fcd-8719-6d5c9610ff09"
-PlutoDevMacros = "a0499f29-c39b-4c5c-807c-88074221b949"
-PlutoHooks = "0ff47ea0-7a50-410d-8455-4348d5de0774"
 WhereTraits = "c9d4e05b-6318-49cb-9b56-e0e2b0ceadd8"
 
 [compat]
 MacroTools = "~0.5.9"
-PlutoDevMacros = "~0.3.10"
-PlutoHooks = "~0.0.3"
 WhereTraits = "~1.0.0"
 """
 
@@ -184,9 +179,6 @@ deps = ["Compat", "ProxyInterfaces", "SimpleMatch", "StructEquality"]
 git-tree-sha1 = "03d3f97dad4bd2b10ca0febca5db6bef5e0b320a"
 uuid = "c5caad1f-83bd-4ce8-ac8e-4b29921e994e"
 version = "1.1.0"
-
-[[deps.FileWatching]]
-uuid = "7b1f6079-737a-58dc-b8bc-7a2ca5c1b5ee"
 
 [[deps.Future]]
 deps = ["Random"]
@@ -252,18 +244,6 @@ uuid = "4536629a-c528-5b80-bd46-f80d51c5b363"
 [[deps.Pkg]]
 deps = ["Artifacts", "Dates", "Downloads", "LibGit2", "Libdl", "Logging", "Markdown", "Printf", "REPL", "Random", "SHA", "Serialization", "TOML", "Tar", "UUIDs", "p7zip_jll"]
 uuid = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
-
-[[deps.PlutoDevMacros]]
-deps = ["MacroTools", "PlutoHooks"]
-git-tree-sha1 = "7bb2558b40c6176ac5094542f7e01407fc3b38c1"
-uuid = "a0499f29-c39b-4c5c-807c-88074221b949"
-version = "0.3.10"
-
-[[deps.PlutoHooks]]
-deps = ["FileWatching", "InteractiveUtils", "Markdown", "UUIDs"]
-git-tree-sha1 = "f297787f7d7507dada25f6769fe3f08f6b9b8b12"
-uuid = "0ff47ea0-7a50-410d-8455-4348d5de0774"
-version = "0.0.3"
 
 [[deps.Printf]]
 deps = ["Unicode"]
@@ -380,7 +360,6 @@ uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
 # ╠═2307b8e6-6308-4902-9921-135b85273f65
 # ╠═9b6c7d3b-b70a-4cd4-9a77-f9b8d8501b9e
 # ╠═ea96e5d7-7bc0-45cf-8bf1-4acfaf5507c9
-# ╠═b5ba492f-5909-4b0a-925d-5537a506d1c8
 # ╠═8f354575-6ca2-4f0f-9880-f50d785de8f9
 # ╠═b810a742-dda2-4bd0-b9d3-8b0b5ee7356c
 # ╠═4495c328-5bff-41ec-97f3-2422ee8c7339

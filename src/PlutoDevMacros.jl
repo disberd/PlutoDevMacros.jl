@@ -12,9 +12,10 @@ using Requires
 include("../notebooks/basics.jl") # @only_in_nb, @only_out_nb, is_notebook_local, plutodump, @current_pluto_cell_id, @current_pluto_notebook_file
 include("../notebooks/mapexpr.jl") # hasexpr, default_exprlist, include_mapexpr
 include("../notebooks/plutoinclude_macro.jl") # hasexpr, default_exprlist, include_mapexpr
+include("../notebooks/pluto_traits.jl") # This defines and exports the @plutotraits macro
 
-function __init__()
-	@require WhereTraits="c9d4e05b-6318-49cb-9b56-e0e2b0ceadd8" include("../notebooks/pluto_traits.jl") # This defines and exports the @plutotraits macro
-end
+# function __init__()
+# 	@require WhereTraits="c9d4e05b-6318-49cb-9b56-e0e2b0ceadd8" include("../notebooks/pluto_traits.jl") # This defines and exports the @plutotraits macro
+# end
 
 end # module

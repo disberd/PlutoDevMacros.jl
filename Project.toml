@@ -1,7 +1,7 @@
 name = "PlutoDevMacros"
 uuid = "a0499f29-c39b-4c5c-807c-88074221b949"
 authors = ["Alberto Mengali <disberd@gmail.com>"]
-version = "0.4.3"
+version = "0.4.4"
 
 [deps]
 MacroTools = "1914dd2f-81c6-5fcd-8719-6d5c9610ff09"

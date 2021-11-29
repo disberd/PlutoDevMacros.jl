@@ -212,10 +212,12 @@ function include_expr(from::Module,kwargstrs::String...; to::Module)
 				# _copymethods!(ex, s; to, from, importedlist = varnames, fromname = modname)
 				ret_types = Base.return_types(getfield(from,s))
 				candidate_type = ret_types[1]
+				# Get the eventual docstring
+				docstring = Base.doc(Base.Docs.Binding(from, s))
 				if all(x -> x === candidate_type, ret_types) && Base.isconcretetype(candidate_type)
-					push!(ex.args, :($s(args...; kwargs...)::$candidate_type = $modname.$s(args...; kwargs...)))
+					push!(ex.args, :(@doc ($docstring) $s(args...; kwargs...)::$candidate_type = $modname.$s(args...; kwargs...)))
 				else
-					push!(ex.args, :($s(args...; kwargs...) = $modname.$s(args...; kwargs...)))
+					push!(ex.args, :(@doc ($docstring) $s(args...; kwargs...) = $modname.$s(args...; kwargs...)))
 				end
 			else
 				push!(ex.args,:(const $s = $modname.$s))

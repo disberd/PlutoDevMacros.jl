@@ -25,6 +25,10 @@ struct TestStruct1 end
 asd(x::Int) = "INTSSS"
 
 # ╔═╡ 354605a3-297e-4647-b4cf-f0aea4987f9e
+"""
+	asd(::TestStruct1)
+This is a magical docstring
+"""
 asd(::TestStruct1) = "TESTSTRUCT1"
 
 # ╔═╡ 9e1468e5-beda-486a-9cde-9c498f77999e

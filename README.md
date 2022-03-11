@@ -13,6 +13,8 @@ Lastly, the macro creates a button on the notebook front-end that can be clicked
 
 See the video example below, or check the [plutoinclude_macro](./notebooks/plutoinclude_macro.jl), [plutoinclude_test](./notebooks/plutoinclude_test.jl) for basic usage or [test1](./notebooks/test1.jl), [test2](./notebooks/test2.jl), [test3](./notebooks/test3.jl) for chained inclusion examples:
 
+https://user-images.githubusercontent.com/12846528/157840718-29f754b0-2649-41ed-934f-b554bdab13b9.mp4
+
 ## `@only_in_nb`, `@only_out_nb`
 
 The exported macro `@only_in_nb` ensures that the content of a cell are only executed when ran from the notebook where they are defined.

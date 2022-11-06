@@ -10,7 +10,7 @@ using Requires
 # export notebook_to_source
 
 include("../notebooks/basics.jl") # @only_in_nb, @only_out_nb, is_notebook_local, plutodump, @current_pluto_cell_id, @current_pluto_notebook_file
-include("../notebooks/htlscript.jl") # @HTLScript
+include("../notebooks/htlscript.jl") # HTLScript, HTLBypass 
 include("../notebooks/mapexpr.jl") # hasexpr, default_exprlist, include_mapexpr
 include("../notebooks/plutoinclude_macro.jl") # hasexpr, default_exprlist, include_mapexpr
 # include("../notebooks/pluto_traits.jl") # This defines and exports the @plutotraits macro

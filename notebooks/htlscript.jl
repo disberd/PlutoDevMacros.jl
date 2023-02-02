@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.14
+# v0.19.22
 
 using Markdown
 using InteractiveUtils
@@ -94,6 +94,16 @@ end
 """
 struct HTLScriptPart
 	buffer::IOBuffer
+	addedEventListeners::Bool
+	function HTLScriptPart(buf::IOBuffer)
+		# We check if the code contains calls to the addScriptEventListeners
+		checkbuf = IOBuffer()
+		seekstart(buf)
+		Base.readuntil_vector!(buf, codeunits("addScriptEventListeners("), false, checkbuf)
+		# If the previous line didn't find any call to addScriptEventListeners, the size of trash and buf will be the same
+		addedEventListeners = !(buf.size === checkbuf.size)
+		new(buf, addedEventListeners)
+	end		
 end
 function HTLScriptPart(r::HypertextLiteral.Result)
 	buf = IOBuffer()
@@ -111,6 +121,11 @@ function HTLScriptPart(s::AbstractString)
 	write(buf, s)
 	HTLScriptPart(buf)
 end
+end
+
+# ╔═╡ b9291d89-8b30-40f6-b13f-4259f774adaa
+let
+	findfirst("addScriptEventListeners(", "dio gesu addScriptEventListenersa(a,1)")
 end
 
 # ╔═╡ 7dcfe459-c23b-4c4f-aa6b-5654f17934a0
@@ -292,16 +307,67 @@ Multiple `HTLScript` elements can be combined together using the [`combine_scrip
 
 When shown inside the output of Pluto cells, the HTLScript object prints its containing formatted code as a `Markdown.Code` element.
 
+# Javascript Events Listeners
+
+`HTLScript` provides some simplified way of adding event listeners in javascript that are automatically removed upon cell invalidation. Scripts created using `HTLScript` expose an internal javascript function 
+```js
+addScriptEventListener(element, listeners)
+```
+which accepts any givent JS `element` to which listeners have to be attached, and an object of with the following key-values:
+```js
+{ 
+  eventName1: listenerFunction1, 
+  eventName2: listenerFunction2,
+  ... 
+}
+```
+When generating the script to execute, `HTLScript` automatically adds all the provided listeners to the provided element, and also takes care of removing all the listeners upon cell invalidation.
+
+For example, the following julia code:
+```julia
+let
+	script = HTLScript(@htl(\"\"\"
+<script>
+	addScriptEventListeners(window, { 
+		click: function (event) {
+			console.log('click: ',event)
+		}, 
+		keydown: function (event) {
+			console.log('keydown: ',event)
+		},
+	})
+</script>
+	\"\"\"))
+	@htl"\$script"
+end
+```
+is functionally equivalent of writing the following javascript code within the script tag of the cell output
+```js
+function onClick(event) {
+	console.log('click: ',event)
+}
+function onKeyDown(event) {
+	console.log('keydown: ',event)
+}
+window.addEventListener('click', onClick)
+window.addEventListener('keydown', onKeyDown)
+
+invalidation.then(() => {
+	window.removeEventListener('click', onClick)
+	window.removeEventListener('keydown', onKeyDown)
+})
+```
+
 See also: [`HTLScriptPart`](@ref), [`combine_scripts`](@ref)
 
 # Examples:
 The following code:
 ```julia
 let
-	a = HTLScript("console.log('asd')")
-	b = HTLScript(@htl("<script>console.log('boh')</script>"), "console.log('lol')")
-	script = combine_scripts([a,b];id='test')
-	out = @htl("\$script")
+a = HTLScript("console.log('asd')")
+b = HTLScript(@htl("<script>console.log('boh')</script>"), "console.log('lol')")
+script = combine_scripts([a,b];id="test")
+out = @htl("\$script")
 end
 ```
 is equivalent to writing directly
@@ -342,6 +408,73 @@ end
 md"""
 ## Show Methods
 """
+
+# ╔═╡ a4ef253a-6254-4fbf-abde-58f98295f7c7
+md"""
+## Automatic Event Listeners
+"""
+
+# ╔═╡ 3b1e9a72-6550-4478-89f9-ccf1089eefdb
+_events_listeners_preamble = HTLScriptPart(@htl("""
+<script>
+	/* #### BEGINNING OF PART AUTOMATICALLY ADDED BY HTLSCRIPT #### */
+	// Array where all the event listeners are stored
+	const _events_listeners_ = []
+
+	// Function that can be called to add events listeners within the script
+	function addScriptEventListeners(element, listeners) {
+		if (listeners.constructor != Object) {error('Only objects with keys as event names and values as listener functions are supported')}
+		_events_listeners_.push({element, listeners})
+	}
+	/* #### END OF PART AUTOMATICALLY ADDED BY HTLSCRIPT #### */
+</script>
+"""));
+
+# ╔═╡ e1e35e7a-efce-45c2-8f67-120755081179
+_events_listeners_postamble = HTLScriptPart(@htl("""
+<script>
+	/* #### BEGINNING OF PART AUTOMATICALLY ADDED BY HTLSCRIPT #### */
+	// Assign the various events listeners defined within the script
+	for (const item of _events_listeners_) {
+		const { element, listeners } = item
+		for (const [name, func] of _.entries(listeners)) {
+  			element.addEventListener(name, func)
+		}
+	}
+	/* #### END OF PART AUTOMATICALLY ADDED BY HTLSCRIPT #### */
+</script>
+"""));
+
+# ╔═╡ ae402f64-409d-4c95-94a3-778348514b0e
+_events_listeners_invalidation = HTLScriptPart(@htl("""
+<script>	
+		/* #### BEGINNING OF PART AUTOMATICALLY ADDED BY HTLSCRIPT #### */
+		// Remove the events listeners during invalidation
+		for (const item of _events_listeners_) {
+			const { element, listeners } = item
+			for (const [name, func] of _.entries(listeners)) {
+	  			element.removeEventListener(name, func)
+			}
+		}
+		/* #### END OF PART AUTOMATICALLY ADDED BY HTLSCRIPT #### */
+</script>
+"""));
+
+# ╔═╡ 36484b50-7f16-40c9-8c0e-25f66a85add4
+# ╠═╡ skip_as_script = true
+#=╠═╡
+testt = HTLScript(@htl("""
+<script>
+	let a = Math.random()
+
+	addScriptEventListeners(window, {
+		click: function (e) {
+			console.log(a)
+		}
+	})
+</script>
+"""))
+  ╠═╡ =#
 
 # ╔═╡ a39f02b8-6681-42e4-a216-966e9884b91a
 md"""
@@ -426,33 +559,43 @@ function combine_scripts(v; id = missing)
 	out = _convert_combine(v;id)
 end
 
+# ╔═╡ dc1d32ef-1c9a-4703-93a6-b61676bc7b98
+#=╠═╡
+let
+	a = HTLScript("console.log('asd')")
+	b = HTLScript(@htl("<script>console.log('boh')</script>"), "console.log('lol')")
+	script = combine_scripts([a,b, testt];id="test")
+end
+  ╠═╡ =#
+
 # ╔═╡ f1f1fe15-2402-4c75-966a-c4cb1fb32b03
-function print_invalidation(s::HTLScriptPart)
-	buf = s.buffer
-	out = buf.size == 0 ? "" : @htl """
+function print_invalidation(s::HTLScriptPart, addListeners::Bool = false)
+	out = (s.buffer.size == 0 && !addListeners) ? "" : @htl("""
 	<script>
 	invalidation.then(() => {
+		$(addListeners ? _events_listeners_invalidation : "")
 		$s
 	})
 </script>
-"""
+""")
 	return HTLScriptPart(out)
 end
 
 # ╔═╡ 6bd8f9ad-b821-4997-abdc-ce6cf28238ba
-print_invalidation(s::Missing) = HTLScriptPart("")
+print_invalidation(s::Missing, addListeners::Bool = false) = print_invalidation(HTLScriptPart(""), addListeners)
 
 # ╔═╡ 882236d8-8bd9-4386-b3c7-00b7842a28cf
-print_invalidation(s::HTLScript) = print_invalidation(s.invalidation)
+print_invalidation(s::HTLScript, addListeners::Bool = false) = print_invalidation(s.invalidation, addListeners)
 
 # ╔═╡ 3ca7beb7-2a4d-448f-9c9a-c26c51fa83fb
-function make_script(h::HTLScript)  
+function make_script(h::HTLScript, addListeners::Bool = h.body.addedEventListeners)  
 	id = coalesce(h.id, h._id)
 	@htl """
 <script id='$id'>
+	$(addListeners ? _events_listeners_preamble : "")
 	$(h.body)
-
-	$(print_invalidation(h))
+	$(addListeners ? _events_listeners_postamble : "")
+	$(print_invalidation(h, addListeners))
 </script>
 """
 end
@@ -460,6 +603,11 @@ end
 # ╔═╡ edc0857a-0a41-4952-b5e4-f0dfbc7c18e0
 # This custom content method is used when interpolating inside the @htl macro (but outside of the script tag)
 HypertextLiteral.content(s::HTLScript) = make_script(s)
+
+# ╔═╡ ea3e8ec4-556d-452e-a136-1441804cc03e
+#=╠═╡
+make_script(testt)
+  ╠═╡ =#
 
 # ╔═╡ 7492b935-f4f4-415d-8305-9de40ca20382
 # Show the formatted code in markdown as output
@@ -620,7 +768,7 @@ PlutoUI = "~0.7.48"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.8.2"
+julia_version = "1.9.0-beta3"
 manifest_format = "2.0"
 project_hash = "e07af10889a79c29aa9a0f67446bc608367fde80"
 
@@ -655,7 +803,7 @@ version = "0.11.4"
 [[deps.CompilerSupportLibraries_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "e66e0078-7015-5450-92f7-15fbd957f2ae"
-version = "0.5.2+0"
+version = "1.0.2+0"
 
 [[deps.Dates]]
 deps = ["Printf"]
@@ -726,7 +874,7 @@ version = "1.10.2+0"
 uuid = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
 
 [[deps.LinearAlgebra]]
-deps = ["Libdl", "libblastrampoline_jll"]
+deps = ["Libdl", "OpenBLAS_jll", "libblastrampoline_jll"]
 uuid = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 
 [[deps.Logging]]
@@ -751,7 +899,7 @@ uuid = "a63ad114-7e13-5084-954f-fe012c677804"
 
 [[deps.MozillaCACerts_jll]]
 uuid = "14a3606d-f60d-562e-9121-12d972cd8159"
-version = "2022.2.1"
+version = "2022.10.11"
 
 [[deps.NetworkOptions]]
 uuid = "ca575930-c2e3-43a9-ace4-1e988b2c1908"
@@ -760,7 +908,7 @@ version = "1.2.0"
 [[deps.OpenBLAS_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Libdl"]
 uuid = "4536629a-c528-5b80-bd46-f80d51c5b363"
-version = "0.3.20+0"
+version = "0.3.21+0"
 
 [[deps.Parsers]]
 deps = ["Dates", "SnoopPrecompile"]
@@ -769,9 +917,9 @@ uuid = "69de0a69-1ddd-5017-9359-2bf0b02dc9f0"
 version = "2.5.0"
 
 [[deps.Pkg]]
-deps = ["Artifacts", "Dates", "Downloads", "LibGit2", "Libdl", "Logging", "Markdown", "Printf", "REPL", "Random", "SHA", "Serialization", "TOML", "Tar", "UUIDs", "p7zip_jll"]
+deps = ["Artifacts", "Dates", "Downloads", "FileWatching", "LibGit2", "Libdl", "Logging", "Markdown", "Printf", "REPL", "Random", "SHA", "Serialization", "TOML", "Tar", "UUIDs", "p7zip_jll"]
 uuid = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
-version = "1.8.0"
+version = "1.9.0"
 
 [[deps.PlutoUI]]
 deps = ["AbstractPlutoDingetjes", "Base64", "ColorTypes", "Dates", "FixedPointNumbers", "Hyperscript", "HypertextLiteral", "IOCapture", "InteractiveUtils", "JSON", "Logging", "MIMEs", "Markdown", "Random", "Reexport", "URIs", "UUIDs"]
@@ -816,22 +964,28 @@ version = "1.0.1"
 uuid = "6462fe0b-24de-5631-8697-dd941f90decc"
 
 [[deps.SparseArrays]]
-deps = ["LinearAlgebra", "Random"]
+deps = ["Libdl", "LinearAlgebra", "Random", "Serialization", "SuiteSparse_jll"]
 uuid = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 
 [[deps.Statistics]]
 deps = ["LinearAlgebra", "SparseArrays"]
 uuid = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
+version = "1.9.0"
+
+[[deps.SuiteSparse_jll]]
+deps = ["Artifacts", "Libdl", "Pkg", "libblastrampoline_jll"]
+uuid = "bea87d4a-7f5b-5778-9afe-8cc45184846c"
+version = "5.10.1+0"
 
 [[deps.TOML]]
 deps = ["Dates"]
 uuid = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
-version = "1.0.0"
+version = "1.0.3"
 
 [[deps.Tar]]
 deps = ["ArgTools", "SHA"]
 uuid = "a4e569a6-e804-4fa4-b0f3-eef7a1d5b13e"
-version = "1.10.1"
+version = "1.10.0"
 
 [[deps.Test]]
 deps = ["InteractiveUtils", "Logging", "Random", "Serialization"]
@@ -857,12 +1011,12 @@ uuid = "4ec0a83e-493e-50e2-b9ac-8f72acf5a8f5"
 [[deps.Zlib_jll]]
 deps = ["Libdl"]
 uuid = "83775a58-1f1d-513f-b197-d71354ab007a"
-version = "1.2.12+3"
+version = "1.2.13+0"
 
 [[deps.libblastrampoline_jll]]
-deps = ["Artifacts", "Libdl", "OpenBLAS_jll"]
+deps = ["Artifacts", "Libdl"]
 uuid = "8e850b90-86db-534c-a0d3-1478176c7d93"
-version = "5.1.1+0"
+version = "5.2.0+0"
 
 [[deps.nghttp2_jll]]
 deps = ["Artifacts", "Libdl"]
@@ -885,6 +1039,7 @@ version = "17.4.0+0"
 # ╟─af424bad-c980-4969-91b7-299d9f029691
 # ╟─c5b66120-bb79-4603-ab2b-767bb684a4ae
 # ╠═1aa9e236-eb68-43f5-afcd-1af51b71b34e
+# ╠═b9291d89-8b30-40f6-b13f-4259f774adaa
 # ╟─7dcfe459-c23b-4c4f-aa6b-5654f17934a0
 # ╠═ac2b8e3e-1704-48c3-bc1f-9f12010b7e3c
 # ╠═9efdecea-27b1-4e9e-892f-c5475ebcf9d5
@@ -914,6 +1069,13 @@ version = "17.4.0+0"
 # ╠═1fcbc5cb-2d26-4951-ba93-df8e45588d67
 # ╠═edc0857a-0a41-4952-b5e4-f0dfbc7c18e0
 # ╠═b2d909ba-8d11-4718-9f7d-aa55506cbcde
+# ╟─a4ef253a-6254-4fbf-abde-58f98295f7c7
+# ╠═3b1e9a72-6550-4478-89f9-ccf1089eefdb
+# ╠═e1e35e7a-efce-45c2-8f67-120755081179
+# ╠═ae402f64-409d-4c95-94a3-778348514b0e
+# ╠═36484b50-7f16-40c9-8c0e-25f66a85add4
+# ╠═ea3e8ec4-556d-452e-a136-1441804cc03e
+# ╠═dc1d32ef-1c9a-4703-93a6-b61676bc7b98
 # ╟─a39f02b8-6681-42e4-a216-966e9884b91a
 # ╠═152c6530-4cf5-4541-8cde-fb88a4d539b6
 # ╠═f79152d5-7dac-411e-8335-9eeafc989ba6

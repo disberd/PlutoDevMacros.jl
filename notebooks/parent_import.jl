@@ -72,9 +72,6 @@ md"""
 # Macro
 """
 
-# ╔═╡ f0ae8c36-875a-412e-8d84-e8d0aeb7b12f
-
-
 # ╔═╡ 9a3ef442-9905-431a-8e18-f72c9acba5e8
 _skip_expr_var_name = :__parent_import_expr_to_remove__
 
@@ -83,19 +80,19 @@ macro skipexpr(ex)
 	esc(Expr(:(=), _skip_expr_var_name, ex))
 end
 
-# ╔═╡ 0176659b-20bf-403b-8d7d-b34b6c32d9b7
-
-
 # ╔═╡ 10b633a4-14ab-4eff-b503-9841d9ffe175
 md"""
 ## Function
 """
 
 # ╔═╡ d1b36c20-63d0-4105-9418-cdb05645ca99
+# ╠═╡ skip_as_script = true
+#=╠═╡
 @skipexpr [
 	:(using MacroTools),
 	:(using Requires),
 ]
+  ╠═╡ =#
 
 # ╔═╡ a3102851-32f0-4ddd-97d2-4c6650b94dcd
 macro fromparent(ex)
@@ -103,13 +100,14 @@ macro fromparent(ex)
 	esc(fromparent(ex, calling_file, __module__))
 end
 
-# ╔═╡ abdb5ebe-6be8-4f97-a5af-00b23dbfa9a4
-@fromparent import *
+# ╔═╡ 3208acb4-9a54-41e9-910f-d98206dc80a2
+export @fromparent, @skipexpr
 
-# ╔═╡ a55f6e98-08ca-4937-ab1e-f84dc72f086a
-map(methods(is_notebook_local)) do m
-	m.module
-end
+# ╔═╡ 43783ef3-3d0f-4a70-9b4f-cfbf3e5b1673
+# ╠═╡ skip_as_script = true
+#=╠═╡
+@fromparent import module
+  ╠═╡ =#
 
 # ╔═╡ e4175daf-bef5-4d91-9794-85458371d03d
 md"""
@@ -122,12 +120,51 @@ md"""
 """
 
 # ╔═╡ 3756fc1e-b64c-4fe5-bf7b-cc6094fc00a7
+# This fuction parse the input and return the path to access the module to import from
 function parseinput(ex, dict)
 	Meta.isexpr(ex, [:import, :using]) || error("Only import or using statements are supported as input to the `@fromparent` macro")
-	# For now we only check for the catchall import, we'll implement more advanced stuff later
-	length(ex.args) == 1 && ex.args[1] == Expr(:(.), :(*)) || error("Only catchall is supported")
-	return nothing
+	# Get the path to access the parent module of the calling function
+	parentpath = filter([:_PackageModule_, dict["Module Path"]...]) do name
+		return !(name == Symbol(dict["name"]))
+	end
+	catchall = false
+	if Meta.isexpr(ex.args[1], :(:))
+		# We have a list of imported names from a module, let's force the import and check if it's a catchall
+		ex.head = :import
+		modname = ex.args[1]
+		# We find how many levels up it goes in the hierarchy
+		Meta.isexpr(modname, :(.)) && modname.args[1] == :(.) || error("We are expecting expression of the type `import .NAME: vars...`")
+		for arg in modname.args[2:end]
+		end
+		imported_names = ex.args[2:end]
+	else
+		name = ex.args[1].args[1]
+		length(ex.args) == 1 && name ∈ (:(*), :module) || error("When calling the macro without specifying which variables to import, you can only use `*` or `module` as arguments, you gave $(ex.args)")
+		if name == :module
+			ex = nothing
+		else
+			catchall = true
+		end
+	end
+	return ex, parentpath, catchall
 end
+
+# ╔═╡ df992d64-4990-4d51-a6bd-831844371617
+# ╠═╡ skip_as_script = true
+#=╠═╡
+module GESURE
+	a(x) = 3+x
+	module MADONNA
+		import ..GESURE: a
+		b = a(50)
+	end
+end
+  ╠═╡ =#
+
+# ╔═╡ cbf5c05a-e0ed-46a4-9533-d7dad5434402
+#=╠═╡
+GESURE.MADONNA.b
+  ╠═╡ =#
 
 # ╔═╡ 76dbf4fd-8c4d-4af2-ac17-efb5b51aae76
 md"""
@@ -362,7 +399,10 @@ function extract_module_expression(filename, _module)
 end
 
 # ╔═╡ 7948ab6f-ee62-4c41-a2c0-74f1c25a87ce
+# ╠═╡ skip_as_script = true
+#=╠═╡
 extract_module_expression(@__FILE__, @__MODULE__)[2]
+  ╠═╡ =#
 
 # ╔═╡ 61871032-7ab7-4066-983c-04d3acdd954d
 function maybe_load_module(calling_file, _module)
@@ -462,19 +502,27 @@ macro addmodule(ex)
 end
 
 # ╔═╡ 7137267a-93c2-410c-a7ad-4217b6bfbafb
+# ╠═╡ skip_as_script = true
+#=╠═╡
 @macroexpand @addmodule begin
 	a = 2
 	b = 5
 end
+  ╠═╡ =#
 
 # ╔═╡ d7266a18-be15-4aab-a299-c39ea98464fb
+# ╠═╡ skip_as_script = true
+#=╠═╡
 @addmodule begin
 	a = 2
 	b = 5
 end
+  ╠═╡ =#
 
 # ╔═╡ 134981ec-c43f-4be0-b06e-a881b7a8f8dd
+#=╠═╡
 a
+  ╠═╡ =#
 
 # ╔═╡ 30c5de94-b453-454a-a3fd-93b86c45c7f1
 function fromparent(ex, calling_file, _module)
@@ -483,10 +531,9 @@ function fromparent(ex, calling_file, _module)
 	# We extract the parse dict
 	dict = _PackageModule_._fromparent_dict_
 	# We parse the input expr, for now just to verify that the catchall expression is provided, otherwise an error is thrown
-	parseinput(ex, dict)
-	parentpath = filter([:_PackageModule_, dict["Module Path"]...]) do name
-		return !(name == Symbol(dict["name"]))
-	end
+	exout, parentpath, catchall = parseinput(ex, dict)
+
+	exout isa Nothing && return block
 	parentmodule = _PackageModule_
 	for sym ∈ parentpath[2:end]
 		parentmodule = getproperty(parentmodule, sym)
@@ -495,7 +542,9 @@ function fromparent(ex, calling_file, _module)
 	to_import = filterednames(parentmodule)
 	# We create the expression to import all the names
 	
-	if !isempty(to_import)
+	if isempty(to_import)
+		@warn "The parent module has no name to import"
+	else
 		import_expr = Expr(:(:), Expr(:(.), :(.), parentpath...), map(x -> Expr(:(.), x), to_import)...)
 		# Add this expr to the block
 		push!(block.args, Expr(:import, import_expr))
@@ -880,23 +929,23 @@ version = "17.4.0+0"
 # ╠═4e1e0305-7cda-4272-904a-2aa7add72cb5
 # ╠═74b3f945-39af-463f-9f0a-ba1c7adc526c
 # ╠═345119ec-5d5d-41bf-9380-1ae684921061
-# ╠═f0ae8c36-875a-412e-8d84-e8d0aeb7b12f
 # ╠═9a3ef442-9905-431a-8e18-f72c9acba5e8
 # ╠═520e5abb-46aa-4dd6-91e5-3b4781e5dbd7
-# ╠═0176659b-20bf-403b-8d7d-b34b6c32d9b7
 # ╠═d2944e2d-3f3f-4482-a052-5ea147f193d9
 # ╠═7948ab6f-ee62-4c41-a2c0-74f1c25a87ce
+# ╠═3208acb4-9a54-41e9-910f-d98206dc80a2
 # ╠═10b633a4-14ab-4eff-b503-9841d9ffe175
 # ╠═d1b36c20-63d0-4105-9418-cdb05645ca99
 # ╠═36601158-bb28-4800-8972-559e822bcabf
 # ╠═61871032-7ab7-4066-983c-04d3acdd954d
 # ╠═30c5de94-b453-454a-a3fd-93b86c45c7f1
-# ╠═abdb5ebe-6be8-4f97-a5af-00b23dbfa9a4
 # ╠═a3102851-32f0-4ddd-97d2-4c6650b94dcd
-# ╠═a55f6e98-08ca-4937-ab1e-f84dc72f086a
+# ╠═43783ef3-3d0f-4a70-9b4f-cfbf3e5b1673
 # ╟─e4175daf-bef5-4d91-9794-85458371d03d
 # ╠═30fbe651-9849-40e6-ad44-7d5a1a0e5097
 # ╠═3756fc1e-b64c-4fe5-bf7b-cc6094fc00a7
+# ╠═df992d64-4990-4d51-a6bd-831844371617
+# ╠═cbf5c05a-e0ed-46a4-9533-d7dad5434402
 # ╟─76dbf4fd-8c4d-4af2-ac17-efb5b51aae76
 # ╠═ccbd8186-c075-4321-9289-e0b320f338ba
 # ╠═061aecc5-b893-4866-8f2a-605e1dcfffec

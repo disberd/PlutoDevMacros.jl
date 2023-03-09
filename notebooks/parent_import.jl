@@ -56,7 +56,7 @@ function get_parent_data(filepath::AbstractString)
 	parent_data["project"] = project_file
 	parent_data["file"] = parent_file
 	parent_data["target"] = filepath
-	parent_data["Nested Level"] = -1
+	parent_data["Module Path"] = Symbol[]
 	
 	return parent_data
 end
@@ -84,20 +84,50 @@ macro skipexpr(ex)
 end
 
 # ╔═╡ 0176659b-20bf-403b-8d7d-b34b6c32d9b7
+
+
+# ╔═╡ 10b633a4-14ab-4eff-b503-9841d9ffe175
+md"""
+## Function
+"""
+
+# ╔═╡ d1b36c20-63d0-4105-9418-cdb05645ca99
 @skipexpr [
 	:(using MacroTools),
 	:(using Requires),
 ]
 
-# ╔═╡ 9fe8c054-07c0-43ab-8560-f90ce69e88d4
-macro gesure(ex)
-	dump(ex)
+# ╔═╡ a3102851-32f0-4ddd-97d2-4c6650b94dcd
+macro fromparent(ex)
+	calling_file = String(__source__.file)
+	esc(fromparent(ex, calling_file, __module__))
+end
+
+# ╔═╡ abdb5ebe-6be8-4f97-a5af-00b23dbfa9a4
+@fromparent import *
+
+# ╔═╡ a55f6e98-08ca-4937-ab1e-f84dc72f086a
+map(methods(is_notebook_local)) do m
+	m.module
 end
 
 # ╔═╡ e4175daf-bef5-4d91-9794-85458371d03d
 md"""
 # Process Functions
 """
+
+# ╔═╡ 30fbe651-9849-40e6-ad44-7d5a1a0e5097
+md"""
+## parseinput
+"""
+
+# ╔═╡ 3756fc1e-b64c-4fe5-bf7b-cc6094fc00a7
+function parseinput(ex, dict)
+	Meta.isexpr(ex, [:import, :using]) || error("Only import or using statements are supported as input to the `@fromparent` macro")
+	# For now we only check for the catchall import, we'll implement more advanced stuff later
+	length(ex.args) == 1 && ex.args[1] == Expr(:(.), :(*)) || error("Only catchall is supported")
+	return nothing
+end
 
 # ╔═╡ 76dbf4fd-8c4d-4af2-ac17-efb5b51aae76
 md"""
@@ -158,9 +188,9 @@ isbind(:(a = @bind a LOL))
 
 # ╔═╡ 8b1f3a72-2d3f-4546-8f2b-4ae13bb6a2a9
 function remove_pluto_exprs(ex, dict)
-	ex.head == :macro && ex.args[1] == :(bind(def, element)) && return nothing, false
+	# ex.head == :macro && ex.args[1] == :(bind(def, element)) && return nothing, false
 	ex.head == :(=) && ex.args[1] ∈ (:PLUTO_PROJECT_TOML_CONTENTS, :PLUTO_MANIFEST_TOML_CONTENTS) && return nothing, false
-	isbind(ex) && return Expr(:throw_error, :bind), false
+	# isbind(ex) && return Expr(:throw_error, :bind), false
 	return ex, false
 end
 
@@ -257,9 +287,10 @@ function clean_args!(newargs)
 			# We add all its args here
 			splice!(newargs, i, arg.args)
 			last_invalid = false
-		# elseif Meta.isexpr(arg, :module) && length(arg.args) != 3
-		# 	newargs[i] = nothing
-		# 	last_invalid = true
+		elseif Meta.isexpr(arg, :module) && length(arg.args) == 2
+			# We have an unclosed module where we found the file
+			push!(arg.args, Expr(:block))
+			last_invalid = false
 		else
 			last_invalid = false
 		end
@@ -271,10 +302,8 @@ end
 function process_ast(ex, dict)
 	ex isa Expr || return ex, false
 	is_Expr_call(ex) && return ex, false
-	nest_level = dict["Nested Level"]
 	if Meta.isexpr(ex, :module)
-		level = dict["Nested Level"] += 1
-		dict["Parent Module"] = (;name = ex.args[2], level)
+		pushfirst!(dict["Module Path"], ex.args[2])
 	end
 	target_found = false
 	for f in (remove_custom_exprs, remove_pluto_exprs, extract_packages, process_include)
@@ -301,7 +330,10 @@ function process_ast(ex, dict)
 	end
 	# Remove the linunumbernodes that are directly before another nothing or LinuNumberNode
 	clean_args!(newargs)
-	dict["Nested Level"] = nest_level
+
+	if Meta.isexpr(ex, :module) && !target_found
+		popfirst!(dict["Module Path"])
+	end
 	return (isempty(newargs) ? nothing : Expr(ex.head, newargs...), target_found)
 end
 
@@ -329,24 +361,53 @@ function extract_module_expression(filename, _module)
 	mod_exp, data
 end
 
-# ╔═╡ a3102851-32f0-4ddd-97d2-4c6650b94dcd
-macro parentimport()
-	calling_file = String(__source__.file)
-	mod_exp, dict = extract_module_expression(calling_file, __module__)
-	# We create the module with a gensym name
-	s = gensym(:parentimport)
-	mod_exp.args[2] = s
-	_module = Core.eval(__module__, mod_exp)
-	quote
-		_ImportedParent_ = $_module
-	end |> esc
-end
+# ╔═╡ 7948ab6f-ee62-4c41-a2c0-74f1c25a87ce
+extract_module_expression(@__FILE__, @__MODULE__)[2]
 
-# ╔═╡ 55139837-501b-45b6-a075-7ce8da09fbf7
-# ╠═╡ skip_as_script = true
-#=╠═╡
-@parentimport
-  ╠═╡ =#
+# ╔═╡ 61871032-7ab7-4066-983c-04d3acdd954d
+function maybe_load_module(calling_file, _module)
+	# We try to see if the module was already created in this workspace
+	packagemodule = let
+		out = nothing
+		for sym in names(_module; all=true)
+			startswith(String(sym), "##packagemodule") || continue
+			out = getproperty(_module, sym)
+			break
+		end
+		out
+	end
+	# if Base.isdefined(_module, :_PackageModule_)
+	if !(packagemodule isa Nothing)
+		return Expr(:block), packagemodule
+	else
+		mod_exp, dict = extract_module_expression(calling_file, _module)
+		asd = if length(split(calling_file, "#==#")) == 1
+			# This is not a notebook
+		else
+			# This is a notebook, so we check the dependencies
+			proj_file = Core.eval(_module, :(Base.active_project()))
+			notebook_project = TOML.parsefile(proj_file)
+			notebook_deps =  Set(map(Symbol, keys(notebook_project["deps"]) |> collect))
+			missing_packages = setdiff(dict["discovered packages"], notebook_deps, Set([:Markdown, :Random, :InteractiveUtils]))
+			if !isempty(missing_packages)
+				error("""The following packages are used in the parent module but are not currently imported in this notebook's environment:
+				$(collect(missing_packages))
+				Consider adding those in a cell with:
+				`import $(join(collect(missing_packages),", "))`
+				""")
+			end
+			# We create the module with a gensym name
+			s = gensym(:packagemodule)
+			mod_exp.args[2] = s
+			__module = Core.eval(_module, mod_exp)
+			__module._fromparent_dict_ = dict
+			block = quote
+				_PackageModule_ = $__module
+			end
+			return block, __module
+		end
+	end
+end
 
 # ╔═╡ bc89433c-1fad-4653-8e98-2ab98360529f
 function process_include(ex, dict)
@@ -369,9 +430,14 @@ function process_include(ex, dict)
 	end
 end
 
+# ╔═╡ 3db3a103-26f2-4b63-8be0-226ec5df4cc9
+md"""
+## filterednames
+"""
+
 # ╔═╡ 0225f847-a8bf-45c0-b208-71d8547f0d3d
 function filterednames(m::Module)
-	excluded = (:eval, :include)
+	excluded = (:eval, :include, :_fromparent_dict_, nameof(m))
 	filter(names(m;all=true)) do s
 		Base.isgensym(s) && return false
 		s in excluded && return false
@@ -410,9 +476,40 @@ end
 # ╔═╡ 134981ec-c43f-4be0-b06e-a881b7a8f8dd
 a
 
-# ╔═╡ 2b1a2d33-4f5d-4faf-b755-7383864b85a8
+# ╔═╡ 30c5de94-b453-454a-a3fd-93b86c45c7f1
+function fromparent(ex, calling_file, _module)
+	# Construct the basic block where the module is import under name _PackageModule_. The module is only parsed if _PackageModule_ is not already defined in the calling module
+	block, _PackageModule_ = maybe_load_module(calling_file, _module)
+	# We extract the parse dict
+	dict = _PackageModule_._fromparent_dict_
+	# We parse the input expr, for now just to verify that the catchall expression is provided, otherwise an error is thrown
+	parseinput(ex, dict)
+	parentpath = filter([:_PackageModule_, dict["Module Path"]...]) do name
+		return !(name == Symbol(dict["name"]))
+	end
+	parentmodule = _PackageModule_
+	for sym ∈ parentpath[2:end]
+		parentmodule = getproperty(parentmodule, sym)
+	end
+	# Extract all names to import
+	to_import = filterednames(parentmodule)
+	# We create the expression to import all the names
+	
+	if !isempty(to_import)
+		import_expr = Expr(:(:), Expr(:(.), :(.), parentpath...), map(x -> Expr(:(.), x), to_import)...)
+		# Add this expr to the block
+		push!(block.args, Expr(:import, import_expr))
+	end
+	return block
+end
+
+# ╔═╡ 36601158-bb28-4800-8972-559e822bcabf
+# ╠═╡ skip_as_script = true
 #=╠═╡
-filterednames(_ImportedParent_)
+let
+	# fromparent(:(import *),"/home/amengali/Repos/github/mine/PlutoExtras/src/latex_equations.jl#==#", @__MODULE__)
+	fromparent(:(import *),@__FILE__, @__MODULE__)
+end
   ╠═╡ =#
 
 # ╔═╡ 24322219-40c4-4dec-9a13-0d35b48b4f66
@@ -471,9 +568,9 @@ PlutoExtras = "~0.7.1"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.9.0-beta4"
+julia_version = "1.9.0-rc1"
 manifest_format = "2.0"
-project_hash = "1e1c774f94cd5d41eeebd85103603b533a18b27c"
+project_hash = "c4293f1276b2768ebf1a798ebaa78478b5b935fb"
 
 [[deps.AbstractPlutoDingetjes]]
 deps = ["Pkg"]
@@ -607,7 +704,7 @@ uuid = "d6f4376e-aef5-505a-96c1-9c027394607a"
 [[deps.MbedTLS_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "c8ffd9c3-330d-5841-b78e-0817d7145fa1"
-version = "2.28.0+0"
+version = "2.28.2+0"
 
 [[deps.Mmap]]
 uuid = "a63ad114-7e13-5084-954f-fe012c677804"
@@ -623,7 +720,7 @@ version = "1.2.0"
 [[deps.OpenBLAS_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Libdl"]
 uuid = "4536629a-c528-5b80-bd46-f80d51c5b363"
-version = "0.3.21+0"
+version = "0.3.21+4"
 
 [[deps.OrderedCollections]]
 git-tree-sha1 = "85f8e6578bf1f9ee0d11e7bb1b1456435479d47c"
@@ -788,11 +885,18 @@ version = "17.4.0+0"
 # ╠═520e5abb-46aa-4dd6-91e5-3b4781e5dbd7
 # ╠═0176659b-20bf-403b-8d7d-b34b6c32d9b7
 # ╠═d2944e2d-3f3f-4482-a052-5ea147f193d9
+# ╠═7948ab6f-ee62-4c41-a2c0-74f1c25a87ce
+# ╠═10b633a4-14ab-4eff-b503-9841d9ffe175
+# ╠═d1b36c20-63d0-4105-9418-cdb05645ca99
+# ╠═36601158-bb28-4800-8972-559e822bcabf
+# ╠═61871032-7ab7-4066-983c-04d3acdd954d
+# ╠═30c5de94-b453-454a-a3fd-93b86c45c7f1
+# ╠═abdb5ebe-6be8-4f97-a5af-00b23dbfa9a4
 # ╠═a3102851-32f0-4ddd-97d2-4c6650b94dcd
-# ╠═55139837-501b-45b6-a075-7ce8da09fbf7
-# ╠═9fe8c054-07c0-43ab-8560-f90ce69e88d4
-# ╠═2b1a2d33-4f5d-4faf-b755-7383864b85a8
+# ╠═a55f6e98-08ca-4937-ab1e-f84dc72f086a
 # ╟─e4175daf-bef5-4d91-9794-85458371d03d
+# ╠═30fbe651-9849-40e6-ad44-7d5a1a0e5097
+# ╠═3756fc1e-b64c-4fe5-bf7b-cc6094fc00a7
 # ╟─76dbf4fd-8c4d-4af2-ac17-efb5b51aae76
 # ╠═ccbd8186-c075-4321-9289-e0b320f338ba
 # ╠═061aecc5-b893-4866-8f2a-605e1dcfffec
@@ -819,6 +923,7 @@ version = "17.4.0+0"
 # ╠═7137267a-93c2-410c-a7ad-4217b6bfbafb
 # ╠═d7266a18-be15-4aab-a299-c39ea98464fb
 # ╠═134981ec-c43f-4be0-b06e-a881b7a8f8dd
+# ╟─3db3a103-26f2-4b63-8be0-226ec5df4cc9
 # ╠═0225f847-a8bf-45c0-b208-71d8547f0d3d
 # ╠═24322219-40c4-4dec-9a13-0d35b48b4f66
 # ╟─134b7f5d-147b-4745-9241-1dd8b4782efa

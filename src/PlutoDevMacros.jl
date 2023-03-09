@@ -11,6 +11,8 @@ using Requires
 
 include("../notebooks/basics.jl") # @only_in_nb, @only_out_nb, is_notebook_local, plutodump, @current_pluto_cell_id, @current_pluto_notebook_file
 module Script include("../notebooks/htlscript.jl") end # HTLScript, HTLBypass, HTLScriptPart, combine_scripts
+module FromParent include("../notebooks/parent_import.jl") end
+# include("../notebooks/parent_import.jl")
 include("../notebooks/mapexpr.jl") # hasexpr, default_exprlist, include_mapexpr
 include("../notebooks/plutoinclude_macro.jl") # hasexpr, default_exprlist, include_mapexpr
 # include("../notebooks/pluto_traits.jl") # This defines and exports the @plutotraits macro

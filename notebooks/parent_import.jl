@@ -324,6 +324,10 @@ function clean_args!(newargs)
 			# We add all its args here
 			splice!(newargs, i, arg.args)
 			last_invalid = false
+		elseif Meta.isexpr(arg, :return) && length(arg.args) == 0
+			# We removed the nothing returned, let's put it back
+			push!(arg.args, nothing)
+			last_invalid = false
 		elseif Meta.isexpr(arg, :module) && length(arg.args) == 2
 			# We have an unclosed module where we found the file
 			push!(arg.args, Expr(:block))
@@ -337,7 +341,7 @@ end
 
 # ╔═╡ 3553578a-aac1-452c-bea2-5c1917f61cd3
 function can_remove_args(ex)
-	Meta.isexpr(ex, :parameters) && return false
+	Meta.isexpr(ex, [:parameters, :return]) && return false
 	return true
 end
 

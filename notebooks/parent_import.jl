@@ -335,6 +335,12 @@ function clean_args!(newargs)
 	filter!(!isnothing, newargs)
 end
 
+# ╔═╡ 3553578a-aac1-452c-bea2-5c1917f61cd3
+function can_remove_args(ex)
+	Meta.isexpr(ex, :parameters) && return false
+	return true
+end
+
 # ╔═╡ 93a422c6-2948-434f-81bf-f4c74dc16e0f
 function process_ast(ex, dict)
 	ex isa Expr || return ex, false
@@ -371,7 +377,7 @@ function process_ast(ex, dict)
 	if Meta.isexpr(ex, :module) && !target_found
 		popfirst!(dict["Module Path"])
 	end
-	return (isempty(newargs) ? nothing : Expr(ex.head, newargs...), target_found)
+	return (isempty(newargs) && can_remove_args(ex) ? nothing : Expr(ex.head, newargs...), target_found)
 end
 
 # ╔═╡ d2944e2d-3f3f-4482-a052-5ea147f193d9
@@ -964,6 +970,7 @@ version = "17.4.0+0"
 # ╟─5d1d9139-b5fa-4b82-a9fa-f025de82012b
 # ╠═bc89433c-1fad-4653-8e98-2ab98360529f
 # ╟─4ec1a33e-c409-4047-853c-722a058768c9
+# ╠═3553578a-aac1-452c-bea2-5c1917f61cd3
 # ╠═93a422c6-2948-434f-81bf-f4c74dc16e0f
 # ╟─88717267-8057-4cd7-b04a-04936c2a3a9f
 # ╠═182a1acb-93d2-4401-b05a-ed78358b1555

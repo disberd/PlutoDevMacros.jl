@@ -114,6 +114,20 @@ md"""
 # Process Functions
 """
 
+# ╔═╡ 09f7ce21-382d-44ba-adaf-15ce787acb65
+md"""
+## Basic skip/remove
+"""
+
+# ╔═╡ 1cab8cea-04b0-4531-89cd-cf8c296ed9a4
+_skip(ex) = Expr(:__skip_expr__, ex)
+
+# ╔═╡ 2f0877d4-bdb3-4009-a117-c47de34059b9
+_remove(ex) = Expr(:__remove_expr__, ex)
+
+# ╔═╡ 38744425-14e4-4228-99cb-965b96490100
+can_skip(ex) = Meta.isexpr(ex, [:__skip_expr__, :__remove_expr__])
+
 # ╔═╡ 30fbe651-9849-40e6-ad44-7d5a1a0e5097
 md"""
 ## parseinput
@@ -187,8 +201,6 @@ function extract_file_ast(filename)
 	ast = Meta.parseall(code; filename)
 	@assert Meta.isexpr(ast, :toplevel)
 	ast
-	# If we are inside a module, we also only focus on the block of instructions within the module
-	# Meta.isexpr(ast, :module) ? ast.args[3] : ast
 end
 
 # ╔═╡ 54508213-9956-4a94-ac5b-9a9be6ea8959
@@ -226,7 +238,7 @@ isbind(:(a = @bind a LOL))
 # ╔═╡ 8b1f3a72-2d3f-4546-8f2b-4ae13bb6a2a9
 function remove_pluto_exprs(ex, dict)
 	# ex.head == :macro && ex.args[1] == :(bind(def, element)) && return nothing, false
-	ex.head == :(=) && ex.args[1] ∈ (:PLUTO_PROJECT_TOML_CONTENTS, :PLUTO_MANIFEST_TOML_CONTENTS) && return nothing, false
+	ex.head == :(=) && ex.args[1] ∈ (:PLUTO_PROJECT_TOML_CONTENTS, :PLUTO_MANIFEST_TOML_CONTENTS) && return _remove(ex), false
 	# isbind(ex) && return Expr(:throw_error, :bind), false
 	return ex, false
 end
@@ -239,20 +251,25 @@ md"""
 # ╔═╡ 47e76b6f-8440-49b9-8aca-015a706da947
 function remove_custom_exprs(ex, dict)
 	exprs = dict["Expr to Remove"]
-	newex = ex ∈ exprs ? nothing : ex
+	newex = ex ∈ exprs ? _remove(ex) : ex
 	return newex, false
 end
 
 # ╔═╡ 08816d5b-7f26-46bf-9b0b-c20e195cf326
 md"""
-## Skip Expr/quote
+## Skip basic exprs
 """
 
 # ╔═╡ 8385962e-8397-4e5b-be98-86a4398c455d
-function is_Expr_call(ex)
-	ex.head == :call && ex.args[1] == :Expr && return true
-	ex.head == :quote && return true
-	return false
+# Check if the provided Expr is internally generating another Expr (like a quote)
+function skip_basic_exprs(ex, dict)
+	# We skip everything that is not an expr
+	ex isa Expr || return (_skip(ex), false)
+	# We skip Expr/quote inside the Expr
+	ex.head == :call && ex.args[1] == :Expr && return (_skip(ex), false)
+	ex.head == :quote && return (_skip(ex), false)
+	# We leave the rest untouched
+	return (ex, false)
 end	
 
 # ╔═╡ 2178c9bf-6128-40f8-9050-492e22cf55e7
@@ -281,18 +298,38 @@ md"""
 ## Process include
 """
 
+# ╔═╡ 26c97491-f315-4a9c-a93d-603c4e1a21f9
+md"""
+## update module path
+"""
+
+# ╔═╡ ca1ea13c-ecee-4517-9176-679ec9f4e585
+function update_module_path(ex, dict)
+	Meta.isexpr(ex, :module) || return (ex, false)
+	path = dict["Module Path"]
+	module_name = ex.args[2]
+	
+	if isempty(path) || first(path) != module_name 
+		# Add the current module to the path
+		pushfirst!(path, module_name)
+	else
+		# Remove the current module from the path
+		popfirst!(path)
+	end
+
+	return ex, false
+end
+
 # ╔═╡ 4ec1a33e-c409-4047-853c-722a058768c9
 md"""
 ## Process ast
 """
 
-# ╔═╡ 88717267-8057-4cd7-b04a-04936c2a3a9f
-md"""
-## Throw errors
-"""
-
-# ╔═╡ 182a1acb-93d2-4401-b05a-ed78358b1555
-throw_error(ln::LineNumberNode, ::Val{:bind}) = error("A call to @bind was found in the imported notebook around $ln, please consider disabling the cell defining the bind from the file")
+# ╔═╡ 3553578a-aac1-452c-bea2-5c1917f61cd3
+function can_remove_args(ex)
+	Meta.isexpr(ex, [:parameters, :return]) && return false
+	return true
+end
 
 # ╔═╡ 98779ff3-46d6-4ae5-98d6-bd5f7ae96504
 md"""
@@ -301,65 +338,30 @@ md"""
 
 # ╔═╡ 6a270c77-5f32-496c-8dcb-361e7039b311
 function clean_args!(newargs)
-	last_invalid = false
-	error_type = :none
+	last_invalid = 0
 	for i ∈ reverse(eachindex(newargs))
 		arg = newargs[i]
-		if Meta.isexpr(arg, :throw_error)
-			error_type = arg.args[1]
-		elseif arg isa Nothing
-			last_invalid = true
+		if Meta.isexpr(arg, :__skip_expr__)
+			# We remove the wrapper
+			newargs[i] = arg.args[1]
+		elseif Meta.isexpr(arg, :__remove_expr__)
+			deleteat!(newargs, i)
+			last_invalid = i
 		elseif arg isa LineNumberNode
-			error_type != :none && throw_error(arg, Val(error_type))
-			# If last arg was nothing, we delete this
-			if last_invalid
-				newargs[i] = nothing
-			else
-				last_invalid = true
-			end
-		elseif Meta.isexpr(arg, :let) && length(arg.args) == 1
-			# We deleted the second block in the let expression, we have to put it back
-			pushfirst!(arg.args, Expr(:block))
-		elseif Meta.isexpr(arg, :processed_toplevel)
-			# We add all its args here
-			splice!(newargs, i, arg.args)
-			last_invalid = false
-		elseif Meta.isexpr(arg, :return) && length(arg.args) == 0
-			# We removed the nothing returned, let's put it back
-			push!(arg.args, nothing)
-			last_invalid = false
-		elseif Meta.isexpr(arg, :module) && length(arg.args) == 2
-			# We have an unclosed module where we found the file
-			push!(arg.args, Expr(:block))
-			last_invalid = false
-		else
-			last_invalid = false
+			last_invalid == i+i && deleteat!(newargs, i)
+			last_invalid = i
 		end
 	end
-	filter!(!isnothing, newargs)
-end
-
-# ╔═╡ 3553578a-aac1-452c-bea2-5c1917f61cd3
-function can_remove_args(ex)
-	Meta.isexpr(ex, [:parameters, :return]) && return false
-	return true
 end
 
 # ╔═╡ 93a422c6-2948-434f-81bf-f4c74dc16e0f
 function process_ast(ex, dict)
-	ex isa Expr || return ex, false
-	is_Expr_call(ex) && return ex, false
-	if Meta.isexpr(ex, :module)
-		pushfirst!(dict["Module Path"], ex.args[2])
-	end
+	# We try to add the module to the path
+	update_module_path(ex, dict)
 	target_found = false
-	for f in (remove_custom_exprs, remove_pluto_exprs, extract_packages, process_include)
+	for f in (skip_basic_exprs, remove_custom_exprs, remove_pluto_exprs, extract_packages, process_include)
 		ex, target_found = f(ex, dict)
-		ex isa Nothing && return nothing, target_found
-	end
-	if (ex.head == :processed_toplevel)
-		# ex.head = :toplevel
-		return ex, target_found
+		can_skip(ex) && return ex, target_found
 	end
 	# Process all arguments
 	last_idx = 0
@@ -378,10 +380,10 @@ function process_ast(ex, dict)
 	# Remove the linunumbernodes that are directly before another nothing or LinuNumberNode
 	clean_args!(newargs)
 
-	if Meta.isexpr(ex, :module) && !target_found
-		popfirst!(dict["Module Path"])
-	end
-	return (isempty(newargs) && can_remove_args(ex) ? nothing : Expr(ex.head, newargs...), target_found)
+	
+	# We try to remove the module from the path
+	update_module_path(ex, dict)
+	return (Expr(ex.head, newargs...), target_found)
 end
 
 # ╔═╡ d2944e2d-3f3f-4482-a052-5ea147f193d9
@@ -475,8 +477,8 @@ function process_include(ex, dict)
 	else
 		# We directly process the include and return the processed expression
 		ast = extract_file_ast(fullpath)
-		newex, found = process_ast(Expr(:block, ast.args...), dict)
-		return Expr(:processed_toplevel, newex.args...), found
+		newex, found = process_ast(ast, dict)
+		return _skip(newex), found
 	end
 end
 
@@ -568,42 +570,6 @@ end
 let
 	# fromparent(:(import *),"/home/amengali/Repos/github/mine/PlutoExtras/src/latex_equations.jl#==#", @__MODULE__)
 	fromparent(:(import *),@__FILE__, @__MODULE__)
-end
-  ╠═╡ =#
-
-# ╔═╡ 24322219-40c4-4dec-9a13-0d35b48b4f66
-# ╠═╡ skip_as_script = true
-#=╠═╡
-dump(:(import .GESU: a))
-  ╠═╡ =#
-
-# ╔═╡ 134b7f5d-147b-4745-9241-1dd8b4782efa
-md"""
-## Find include
-"""
-
-# ╔═╡ 19c151fc-f43f-4f52-bd5a-706776259a64
-function find_include(ast, filename)
-	idx = 0
-	for (i,ex) in enumerate(ast.args)
-		ex isa LineNumberNode && continue
-		M
-	end
-end
-
-# ╔═╡ 06e0d5a8-7dd5-4da2-9f2d-53cd47dbfe50
-#=╠═╡
-data
-  ╠═╡ =#
-
-# ╔═╡ 991bd364-3412-4329-85bc-ed2d513540c7
-# ╠═╡ skip_as_script = true
-#=╠═╡
-let
-	data = Dict{String, Any}("dir" => "/home/amengali/Repos/github/mine/PlutoExtras", "target" => "")
-	ast = extract_file_ast("/home/amengali/Repos/github/mine/PlutoExtras/src/PlutoExtras.jl")
-	ex, _ = process_ast(ast, data)
-	data
 end
   ╠═╡ =#
 
@@ -952,7 +918,11 @@ version = "17.4.0+0"
 # ╠═a3102851-32f0-4ddd-97d2-4c6650b94dcd
 # ╠═43783ef3-3d0f-4a70-9b4f-cfbf3e5b1673
 # ╟─e4175daf-bef5-4d91-9794-85458371d03d
-# ╠═30fbe651-9849-40e6-ad44-7d5a1a0e5097
+# ╟─09f7ce21-382d-44ba-adaf-15ce787acb65
+# ╠═1cab8cea-04b0-4531-89cd-cf8c296ed9a4
+# ╠═2f0877d4-bdb3-4009-a117-c47de34059b9
+# ╠═38744425-14e4-4228-99cb-965b96490100
+# ╟─30fbe651-9849-40e6-ad44-7d5a1a0e5097
 # ╠═3756fc1e-b64c-4fe5-bf7b-cc6094fc00a7
 # ╠═df992d64-4990-4d51-a6bd-831844371617
 # ╠═cbf5c05a-e0ed-46a4-9533-d7dad5434402
@@ -973,11 +943,11 @@ version = "17.4.0+0"
 # ╠═96768bc9-f233-44e1-b833-7a39acaf111e
 # ╟─5d1d9139-b5fa-4b82-a9fa-f025de82012b
 # ╠═bc89433c-1fad-4653-8e98-2ab98360529f
+# ╟─26c97491-f315-4a9c-a93d-603c4e1a21f9
+# ╠═ca1ea13c-ecee-4517-9176-679ec9f4e585
 # ╟─4ec1a33e-c409-4047-853c-722a058768c9
 # ╠═3553578a-aac1-452c-bea2-5c1917f61cd3
 # ╠═93a422c6-2948-434f-81bf-f4c74dc16e0f
-# ╟─88717267-8057-4cd7-b04a-04936c2a3a9f
-# ╠═182a1acb-93d2-4401-b05a-ed78358b1555
 # ╟─98779ff3-46d6-4ae5-98d6-bd5f7ae96504
 # ╠═6a270c77-5f32-496c-8dcb-361e7039b311
 # ╠═7137267a-93c2-410c-a7ad-4217b6bfbafb
@@ -985,10 +955,5 @@ version = "17.4.0+0"
 # ╠═134981ec-c43f-4be0-b06e-a881b7a8f8dd
 # ╟─3db3a103-26f2-4b63-8be0-226ec5df4cc9
 # ╠═0225f847-a8bf-45c0-b208-71d8547f0d3d
-# ╠═24322219-40c4-4dec-9a13-0d35b48b4f66
-# ╟─134b7f5d-147b-4745-9241-1dd8b4782efa
-# ╠═19c151fc-f43f-4f52-bd5a-706776259a64
-# ╠═06e0d5a8-7dd5-4da2-9f2d-53cd47dbfe50
-# ╠═991bd364-3412-4329-85bc-ed2d513540c7
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

@@ -57,6 +57,7 @@ function get_parent_data(filepath::AbstractString)
 	parent_data["file"] = parent_file
 	parent_data["target"] = filepath
 	parent_data["Module Path"] = Symbol[]
+	parent_data["Loaded Packages"] = Dict(:_Overall_ => Set{Symbol}())
 	
 	return parent_data
 end
@@ -126,7 +127,11 @@ _skip(ex) = Expr(:__skip_expr__, ex)
 _remove(ex) = Expr(:__remove_expr__, ex)
 
 # ╔═╡ 38744425-14e4-4228-99cb-965b96490100
-can_skip(ex) = Meta.isexpr(ex, [:__skip_expr__, :__remove_expr__])
+can_skip(ex) = Meta.isexpr(ex, [:__skip_expr__, :__remove_expr__]) || ex isa LineNumberNode
+
+# ╔═╡ b72444f4-5733-487c-a49a-ac152db43711
+# This function check if the search stopped either because we found the target
+stop_parsing(dict) = haskey(dict, "Stopped Parsing")	
 
 # ╔═╡ 30fbe651-9849-40e6-ad44-7d5a1a0e5097
 md"""
@@ -237,10 +242,8 @@ isbind(:(a = @bind a LOL))
 
 # ╔═╡ 8b1f3a72-2d3f-4546-8f2b-4ae13bb6a2a9
 function remove_pluto_exprs(ex, dict)
-	# ex.head == :macro && ex.args[1] == :(bind(def, element)) && return nothing, false
-	ex.head == :(=) && ex.args[1] ∈ (:PLUTO_PROJECT_TOML_CONTENTS, :PLUTO_MANIFEST_TOML_CONTENTS) && return _remove(ex), false
-	# isbind(ex) && return Expr(:throw_error, :bind), false
-	return ex, false
+	ex.head == :(=) && ex.args[1] ∈ (:PLUTO_PROJECT_TOML_CONTENTS, :PLUTO_MANIFEST_TOML_CONTENTS) && return _remove(ex)
+	return ex
 end
 
 # ╔═╡ eedf9fb4-3371-4c98-8d97-3d925ccf3cc0
@@ -252,7 +255,7 @@ md"""
 function remove_custom_exprs(ex, dict)
 	exprs = dict["Expr to Remove"]
 	newex = ex ∈ exprs ? _remove(ex) : ex
-	return newex, false
+	return newex
 end
 
 # ╔═╡ 08816d5b-7f26-46bf-9b0b-c20e195cf326
@@ -263,13 +266,15 @@ md"""
 # ╔═╡ 8385962e-8397-4e5b-be98-86a4398c455d
 # Check if the provided Expr is internally generating another Expr (like a quote)
 function skip_basic_exprs(ex, dict)
+	# We leave LineNumberNodes untouched
+	ex isa LineNumberNode && (dict["Last Parsed Line"] = ex; return ex)
 	# We skip everything that is not an expr
-	ex isa Expr || return (_skip(ex), false)
+	ex isa Expr || return _skip(ex)
 	# We skip Expr/quote inside the Expr
-	ex.head == :call && ex.args[1] == :Expr && return (_skip(ex), false)
-	ex.head == :quote && return (_skip(ex), false)
+	ex.head == :call && ex.args[1] == :Expr && return _skip(ex)
+	ex.head == :quote && return _skip(ex)
 	# We leave the rest untouched
-	return (ex, false)
+	return ex
 end	
 
 # ╔═╡ 2178c9bf-6128-40f8-9050-492e22cf55e7
@@ -279,18 +284,24 @@ md"""
 
 # ╔═╡ 96768bc9-f233-44e1-b833-7a39acaf111e
 function extract_packages(ex, dict)
-	ex.head ∈ (:using, :import) || return ex, false
+	ex.head ∈ (:using, :import) || return ex
 	arg = ex.args[1]
 	arg = arg.head == :(:) ? arg.args[1] : arg
 	arg.head == :(.) || error("Something unexpected happened")
 	# If the import or using is of the type `import .NAME: something` we ignore it as it's not a package but a local module
-	arg.args[1] == :(.) && return ex, false
+	arg.args[1] == :(.) && return ex
 	skip_names = (:Main, :Core, :Base)
 	mod_name = getfirst(x -> x ∉ skip_names, arg.args)
-	mod_name isa Nothing && return ex, false
-	package_set = get!(dict, "discovered packages", Set{Symbol}())
+	mod_name isa Nothing && return ex
+	# We keep track of all the various packages loaded per each submodule we encounter while parsing.
+	# We need this to import all the loaded packages as first expression at the toplevel of each module/submodule. 
+	# If not doing this, the macros defined in packages present in `included` files are tried to be expanded before the `using/import` statements are used
+	package_dict = dict["Loaded Packages"]
+	# The package dict contains one entry per module/submodule. The combined group of packages will be extracted from the key called :_Overall_
+	path = dict["Module Path"]
+	package_set = isempty(path) ? package_dict[:_Overall_] : get!(package_dict, first(path), Set{Symbol}())
 	push!(package_set, mod_name)
-	return ex, false
+	return ex
 end
 
 # ╔═╡ 5d1d9139-b5fa-4b82-a9fa-f025de82012b
@@ -305,7 +316,7 @@ md"""
 
 # ╔═╡ ca1ea13c-ecee-4517-9176-679ec9f4e585
 function update_module_path(ex, dict)
-	Meta.isexpr(ex, :module) || return (ex, false)
+	Meta.isexpr(ex, :module) || return ex
 	path = dict["Module Path"]
 	module_name = ex.args[2]
 	
@@ -317,7 +328,7 @@ function update_module_path(ex, dict)
 		popfirst!(path)
 	end
 
-	return ex, false
+	return ex
 end
 
 # ╔═╡ 4ec1a33e-c409-4047-853c-722a058768c9
@@ -348,33 +359,41 @@ function clean_args!(newargs)
 			deleteat!(newargs, i)
 			last_invalid = i
 		elseif arg isa LineNumberNode
-			last_invalid == i+i && deleteat!(newargs, i)
+			flag = last_invalid == i+1
+			flag &&	deleteat!(newargs, i)
 			last_invalid = i
 		end
 	end
 end
 
 # ╔═╡ 93a422c6-2948-434f-81bf-f4c74dc16e0f
-function process_ast(ex, dict)
+function process_ast(ex, dict; stop_after_line = 10^6)
 	# We try to add the module to the path
 	update_module_path(ex, dict)
-	target_found = false
 	for f in (skip_basic_exprs, remove_custom_exprs, remove_pluto_exprs, extract_packages, process_include)
-		ex, target_found = f(ex, dict)
-		can_skip(ex) && return ex, target_found
+		ex = f(ex, dict)
+		can_skip(ex) && return ex
 	end
 	# Process all arguments
 	last_idx = 0
 	newargs = ex.args
 	for (i,arg) in enumerate(newargs)
-		newarg, target_found = process_ast(arg, dict)
+		if arg isa LineNumberNode && arg.line > stop_after_line
+			# We add a stopping reason
+			dict["Stopped Parsing"] = "Max LineNumber Reached"
+			last_idx = i-1
+			break
+		end
+		newarg = process_ast(arg, dict; stop_after_line)
 		newargs[i] = newarg
-		if target_found
+		if stop_parsing(dict)
+			# We found the target, we can stop parsing
 			last_idx = i
 			break
 		end
 	end
-	if target_found && last_idx > 0 && last_idx != lastindex(newargs)
+	parsing_stopped = stop_parsing(dict)
+	if parsing_stopped && last_idx > 0 && last_idx != lastindex(newargs)
 		newargs = newargs[1:last_idx]
 	end
 	# Remove the linunumbernodes that are directly before another nothing or LinuNumberNode
@@ -383,11 +402,11 @@ function process_ast(ex, dict)
 	
 	# We try to remove the module from the path
 	update_module_path(ex, dict)
-	return (Expr(ex.head, newargs...), target_found)
+	return Expr(ex.head, newargs...)
 end
 
 # ╔═╡ d2944e2d-3f3f-4482-a052-5ea147f193d9
-function extract_module_expression(filename, _module)
+function extract_module_expression(filename, _module; stop_after_line = 10^6)
 	data = get_parent_data(filename)
 	# We check if there are specific expressions that we want to avoid
 	get!(data, "Expr to Remove") do
@@ -402,10 +421,13 @@ function extract_module_expression(filename, _module)
 	logger = EarlyFilteredLogger(current_logger()) do log
 		log.level > Logging.Debug ? true : false
 	end
-	ex, found = let
+	ex = let
 	# ex, found = with_logger(logger) do
-		process_ast(ast, data)
+		process_ast(ast, data; stop_after_line)
 	end
+	# We combine all the packages loaded
+	packages = data["Loaded Packages"]
+	packages[:_Overall_] = union(values(packages)...)
 	mod_exp = getfirst(x -> Meta.isexpr(x, :module), ex.args)
 	mod_exp, data
 end
@@ -463,22 +485,24 @@ end
 
 # ╔═╡ bc89433c-1fad-4653-8e98-2ab98360529f
 function process_include(ex, dict)
-	ex.head === :call && ex.args[1] == :include || return ex, false
+	ex.head === :call && ex.args[1] == :include || return ex
 	filename = ex.args[2]
 	if !(filename isa String) 
 		@warn "Only calls to include which are given direct strings are supported, instead $ex was found as expression"
-		return ex, false
+		return ex
 	end
 	srcdir = joinpath(dict["dir"], "src")
 	fullpath = startswith(filename, srcdir) ? filename : normpath(joinpath(srcdir, filename))
 	is_target = fullpath == dict["target"]
 	if is_target
-		return nothing, true
+		# We save the reason why we stopped parsing to allow skipping following parsing and we just return the expression to be removed
+		dict["Stopped Parsing"] = "Target Found"
+		return _remove(ex)
 	else
 		# We directly process the include and return the processed expression
 		ast = extract_file_ast(fullpath)
-		newex, found = process_ast(ast, dict)
-		return _skip(newex), found
+		newex = process_ast(ast, dict)
+		return _skip(newex)
 	end
 end
 
@@ -512,29 +536,6 @@ macro addmodule(ex)
 		$imports
 	end |> esc
 end
-
-# ╔═╡ 7137267a-93c2-410c-a7ad-4217b6bfbafb
-# ╠═╡ skip_as_script = true
-#=╠═╡
-@macroexpand @addmodule begin
-	a = 2
-	b = 5
-end
-  ╠═╡ =#
-
-# ╔═╡ d7266a18-be15-4aab-a299-c39ea98464fb
-# ╠═╡ skip_as_script = true
-#=╠═╡
-@addmodule begin
-	a = 2
-	b = 5
-end
-  ╠═╡ =#
-
-# ╔═╡ 134981ec-c43f-4be0-b06e-a881b7a8f8dd
-#=╠═╡
-a
-  ╠═╡ =#
 
 # ╔═╡ 30c5de94-b453-454a-a3fd-93b86c45c7f1
 function fromparent(ex, calling_file, _module)
@@ -922,6 +923,7 @@ version = "17.4.0+0"
 # ╠═1cab8cea-04b0-4531-89cd-cf8c296ed9a4
 # ╠═2f0877d4-bdb3-4009-a117-c47de34059b9
 # ╠═38744425-14e4-4228-99cb-965b96490100
+# ╠═b72444f4-5733-487c-a49a-ac152db43711
 # ╟─30fbe651-9849-40e6-ad44-7d5a1a0e5097
 # ╠═3756fc1e-b64c-4fe5-bf7b-cc6094fc00a7
 # ╠═df992d64-4990-4d51-a6bd-831844371617
@@ -950,9 +952,6 @@ version = "17.4.0+0"
 # ╠═93a422c6-2948-434f-81bf-f4c74dc16e0f
 # ╟─98779ff3-46d6-4ae5-98d6-bd5f7ae96504
 # ╠═6a270c77-5f32-496c-8dcb-361e7039b311
-# ╠═7137267a-93c2-410c-a7ad-4217b6bfbafb
-# ╠═d7266a18-be15-4aab-a299-c39ea98464fb
-# ╠═134981ec-c43f-4be0-b06e-a881b7a8f8dd
 # ╟─3db3a103-26f2-4b63-8be0-226ec5df4cc9
 # ╠═0225f847-a8bf-45c0-b208-71d8547f0d3d
 # ╟─00000000-0000-0000-0000-000000000001

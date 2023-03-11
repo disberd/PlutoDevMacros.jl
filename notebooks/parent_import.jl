@@ -74,11 +74,11 @@ md"""
 """
 
 # ╔═╡ 9a3ef442-9905-431a-8e18-f72c9acba5e8
-_skip_expr_var_name = :__parent_import_expr_to_remove__
+_remove_expr_var_name = :__fromparent_expr_to_remove__
 
 # ╔═╡ 520e5abb-46aa-4dd6-91e5-3b4781e5dbd7
 macro skipexpr(ex)
-	esc(Expr(:(=), _skip_expr_var_name, ex))
+	esc(Expr(:(=), _remove_expr_var_name, ex))
 end
 
 # ╔═╡ 10b633a4-14ab-4eff-b503-9841d9ffe175
@@ -131,7 +131,7 @@ can_skip(ex) = Meta.isexpr(ex, [:__skip_expr__, :__remove_expr__]) || ex isa Lin
 
 # ╔═╡ b72444f4-5733-487c-a49a-ac152db43711
 # This function check if the search stopped either because we found the target
-stop_parsing(dict) = haskey(dict, "Stopped Parsing")	
+should_stop_parsing(dict) = haskey(dict, "Stopped Parsing")	
 
 # ╔═╡ 30fbe651-9849-40e6-ad44-7d5a1a0e5097
 md"""
@@ -168,22 +168,13 @@ function parseinput(ex, dict)
 	return ex, parentpath, catchall
 end
 
-# ╔═╡ df992d64-4990-4d51-a6bd-831844371617
-# ╠═╡ skip_as_script = true
-#=╠═╡
-module GESURE
-	a(x) = 3+x
-	module MADONNA
-		import ..GESURE: a
-		b = a(50)
-	end
-end
-  ╠═╡ =#
+# ╔═╡ d42afa4b-bb05-41d9-99a4-5aaa279491b3
+md"""
+## Extract Module Expression
+"""
 
-# ╔═╡ cbf5c05a-e0ed-46a4-9533-d7dad5434402
-#=╠═╡
-GESURE.MADONNA.b
-  ╠═╡ =#
+# ╔═╡ d4c25048-a095-44cf-a5ea-46172560f463
+extract_module_expression(filename::AbstractString, _module) = extract_module_expression(get_parent_data(filename), _module)
 
 # ╔═╡ 76dbf4fd-8c4d-4af2-ac17-efb5b51aae76
 md"""
@@ -254,8 +245,29 @@ md"""
 # ╔═╡ 47e76b6f-8440-49b9-8aca-015a706da947
 function remove_custom_exprs(ex, dict)
 	exprs = dict["Expr to Remove"]
-	newex = ex ∈ exprs ? _remove(ex) : ex
-	return newex
+	for check in exprs
+		if check isa LineNumberNode
+			# We remove whatever expression is at the given LineNumberNode
+			check == get(dict, "Last Parsed Line", nothing) && (return _remove(ex))
+		else
+			ex == check && return _remove(ex)
+		end
+	end
+	return ex
+end
+
+# ╔═╡ 364c045c-29b2-4308-8c49-f776708826d4
+function process_linenumber(ex, dict)
+	ex isa LineNumberNode || return ex
+	# We first save the current line as the last one parsed
+	dict["Last Parsed Line"] = ex
+	# We check if we reached the stopping condition
+	stop_line = get(dict,"Stop After Line",LineNumberNode(0,:_NotProvided_)) 
+	stop_line isa LineNumberNode || error("The key 'Stop After Line' only accepts object of type LineNumberNode")
+	if stop_line.file == ex.file && stop_line.line <= ex.line
+		dict["Stopped Parsing"] = "Target LineNumber Reached"
+	end
+	return ex
 end
 
 # ╔═╡ 08816d5b-7f26-46bf-9b0b-c20e195cf326
@@ -266,8 +278,6 @@ md"""
 # ╔═╡ 8385962e-8397-4e5b-be98-86a4398c455d
 # Check if the provided Expr is internally generating another Expr (like a quote)
 function skip_basic_exprs(ex, dict)
-	# We leave LineNumberNodes untouched
-	ex isa LineNumberNode && (dict["Last Parsed Line"] = ex; return ex)
 	# We skip everything that is not an expr
 	ex isa Expr || return _skip(ex)
 	# We skip Expr/quote inside the Expr
@@ -367,33 +377,28 @@ function clean_args!(newargs)
 end
 
 # ╔═╡ 93a422c6-2948-434f-81bf-f4c74dc16e0f
-function process_ast(ex, dict; stop_after_line = 10^6)
+function process_ast(ex, dict)
 	# We try to add the module to the path
 	update_module_path(ex, dict)
-	for f in (skip_basic_exprs, remove_custom_exprs, remove_pluto_exprs, extract_packages, process_include)
+	for f in (process_linenumber, skip_basic_exprs, remove_custom_exprs, remove_pluto_exprs, extract_packages, process_include)
 		ex = f(ex, dict)
 		can_skip(ex) && return ex
 	end
 	# Process all arguments
 	last_idx = 0
 	newargs = ex.args
+	stop_parsing = false
 	for (i,arg) in enumerate(newargs)
-		if arg isa LineNumberNode && arg.line > stop_after_line
-			# We add a stopping reason
-			dict["Stopped Parsing"] = "Max LineNumber Reached"
-			last_idx = i-1
-			break
-		end
-		newarg = process_ast(arg, dict; stop_after_line)
+		newarg = process_ast(arg, dict)
 		newargs[i] = newarg
-		if stop_parsing(dict)
+		stop_parsing = should_stop_parsing(dict)
+		if stop_parsing
 			# We found the target, we can stop parsing
 			last_idx = i
 			break
 		end
 	end
-	parsing_stopped = stop_parsing(dict)
-	if parsing_stopped && last_idx > 0 && last_idx != lastindex(newargs)
+	if stop_parsing && last_idx > 0 && last_idx != lastindex(newargs)
 		newargs = newargs[1:last_idx]
 	end
 	# Remove the linunumbernodes that are directly before another nothing or LinuNumberNode
@@ -406,14 +411,13 @@ function process_ast(ex, dict; stop_after_line = 10^6)
 end
 
 # ╔═╡ d2944e2d-3f3f-4482-a052-5ea147f193d9
-function extract_module_expression(filename, _module; stop_after_line = 10^6)
-	data = get_parent_data(filename)
+function extract_module_expression(data, _module)
 	# We check if there are specific expressions that we want to avoid
 	get!(data, "Expr to Remove") do
-		if isdefined(_module, _skip_expr_var_name)
-			Core.eval(_module, _skip_expr_var_name)
+		if isdefined(_module, _remove_expr_var_name)
+			Core.eval(_module, _remove_expr_var_name)
 		else
-			Expr[]
+			[]
 		end
 	end
 	
@@ -423,7 +427,7 @@ function extract_module_expression(filename, _module; stop_after_line = 10^6)
 	end
 	ex = let
 	# ex, found = with_logger(logger) do
-		process_ast(ast, data; stop_after_line)
+		process_ast(ast, data)
 	end
 	# We combine all the packages loaded
 	packages = data["Loaded Packages"]
@@ -908,7 +912,6 @@ version = "17.4.0+0"
 # ╠═345119ec-5d5d-41bf-9380-1ae684921061
 # ╠═9a3ef442-9905-431a-8e18-f72c9acba5e8
 # ╠═520e5abb-46aa-4dd6-91e5-3b4781e5dbd7
-# ╠═d2944e2d-3f3f-4482-a052-5ea147f193d9
 # ╠═7948ab6f-ee62-4c41-a2c0-74f1c25a87ce
 # ╠═3208acb4-9a54-41e9-910f-d98206dc80a2
 # ╠═10b633a4-14ab-4eff-b503-9841d9ffe175
@@ -926,8 +929,9 @@ version = "17.4.0+0"
 # ╠═b72444f4-5733-487c-a49a-ac152db43711
 # ╟─30fbe651-9849-40e6-ad44-7d5a1a0e5097
 # ╠═3756fc1e-b64c-4fe5-bf7b-cc6094fc00a7
-# ╠═df992d64-4990-4d51-a6bd-831844371617
-# ╠═cbf5c05a-e0ed-46a4-9533-d7dad5434402
+# ╟─d42afa4b-bb05-41d9-99a4-5aaa279491b3
+# ╠═d4c25048-a095-44cf-a5ea-46172560f463
+# ╠═d2944e2d-3f3f-4482-a052-5ea147f193d9
 # ╟─76dbf4fd-8c4d-4af2-ac17-efb5b51aae76
 # ╠═ccbd8186-c075-4321-9289-e0b320f338ba
 # ╠═061aecc5-b893-4866-8f2a-605e1dcfffec
@@ -939,6 +943,7 @@ version = "17.4.0+0"
 # ╠═8b1f3a72-2d3f-4546-8f2b-4ae13bb6a2a9
 # ╟─eedf9fb4-3371-4c98-8d97-3d925ccf3cc0
 # ╠═47e76b6f-8440-49b9-8aca-015a706da947
+# ╠═364c045c-29b2-4308-8c49-f776708826d4
 # ╠═08816d5b-7f26-46bf-9b0b-c20e195cf326
 # ╠═8385962e-8397-4e5b-be98-86a4398c455d
 # ╟─2178c9bf-6128-40f8-9050-492e22cf55e7

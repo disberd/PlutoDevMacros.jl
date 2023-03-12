@@ -1,4 +1,4 @@
-import PlutoDevMacros.FromParent: process_ast
+import PlutoDevMacros.FromParent: process_ast, add_package_names!
 using MacroTools: rmlines, prewalk
 
 @testset "FromParent" begin
@@ -25,4 +25,9 @@ using MacroTools: rmlines, prewalk
         return 
     end) 
     @test check_equal(ex, dict)
+
+
+    # Test the package name extraction
+    @test Set([:PackageA]) == add_package_names!(Set{Symbol}(), :(using PackageA: var1, var2))
+    @test Set([:PackageA, PackageC]) == add_package_names!(Set{Symbol}(), :(using PackageA, .PackageB, PackageC))
 end

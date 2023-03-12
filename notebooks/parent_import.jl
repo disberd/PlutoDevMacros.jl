@@ -57,7 +57,7 @@ function get_parent_data(filepath::AbstractString)
 	parent_data["file"] = parent_file
 	parent_data["target"] = filepath
 	parent_data["Module Path"] = Symbol[]
-	parent_data["Loaded Packages"] = Dict(:_Overall_ => Set{Symbol}())
+	parent_data["Loaded Packages"] = Dict{Symbol, Any}(:_Overall_ => Dict{Symbol, Any}(:Names => Set{Symbol}()))
 	
 	return parent_data
 end
@@ -95,6 +95,11 @@ md"""
 ]
   ╠═╡ =#
 
+# ╔═╡ d03e2afd-5dea-429e-a56a-f0be2162944f
+md"""
+## @fromparent
+"""
+
 # ╔═╡ a3102851-32f0-4ddd-97d2-4c6650b94dcd
 macro fromparent(ex)
 	calling_file = String(__source__.file)
@@ -120,6 +125,9 @@ md"""
 ## Basic skip/remove
 """
 
+# ╔═╡ d14909d3-3529-4119-bc1b-ee6ffacf2aaa
+_wrap_import(ex) = Expr(:__wrapped_import__, ex)
+
 # ╔═╡ 1cab8cea-04b0-4531-89cd-cf8c296ed9a4
 _skip(ex) = Expr(:__skip_expr__, ex)
 
@@ -127,7 +135,7 @@ _skip(ex) = Expr(:__skip_expr__, ex)
 _remove(ex) = Expr(:__remove_expr__, ex)
 
 # ╔═╡ 38744425-14e4-4228-99cb-965b96490100
-can_skip(ex) = Meta.isexpr(ex, [:__skip_expr__, :__remove_expr__]) || ex isa LineNumberNode
+can_skip(ex) = Meta.isexpr(ex, [:__wrapped_import__, :__skip_expr__, :__remove_expr__]) || ex isa LineNumberNode
 
 # ╔═╡ b72444f4-5733-487c-a49a-ac152db43711
 # This function check if the search stopped either because we found the target
@@ -292,26 +300,48 @@ md"""
 ## Extract Package Names
 """
 
+# ╔═╡ 6e445780-51a8-4f4a-b5f2-19c4b84fac75
+# This function takes a `using` or `import` expression and collects a list of all the imported packages inside the `set` provided as first argument
+function add_package_names!(set, ex)
+	# Here we alaredy know that the expression is an import, so we can directly look at the args
+	args = if length(ex.args) > 1
+		# We have multiple packages
+		ex.args
+	else
+		arg = ex.args[1]
+		# We only have one package in this expression, we put it in a vector
+		[arg.head == :(:) ? arg.args[1] : arg]
+	end
+	skip_names = (:Main, :Core, :Base)
+	for arg in args
+		arg.head == :(.) || error("Something unexpected happened")
+		# If the import or using is of the type `import .NAME: something` we ignore it as it's not a package but a local module
+		arg.args[1] == :(.) && continue
+		mod_name = getfirst(x -> x ∉ skip_names, arg.args)
+		mod_name isa Nothing && continue
+		push!(set, mod_name)
+	end
+	return set
+end
+
+# ╔═╡ ffc6abe2-f4a1-425c-84e1-2b1505d46c84
+# This function expects as input a vector of Expr or LineNumberNodes that are
+# the list of `import` or `using` statements have been found during the
+# processing of the current module. These statements are parsed to extract the
+# package names that will be used to check if the calling notebook has missing dependencies
+function process_extracted_packages(package_exprs)
+	set = Set{Symbol}()
+	for ex in package_exprs
+		ex isa LineNumberNode && continue
+		add_package_names!(set, ex)
+	end
+	return set
+end
+
 # ╔═╡ 96768bc9-f233-44e1-b833-7a39acaf111e
 function extract_packages(ex, dict)
 	ex.head ∈ (:using, :import) || return ex
-	arg = ex.args[1]
-	arg = arg.head == :(:) ? arg.args[1] : arg
-	arg.head == :(.) || error("Something unexpected happened")
-	# If the import or using is of the type `import .NAME: something` we ignore it as it's not a package but a local module
-	arg.args[1] == :(.) && return ex
-	skip_names = (:Main, :Core, :Base)
-	mod_name = getfirst(x -> x ∉ skip_names, arg.args)
-	mod_name isa Nothing && return ex
-	# We keep track of all the various packages loaded per each submodule we encounter while parsing.
-	# We need this to import all the loaded packages as first expression at the toplevel of each module/submodule. 
-	# If not doing this, the macros defined in packages present in `included` files are tried to be expanded before the `using/import` statements are used
-	package_dict = dict["Loaded Packages"]
-	# The package dict contains one entry per module/submodule. The combined group of packages will be extracted from the key called :_Overall_
-	path = dict["Module Path"]
-	package_set = isempty(path) ? package_dict[:_Overall_] : get!(package_dict, first(path), Set{Symbol}())
-	push!(package_set, mod_name)
-	return ex
+	return _wrap_import(ex)
 end
 
 # ╔═╡ 5d1d9139-b5fa-4b82-a9fa-f025de82012b
@@ -321,23 +351,43 @@ md"""
 
 # ╔═╡ 26c97491-f315-4a9c-a93d-603c4e1a21f9
 md"""
-## update module path
+## Process Module
 """
 
 # ╔═╡ ca1ea13c-ecee-4517-9176-679ec9f4e585
-function update_module_path(ex, dict)
+function preprocess_module(ex, dict)
 	Meta.isexpr(ex, :module) || return ex
 	path = dict["Module Path"]
 	module_name = ex.args[2]
 	
-	if isempty(path) || first(path) != module_name 
-		# Add the current module to the path
-		pushfirst!(path, module_name)
-	else
-		# Remove the current module from the path
-		popfirst!(path)
-	end
+	# Add the current module to the path
+	pushfirst!(path, module_name)
+	
+	# Reset the module specific data
+	dict["Loaded Packages"][module_name] = Dict{Symbol, Any}(:Exprs => [], :Names => Set{Symbol}())
 
+	return ex
+end
+
+# ╔═╡ 2499bae5-5631-44c3-8fc1-698d22d29b61
+function postprocess_module(ex, dict)
+	Meta.isexpr(ex, :module) || return ex
+	path = dict["Module Path"]
+	module_name = ex.args[2]
+
+	# We have to create an import statement with all the packages used inside the Module and put it as first expression to avoid problems with macro expansion
+	package_exprs = get(dict["Loaded Packages"][module_name], :Exprs, [])
+	names_set = process_extracted_packages(package_exprs)
+	# We put the set of names in the Loaded Packages for this module
+	dict["Loaded Packages"][module_name][:Names] = names_set
+	if !isempty(package_exprs) && length(path) > 1 # We don't do this for the top level module as it's not needed there
+		# We add a begin-end block with all the using/import statements (and their linenumbers) at the beginning of the module
+		import_block = Expr(:block, package_exprs...)
+		pushfirst!(ex.args[end].args, import_block)
+	end
+	
+	# We pop the current module from the path
+	popfirst!(path)
 	return ex
 end
 
@@ -359,7 +409,8 @@ md"""
 
 # ╔═╡ 6a270c77-5f32-496c-8dcb-361e7039b311
 function clean_args!(newargs)
-	last_invalid = 0
+	last_invalid = last_popup = 0
+	cloned_exprs = []
 	for i ∈ reverse(eachindex(newargs))
 		arg = newargs[i]
 		if Meta.isexpr(arg, :__skip_expr__)
@@ -368,18 +419,29 @@ function clean_args!(newargs)
 		elseif Meta.isexpr(arg, :__remove_expr__)
 			deleteat!(newargs, i)
 			last_invalid = i
+		elseif Meta.isexpr(arg, :__wrapped_import__)
+			# We have a wrapped import statement, we unwrap it and also put it in the vector to return
+			ex = arg.args[1]
+			newargs[i] = ex
+			# We add the expression to the vector, and we also mark the counter to copy the related LineNumberNode as well, but we add information to the LineNumberNode
+			pushfirst!(cloned_exprs, ex)
+			last_popup = i
 		elseif arg isa LineNumberNode
-			flag = last_invalid == i+1
-			flag &&	deleteat!(newargs, i)
+			# We eventually delete or add the linenumbers
+			(last_invalid == i+1) && deleteat!(newargs, i)
+			# We put a note that this was added by fromparent
+			(last_popup == i+1) && pushfirst!(cloned_exprs, LineNumberNode(arg.line, Symbol("Added by @fromparent => ", arg.file)))
+			# We set this as the last invalid so that we can delete hanging LineNumberNodes that are all bundled together, likely coming from expression that were delete in the ast processing
 			last_invalid = i
 		end
 	end
+	return cloned_exprs
 end
 
 # ╔═╡ 93a422c6-2948-434f-81bf-f4c74dc16e0f
 function process_ast(ex, dict)
 	# We try to add the module to the path
-	update_module_path(ex, dict)
+	preprocess_module(ex, dict)
 	for f in (process_linenumber, skip_basic_exprs, remove_custom_exprs, remove_pluto_exprs, extract_packages, process_include)
 		ex = f(ex, dict)
 		can_skip(ex) && return ex
@@ -402,11 +464,16 @@ function process_ast(ex, dict)
 		newargs = newargs[1:last_idx]
 	end
 	# Remove the linunumbernodes that are directly before another nothing or LinuNumberNode
-	clean_args!(newargs)
+	cloned_exprs = clean_args!(newargs)
+	# We check if we are in a module, and we do add the cloned expressions to the loaded packages.
+	# If not in a module, the expressions are still cloned to the generic dict entry to later extract the package names
+	path = get(dict, "Module Path", [])
+	mod_name = isempty(path) ? :_Overall_ : first(path)
+	package_exprs = get!(dict["Loaded Packages"][mod_name], :Exprs, [])
+	append!(package_exprs, cloned_exprs)
 
-	
 	# We try to remove the module from the path
-	update_module_path(ex, dict)
+	postprocess_module(ex, dict)
 	return Expr(ex.head, newargs...)
 end
 
@@ -431,7 +498,10 @@ function extract_module_expression(data, _module)
 	end
 	# We combine all the packages loaded
 	packages = data["Loaded Packages"]
-	packages[:_Overall_] = union(values(packages)...)
+	extracted_names = map(values(packages)) do d
+		get(d, :Names, Set{Symbol}())
+	end
+	packages[:_Overall_][:Names] = union(extracted_names...)
 	mod_exp = getfirst(x -> Meta.isexpr(x, :module), ex.args)
 	mod_exp, data
 end
@@ -466,7 +536,8 @@ function maybe_load_module(calling_file, _module)
 			proj_file = Core.eval(_module, :(Base.active_project()))
 			notebook_project = TOML.parsefile(proj_file)
 			notebook_deps =  Set(map(Symbol, keys(notebook_project["deps"]) |> collect))
-			missing_packages = setdiff(dict["discovered packages"], notebook_deps, Set([:Markdown, :Random, :InteractiveUtils]))
+			loaded_packages = get(dict["Loaded Packages"][:_Overall_], :Names, Set{Symbol}())
+			missing_packages = setdiff(loaded_packages, notebook_deps, Set([:Markdown, :Random, :InteractiveUtils]))
 			if !isempty(missing_packages)
 				error("""The following packages are used in the parent module but are not currently imported in this notebook's environment:
 				$(collect(missing_packages))
@@ -501,6 +572,8 @@ function process_include(ex, dict)
 	if is_target
 		# We save the reason why we stopped parsing to allow skipping following parsing and we just return the expression to be removed
 		dict["Stopped Parsing"] = "Target Found"
+		# We also save a copy of the module path where the target resides
+		dict["Target Path"] = dict["Module Path"]
 		return _remove(ex)
 	else
 		# We directly process the include and return the processed expression
@@ -919,10 +992,12 @@ version = "17.4.0+0"
 # ╠═36601158-bb28-4800-8972-559e822bcabf
 # ╠═61871032-7ab7-4066-983c-04d3acdd954d
 # ╠═30c5de94-b453-454a-a3fd-93b86c45c7f1
+# ╠═d03e2afd-5dea-429e-a56a-f0be2162944f
 # ╠═a3102851-32f0-4ddd-97d2-4c6650b94dcd
 # ╠═43783ef3-3d0f-4a70-9b4f-cfbf3e5b1673
 # ╟─e4175daf-bef5-4d91-9794-85458371d03d
 # ╟─09f7ce21-382d-44ba-adaf-15ce787acb65
+# ╠═d14909d3-3529-4119-bc1b-ee6ffacf2aaa
 # ╠═1cab8cea-04b0-4531-89cd-cf8c296ed9a4
 # ╠═2f0877d4-bdb3-4009-a117-c47de34059b9
 # ╠═38744425-14e4-4228-99cb-965b96490100
@@ -947,11 +1022,14 @@ version = "17.4.0+0"
 # ╠═08816d5b-7f26-46bf-9b0b-c20e195cf326
 # ╠═8385962e-8397-4e5b-be98-86a4398c455d
 # ╟─2178c9bf-6128-40f8-9050-492e22cf55e7
+# ╠═ffc6abe2-f4a1-425c-84e1-2b1505d46c84
+# ╠═6e445780-51a8-4f4a-b5f2-19c4b84fac75
 # ╠═96768bc9-f233-44e1-b833-7a39acaf111e
 # ╟─5d1d9139-b5fa-4b82-a9fa-f025de82012b
 # ╠═bc89433c-1fad-4653-8e98-2ab98360529f
 # ╟─26c97491-f315-4a9c-a93d-603c4e1a21f9
 # ╠═ca1ea13c-ecee-4517-9176-679ec9f4e585
+# ╠═2499bae5-5631-44c3-8fc1-698d22d29b61
 # ╟─4ec1a33e-c409-4047-853c-722a058768c9
 # ╠═3553578a-aac1-452c-bea2-5c1917f61cd3
 # ╠═93a422c6-2948-434f-81bf-f4c74dc16e0f

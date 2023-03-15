@@ -37,63 +37,23 @@ end
 ExtendedTableOfContents(;hide_preamble = false)
   ╠═╡ =#
 
-# ╔═╡ 5f1db2c0-4ab5-4391-a15b-8331f9b649d7
-function get_parent_data(filepath::AbstractString)
-	# Eventually remove the Pluto cell part
-	filepath = first(split(filepath, "#==#"))
-	endswith(filepath, ".jl") || error("It looks like the provided file path $filepath does not end with .jl, so it's not a julia file")
-	
-	project_file = Base.current_project(dirname(filepath))
-	project_file isa Nothing && error("The current notebook is not part of a Package")
+# ╔═╡ 7a00a57d-13b6-4156-9c81-4ffda2214dae
+md"""
+# Variables
+"""
 
-	parent_dir = dirname(project_file)
-	parent_data = TOML.parsefile(project_file)
-
-	# Check that the package file actually exists
-	parent_file = joinpath(parent_dir,"src", parent_data["name"] * ".jl")
-	isfile(parent_file) || error("The parent package main file was not found at path $parent_file")
-	parent_data["dir"] = parent_dir
-	parent_data["project"] = project_file
-	parent_data["file"] = parent_file
-	parent_data["target"] = filepath
-	parent_data["Module Path"] = Symbol[]
-	parent_data["Loaded Packages"] = Dict{Symbol, Any}(:_Overall_ => Dict{Symbol, Any}(:Names => Set{Symbol}()))
-	
-	return parent_data
-end
-
-# ╔═╡ 4e1e0305-7cda-4272-904a-2aa7add72cb5
-# ╠═╡ skip_as_script = true
-#=╠═╡
-data = get_parent_data(@__FILE__)
-  ╠═╡ =#
+# ╔═╡ 9a3ef442-9905-431a-8e18-f72c9acba5e8
+_remove_expr_var_name = :__fromparent_expr_to_remove__
 
 # ╔═╡ 74b3f945-39af-463f-9f0a-ba1c7adc526c
 md"""
 # Macro
 """
 
-# ╔═╡ 9a3ef442-9905-431a-8e18-f72c9acba5e8
-_remove_expr_var_name = :__fromparent_expr_to_remove__
-
-# ╔═╡ 520e5abb-46aa-4dd6-91e5-3b4781e5dbd7
-macro skipexpr(ex)
-	esc(Expr(:(=), _remove_expr_var_name, ex))
-end
-
 # ╔═╡ 10b633a4-14ab-4eff-b503-9841d9ffe175
 md"""
 ## Function
 """
-
-# ╔═╡ d1b36c20-63d0-4105-9418-cdb05645ca99
-# ╠═╡ skip_as_script = true
-#=╠═╡
-@skipexpr [
-	:(using MacroTools),
-	:(using Requires),
-]
-  ╠═╡ =#
 
 # ╔═╡ d03e2afd-5dea-429e-a56a-f0be2162944f
 md"""
@@ -106,40 +66,31 @@ macro fromparent(ex)
 	esc(fromparent(ex, calling_file, __module__))
 end
 
-# ╔═╡ 3208acb4-9a54-41e9-910f-d98206dc80a2
-export @fromparent, @skipexpr
-
 # ╔═╡ 43783ef3-3d0f-4a70-9b4f-cfbf3e5b1673
 # ╠═╡ skip_as_script = true
 #=╠═╡
 @fromparent import module
   ╠═╡ =#
 
-# ╔═╡ e4175daf-bef5-4d91-9794-85458371d03d
+# ╔═╡ b777c029-b9cc-4833-9d87-b3374b57a695
 md"""
-# Process Functions
+# Parse User expression 
 """
 
-# ╔═╡ 09f7ce21-382d-44ba-adaf-15ce787acb65
+# ╔═╡ e1305481-7d47-4841-b603-8adbb5df1f12
 md"""
-## Basic skip/remove
+We want to parse import using statements. The following cases are supported:
+- `import/using module` → Just load the module in the current workspace and import the exported names if `using`.
+  - **SHOULD ONLY WORK INSIDE PLUTO**.
+- `import/using module.SubModule / module: vars / module.SubModule: vars` → Import or Use submodules or explicit names starting from the top-level parsed module.
+  - **SHOULD ONLY WORK INSIDE PLUTO**.
+- `import/using *` → Automatically import all names defined in the parent module
+  - Use the module containing the target if the target is found, use the the top-level module otherwise
+  - **SHOULD ONLY WORK INSIDE PLUTO**
+- `import/using .ModName \ ..ModName \ .ModName: vars \ etc` → Import/Use a module or just some variables from a module starting from the path of the target. 
+  -  Should execute the given expression as-is outside of Pluto
+  -  Should give an error in Pluto if the target is not found.
 """
-
-# ╔═╡ d14909d3-3529-4119-bc1b-ee6ffacf2aaa
-_wrap_import(ex) = Expr(:__wrapped_import__, ex)
-
-# ╔═╡ 1cab8cea-04b0-4531-89cd-cf8c296ed9a4
-_skip(ex) = Expr(:__skip_expr__, ex)
-
-# ╔═╡ 2f0877d4-bdb3-4009-a117-c47de34059b9
-_remove(ex) = Expr(:__remove_expr__, ex)
-
-# ╔═╡ 38744425-14e4-4228-99cb-965b96490100
-can_skip(ex) = Meta.isexpr(ex, [:__wrapped_import__, :__skip_expr__, :__remove_expr__]) || ex isa LineNumberNode
-
-# ╔═╡ b72444f4-5733-487c-a49a-ac152db43711
-# This function check if the search stopped either because we found the target
-should_stop_parsing(dict) = haskey(dict, "Stopped Parsing")	
 
 # ╔═╡ 30fbe651-9849-40e6-ad44-7d5a1a0e5097
 md"""
@@ -176,48 +127,83 @@ function parseinput(ex, dict)
 	return ex, parentpath, catchall
 end
 
+# ╔═╡ ffe2d1ab-49bb-4ed7-8d72-e4711b1bb2ee
+# Extract useful data from the provided import statement
+function decompose_input(ex)
+	import_type = ex.head
+	args = ex.args
+	modules, variables = if Meta.isexpr(args[1], :(:))
+		m, v... = args[1].args
+		[m], v
+	else
+		args, [v]
+	end
+	# We check if there is any catchall
+	has_catchall = if :(.*) ∈ modules
+		 true
+	elseif :(.*) ∈ variables
+		# We check if the catchall was also the only thing provided
+		length(variables) == 1 || error("You can export additional variable names if you already use the catchall `*`")
+		true
+	else
+		false
+	end
+	# We check if the package uses the `module` keyword for module names
+	has_module = map(modules) do ex
+		:module ∈ ex.args || return false
+		# We check that module is actually the first package in the hierarchy
+		:module == ex.args[1] || error("If you use the `module` keyword to specify the loaded package, it has to be the first name like so `import module.SubModule`")
+		return true
+		end |> any
+	# We check if all the loaded packages are relative (they start with .), to verify whether it's a valid expression that has to be parsed outside of Pluto
+	relative_packages = map(modules) do ex
+		ex.args[1] == :(.) # If the module name starts with a ., it is relative
+	end		
+end
+
+# ╔═╡ e4175daf-bef5-4d91-9794-85458371d03d
+md"""
+# Parent Code Parsing
+"""
+
+# ╔═╡ 09f7ce21-382d-44ba-adaf-15ce787acb65
+md"""
+## Basic skip/remove
+"""
+
+# ╔═╡ d14909d3-3529-4119-bc1b-ee6ffacf2aaa
+_wrap_import(ex) = Expr(:__wrapped_import__, ex)
+
+# ╔═╡ 1cab8cea-04b0-4531-89cd-cf8c296ed9a4
+_skip(ex) = Expr(:__skip_expr__, ex)
+
+# ╔═╡ 2f0877d4-bdb3-4009-a117-c47de34059b9
+_remove(ex) = Expr(:__remove_expr__, ex)
+
+# ╔═╡ 38744425-14e4-4228-99cb-965b96490100
+can_skip(ex) = Meta.isexpr(ex, [:__wrapped_import__, :__skip_expr__, :__remove_expr__]) || ex isa LineNumberNode
+
+# ╔═╡ b72444f4-5733-487c-a49a-ac152db43711
+# This function check if the search stopped either because we found the target
+should_stop_parsing(dict) = haskey(dict, "Stopped Parsing")	
+
 # ╔═╡ d42afa4b-bb05-41d9-99a4-5aaa279491b3
 md"""
 ## Extract Module Expression
 """
-
-# ╔═╡ d4c25048-a095-44cf-a5ea-46172560f463
-extract_module_expression(filename::AbstractString, _module) = extract_module_expression(get_parent_data(filename), _module)
 
 # ╔═╡ 76dbf4fd-8c4d-4af2-ac17-efb5b51aae76
 md"""
 ## Extract File AST
 """
 
-# ╔═╡ ccbd8186-c075-4321-9289-e0b320f338ba
-# ╠═╡ skip_as_script = true
-#=╠═╡
-let
-	code = read("/home/amengali/Repos/github/mine/PlutoDevMacros/notebooks/basics.jl", String)
-	ast = Meta.parseall(code)
-	ast.args
-end
-  ╠═╡ =#
-
 # ╔═╡ 061aecc5-b893-4866-8f2a-605e1dcfffec
+# Parse the content of the file and return the parsed expression
 function extract_file_ast(filename)
 	code = read(filename, String)
 	ast = Meta.parseall(code; filename)
 	@assert Meta.isexpr(ast, :toplevel)
 	ast
-end
-
-# ╔═╡ 54508213-9956-4a94-ac5b-9a9be6ea8959
-md"""
-## getfirst
-"""
-
-# ╔═╡ 5fbbed80-6235-4d9d-b3ca-fac179e80568
-function getfirst(p, itr)
-    for el in itr
-        p(el) && return el
-    end
-    return nothing
 end
 
 # ╔═╡ 0bc1743a-b672-4310-8198-bcc754b30fc4
@@ -232,12 +218,6 @@ function isbind(ex)
 	ex.head == :macrocall && ex.args[1] == Symbol("@bind") && return true
 	return false
 end
-
-# ╔═╡ b66e9c72-00d9-4af5-9f27-02c0c9aff5e6
-# ╠═╡ skip_as_script = true
-#=╠═╡
-isbind(:(a = @bind a LOL))
-  ╠═╡ =#
 
 # ╔═╡ 8b1f3a72-2d3f-4546-8f2b-4ae13bb6a2a9
 function remove_pluto_exprs(ex, dict)
@@ -264,7 +244,13 @@ function remove_custom_exprs(ex, dict)
 	return ex
 end
 
+# ╔═╡ cbd94c2f-00fa-4eb8-80c5-f99862033f62
+md"""
+## Process Linenumber
+"""
+
 # ╔═╡ 364c045c-29b2-4308-8c49-f776708826d4
+# Update the last parsed LineNumber and eventually stop parsing if the stopping condnition has been reached 
 function process_linenumber(ex, dict)
 	ex isa LineNumberNode || return ex
 	# We first save the current line as the last one parsed
@@ -299,6 +285,207 @@ end
 md"""
 ## Extract Package Names
 """
+
+# ╔═╡ 96768bc9-f233-44e1-b833-7a39acaf111e
+function extract_packages(ex, dict)
+	ex.head ∈ (:using, :import) || return ex
+	return _wrap_import(ex)
+end
+
+# ╔═╡ 5d1d9139-b5fa-4b82-a9fa-f025de82012b
+md"""
+## Process include
+"""
+
+# ╔═╡ 26c97491-f315-4a9c-a93d-603c4e1a21f9
+md"""
+## Process Module
+"""
+
+# ╔═╡ ca1ea13c-ecee-4517-9176-679ec9f4e585
+function preprocess_module(ex, dict)
+	Meta.isexpr(ex, :module) || return ex
+	path = dict["Module Path"]
+	module_name = ex.args[2]
+	
+	# Add the current module to the path
+	pushfirst!(path, module_name)
+	
+	# Reset the module specific data
+	dict["Loaded Packages"][module_name] = Dict{Symbol, Any}(:Exprs => [], :Names => Set{Symbol}())
+
+	return ex
+end
+
+# ╔═╡ 4ec1a33e-c409-4047-853c-722a058768c9
+md"""
+## Process ast
+"""
+
+# ╔═╡ 98779ff3-46d6-4ae5-98d6-bd5f7ae96504
+md"""
+## clearn args
+"""
+
+# ╔═╡ 6a270c77-5f32-496c-8dcb-361e7039b311
+function clean_args!(newargs)
+	last_invalid = last_popup = 0
+	cloned_exprs = []
+	for i ∈ reverse(eachindex(newargs))
+		arg = newargs[i]
+		if Meta.isexpr(arg, :__skip_expr__)
+			# We remove the wrapper
+			newargs[i] = arg.args[1]
+		elseif Meta.isexpr(arg, :__remove_expr__)
+			deleteat!(newargs, i)
+			last_invalid = i
+		elseif Meta.isexpr(arg, :__wrapped_import__)
+			# We have a wrapped import statement, we unwrap it and also put it in the vector to return
+			ex = arg.args[1]
+			newargs[i] = ex
+			# We add the expression to the vector, and we also mark the counter to copy the related LineNumberNode as well, but we add information to the LineNumberNode
+			pushfirst!(cloned_exprs, ex)
+			last_popup = i
+		elseif arg isa LineNumberNode
+			# We eventually delete or add the linenumbers
+			(last_invalid == i+1) && deleteat!(newargs, i)
+			# We put a note that this was added by fromparent
+			(last_popup == i+1) && pushfirst!(cloned_exprs, LineNumberNode(arg.line, Symbol("Added by @fromparent => ", arg.file)))
+			# We set this as the last invalid so that we can delete hanging LineNumberNodes that are all bundled together, likely coming from expression that were delete in the ast processing
+			last_invalid = i
+		end
+	end
+	return cloned_exprs
+end
+
+# ╔═╡ a9397d9f-9706-4f3e-b464-f823ca895b87
+md"""
+# Helper Functions
+"""
+
+# ╔═╡ b013b1d4-3897-434d-92a9-9a7f48b30adc
+md"""
+## execute only in notebook
+"""
+
+# ╔═╡ 674a304f-ddda-42e8-a203-155302f9c47f
+# We have to create our own simple check to only execute some stuff inside the notebook where they are defined. We have stuff in basics.jl but we don't want to include that in this notebook
+function is_notebook_local()
+	cell_id = try
+		Main.PlutoRunner.currently_running_cell_id[]
+	catch e
+		return false
+	end
+	caller = stacktrace()[2] # We get the function calling this function
+	calling_file = caller.file |> string
+	return endswith(calling_file, string(cell_id))
+end
+
+# ╔═╡ 86c2fc8f-64f2-4b8e-aa8e-38fbb28ec054
+# We have to create our own simple check to only execute some stuff inside the notebook where they are defined. We have stuff in basics.jl but we don't want to include that in this notebook
+function is_notebook_local(calling_file::String)
+	name_cell = split(calling_file, "#==#")
+	return length(name_cell) == 2 && length(name_cell[2]) == 36
+end
+
+# ╔═╡ 0832337c-ad8a-47ae-a09c-da4eda775479
+is_notebook_local(calling_file::Symbol) = is_notebook_local(String(calling_file))
+
+# ╔═╡ 520e5abb-46aa-4dd6-91e5-3b4781e5dbd7
+macro removeexpr(ex)
+	ex = if is_notebook_local(__source__.file)
+		:($_remove_expr_var_name = $ex)
+	else
+		nothing
+	end
+	esc(ex)
+end
+
+# ╔═╡ 3208acb4-9a54-41e9-910f-d98206dc80a2
+export @fromparent, @removeexpr
+
+# ╔═╡ d1b36c20-63d0-4105-9418-cdb05645ca99
+@removeexpr [
+	:(using MacroTools),
+	:(using Requires),
+]
+
+# ╔═╡ 50ffd58f-df98-4a72-96e4-58590ae0acd3
+"""
+	only_in_nb(ex)
+Executes the expression `ex` only if the macro is called from a running Pluto instance and ran directly from the source notebook file.
+
+This is more strict than `PlutoHooks.@skip_as_script` as including a notebook with `@skip_as_script ex` from another notebook would still execute `ex`.\\
+`@only_in_nb ex` instead only evaluates `ex` if the calling notebook is the original source notebook file.
+
+See also: [`@only_out_nb`](@ref). [`PlutoHooks.@skip_as_script`](@ref).
+"""
+macro only_in_nb(ex) 
+	is_notebook_local(__source__.file) ? esc(ex) : nothing 
+end
+
+# ╔═╡ c4c7965e-a522-4072-b18b-f64ac404c236
+"""
+	only_out_nb(ex)
+Opposite of `@only_in_nb`
+
+See also: [`@only_in_nb`](@ref). [`PlutoHooks.@only_as_script`](@ref).
+"""
+macro only_out_nb(ex) 
+	is_notebook_local(__source__.file) ? nothing : esc(ex) 
+end
+
+# ╔═╡ 5f690820-2ee2-480d-a4a8-62965df6f4cb
+md"""
+## get parent data
+"""
+
+# ╔═╡ 5f1db2c0-4ab5-4391-a15b-8331f9b649d7
+function get_parent_data(filepath::AbstractString)
+	# Eventually remove the Pluto cell part
+	filepath = first(split(filepath, "#==#"))
+	endswith(filepath, ".jl") || error("It looks like the provided file path $filepath does not end with .jl, so it's not a julia file")
+	
+	project_file = Base.current_project(dirname(filepath))
+	project_file isa Nothing && error("The current notebook is not part of a Package")
+
+	parent_dir = dirname(project_file)
+	parent_data = TOML.parsefile(project_file)
+
+	# Check that the package file actually exists
+	parent_file = joinpath(parent_dir,"src", parent_data["name"] * ".jl")
+	isfile(parent_file) || error("The parent package main file was not found at path $parent_file")
+	parent_data["dir"] = parent_dir
+	parent_data["project"] = project_file
+	parent_data["file"] = parent_file
+	parent_data["target"] = filepath
+	parent_data["Module Path"] = Symbol[]
+	parent_data["Loaded Packages"] = Dict{Symbol, Any}(:_Overall_ => Dict{Symbol, Any}(:Names => Set{Symbol}()))
+	
+	return parent_data
+end
+
+# ╔═╡ 4e1e0305-7cda-4272-904a-2aa7add72cb5
+# ╠═╡ skip_as_script = true
+#=╠═╡
+data = get_parent_data(@__FILE__)
+  ╠═╡ =#
+
+# ╔═╡ d4c25048-a095-44cf-a5ea-46172560f463
+extract_module_expression(filename::AbstractString, _module) = extract_module_expression(get_parent_data(filename), _module)
+
+# ╔═╡ 54508213-9956-4a94-ac5b-9a9be6ea8959
+md"""
+## getfirst
+"""
+
+# ╔═╡ 5fbbed80-6235-4d9d-b3ca-fac179e80568
+function getfirst(p, itr)
+    for el in itr
+        p(el) && return el
+    end
+    return nothing
+end
 
 # ╔═╡ 6e445780-51a8-4f4a-b5f2-19c4b84fac75
 # This function takes a `using` or `import` expression and collects a list of all the imported packages inside the `set` provided as first argument
@@ -338,37 +525,6 @@ function process_extracted_packages(package_exprs)
 	return set
 end
 
-# ╔═╡ 96768bc9-f233-44e1-b833-7a39acaf111e
-function extract_packages(ex, dict)
-	ex.head ∈ (:using, :import) || return ex
-	return _wrap_import(ex)
-end
-
-# ╔═╡ 5d1d9139-b5fa-4b82-a9fa-f025de82012b
-md"""
-## Process include
-"""
-
-# ╔═╡ 26c97491-f315-4a9c-a93d-603c4e1a21f9
-md"""
-## Process Module
-"""
-
-# ╔═╡ ca1ea13c-ecee-4517-9176-679ec9f4e585
-function preprocess_module(ex, dict)
-	Meta.isexpr(ex, :module) || return ex
-	path = dict["Module Path"]
-	module_name = ex.args[2]
-	
-	# Add the current module to the path
-	pushfirst!(path, module_name)
-	
-	# Reset the module specific data
-	dict["Loaded Packages"][module_name] = Dict{Symbol, Any}(:Exprs => [], :Names => Set{Symbol}())
-
-	return ex
-end
-
 # ╔═╡ 2499bae5-5631-44c3-8fc1-698d22d29b61
 function postprocess_module(ex, dict)
 	Meta.isexpr(ex, :module) || return ex
@@ -391,57 +547,11 @@ function postprocess_module(ex, dict)
 	return ex
 end
 
-# ╔═╡ 4ec1a33e-c409-4047-853c-722a058768c9
-md"""
-## Process ast
-"""
-
-# ╔═╡ 3553578a-aac1-452c-bea2-5c1917f61cd3
-function can_remove_args(ex)
-	Meta.isexpr(ex, [:parameters, :return]) && return false
-	return true
-end
-
-# ╔═╡ 98779ff3-46d6-4ae5-98d6-bd5f7ae96504
-md"""
-## clearn args
-"""
-
-# ╔═╡ 6a270c77-5f32-496c-8dcb-361e7039b311
-function clean_args!(newargs)
-	last_invalid = last_popup = 0
-	cloned_exprs = []
-	for i ∈ reverse(eachindex(newargs))
-		arg = newargs[i]
-		if Meta.isexpr(arg, :__skip_expr__)
-			# We remove the wrapper
-			newargs[i] = arg.args[1]
-		elseif Meta.isexpr(arg, :__remove_expr__)
-			deleteat!(newargs, i)
-			last_invalid = i
-		elseif Meta.isexpr(arg, :__wrapped_import__)
-			# We have a wrapped import statement, we unwrap it and also put it in the vector to return
-			ex = arg.args[1]
-			newargs[i] = ex
-			# We add the expression to the vector, and we also mark the counter to copy the related LineNumberNode as well, but we add information to the LineNumberNode
-			pushfirst!(cloned_exprs, ex)
-			last_popup = i
-		elseif arg isa LineNumberNode
-			# We eventually delete or add the linenumbers
-			(last_invalid == i+1) && deleteat!(newargs, i)
-			# We put a note that this was added by fromparent
-			(last_popup == i+1) && pushfirst!(cloned_exprs, LineNumberNode(arg.line, Symbol("Added by @fromparent => ", arg.file)))
-			# We set this as the last invalid so that we can delete hanging LineNumberNodes that are all bundled together, likely coming from expression that were delete in the ast processing
-			last_invalid = i
-		end
-	end
-	return cloned_exprs
-end
-
 # ╔═╡ 93a422c6-2948-434f-81bf-f4c74dc16e0f
 function process_ast(ex, dict)
 	# We try to add the module to the path
 	preprocess_module(ex, dict)
+	# It is important that the process_linenumber is the first function to use, as LineNumbers are skipped at the first `can_skip`
 	for f in (process_linenumber, skip_basic_exprs, remove_custom_exprs, remove_pluto_exprs, extract_packages, process_include)
 		ex = f(ex, dict)
 		can_skip(ex) && return ex
@@ -469,7 +579,11 @@ function process_ast(ex, dict)
 	# If not in a module, the expressions are still cloned to the generic dict entry to later extract the package names
 	path = get(dict, "Module Path", [])
 	mod_name = isempty(path) ? :_Overall_ : first(path)
-	package_exprs = get!(dict["Loaded Packages"][mod_name], :Exprs, [])
+	package_exprs = let
+		general_dict = get!(dict, "Loaded Packages", Dict{Symbol, Any}())
+		current_dict = get!(general_dict, mod_name, Dict{Symbol, Any}())
+		get!(current_dict, :Exprs, [])
+	end
 	append!(package_exprs, cloned_exprs)
 
 	# We try to remove the module from the path
@@ -596,22 +710,6 @@ function filterednames(m::Module)
 		s in excluded && return false
 		return true
 	end
-end
-
-# ╔═╡ 345119ec-5d5d-41bf-9380-1ae684921061
-macro addmodule(ex)
-	s = gensym()
-	modexpr = :(module $s $ex end)
-	m = Core.eval(__module__, modexpr)
-	all_names = filterednames(m)
-	imports = :(import .GESU)
-	imports.args[1] = Expr(:(:), imports.args[1], map(all_names) do name
-		Expr(:(.), name)
-	end...)
-	quote
-		GESU = $m
-		$imports
-	end |> esc
 end
 
 # ╔═╡ 30c5de94-b453-454a-a3fd-93b86c45c7f1
@@ -979,11 +1077,10 @@ version = "17.4.0+0"
 # ╠═7f164c6d-1b27-4805-ae03-6a82a8390c16
 # ╠═60aecd17-82c9-4a64-ad99-310e502c5a5e
 # ╠═5722e2db-881f-4ec2-98ec-220654a4e7ae
-# ╠═5f1db2c0-4ab5-4391-a15b-8331f9b649d7
 # ╠═4e1e0305-7cda-4272-904a-2aa7add72cb5
-# ╠═74b3f945-39af-463f-9f0a-ba1c7adc526c
-# ╠═345119ec-5d5d-41bf-9380-1ae684921061
+# ╟─7a00a57d-13b6-4156-9c81-4ffda2214dae
 # ╠═9a3ef442-9905-431a-8e18-f72c9acba5e8
+# ╟─74b3f945-39af-463f-9f0a-ba1c7adc526c
 # ╠═520e5abb-46aa-4dd6-91e5-3b4781e5dbd7
 # ╠═7948ab6f-ee62-4c41-a2c0-74f1c25a87ce
 # ╠═3208acb4-9a54-41e9-910f-d98206dc80a2
@@ -995,6 +1092,11 @@ version = "17.4.0+0"
 # ╠═d03e2afd-5dea-429e-a56a-f0be2162944f
 # ╠═a3102851-32f0-4ddd-97d2-4c6650b94dcd
 # ╠═43783ef3-3d0f-4a70-9b4f-cfbf3e5b1673
+# ╟─b777c029-b9cc-4833-9d87-b3374b57a695
+# ╟─e1305481-7d47-4841-b603-8adbb5df1f12
+# ╟─30fbe651-9849-40e6-ad44-7d5a1a0e5097
+# ╠═3756fc1e-b64c-4fe5-bf7b-cc6094fc00a7
+# ╠═ffe2d1ab-49bb-4ed7-8d72-e4711b1bb2ee
 # ╟─e4175daf-bef5-4d91-9794-85458371d03d
 # ╟─09f7ce21-382d-44ba-adaf-15ce787acb65
 # ╠═d14909d3-3529-4119-bc1b-ee6ffacf2aaa
@@ -1002,22 +1104,17 @@ version = "17.4.0+0"
 # ╠═2f0877d4-bdb3-4009-a117-c47de34059b9
 # ╠═38744425-14e4-4228-99cb-965b96490100
 # ╠═b72444f4-5733-487c-a49a-ac152db43711
-# ╟─30fbe651-9849-40e6-ad44-7d5a1a0e5097
-# ╠═3756fc1e-b64c-4fe5-bf7b-cc6094fc00a7
 # ╟─d42afa4b-bb05-41d9-99a4-5aaa279491b3
 # ╠═d4c25048-a095-44cf-a5ea-46172560f463
 # ╠═d2944e2d-3f3f-4482-a052-5ea147f193d9
 # ╟─76dbf4fd-8c4d-4af2-ac17-efb5b51aae76
-# ╠═ccbd8186-c075-4321-9289-e0b320f338ba
 # ╠═061aecc5-b893-4866-8f2a-605e1dcfffec
-# ╠═54508213-9956-4a94-ac5b-9a9be6ea8959
-# ╠═5fbbed80-6235-4d9d-b3ca-fac179e80568
 # ╟─0bc1743a-b672-4310-8198-bcc754b30fc4
 # ╠═6160fd21-6fe8-40fb-89fe-f86a1b945099
-# ╠═b66e9c72-00d9-4af5-9f27-02c0c9aff5e6
 # ╠═8b1f3a72-2d3f-4546-8f2b-4ae13bb6a2a9
 # ╟─eedf9fb4-3371-4c98-8d97-3d925ccf3cc0
 # ╠═47e76b6f-8440-49b9-8aca-015a706da947
+# ╟─cbd94c2f-00fa-4eb8-80c5-f99862033f62
 # ╠═364c045c-29b2-4308-8c49-f776708826d4
 # ╠═08816d5b-7f26-46bf-9b0b-c20e195cf326
 # ╠═8385962e-8397-4e5b-be98-86a4398c455d
@@ -1031,10 +1128,20 @@ version = "17.4.0+0"
 # ╠═ca1ea13c-ecee-4517-9176-679ec9f4e585
 # ╠═2499bae5-5631-44c3-8fc1-698d22d29b61
 # ╟─4ec1a33e-c409-4047-853c-722a058768c9
-# ╠═3553578a-aac1-452c-bea2-5c1917f61cd3
 # ╠═93a422c6-2948-434f-81bf-f4c74dc16e0f
 # ╟─98779ff3-46d6-4ae5-98d6-bd5f7ae96504
 # ╠═6a270c77-5f32-496c-8dcb-361e7039b311
+# ╟─a9397d9f-9706-4f3e-b464-f823ca895b87
+# ╟─b013b1d4-3897-434d-92a9-9a7f48b30adc
+# ╠═674a304f-ddda-42e8-a203-155302f9c47f
+# ╠═86c2fc8f-64f2-4b8e-aa8e-38fbb28ec054
+# ╠═0832337c-ad8a-47ae-a09c-da4eda775479
+# ╠═50ffd58f-df98-4a72-96e4-58590ae0acd3
+# ╠═c4c7965e-a522-4072-b18b-f64ac404c236
+# ╟─5f690820-2ee2-480d-a4a8-62965df6f4cb
+# ╠═5f1db2c0-4ab5-4391-a15b-8331f9b649d7
+# ╟─54508213-9956-4a94-ac5b-9a9be6ea8959
+# ╠═5fbbed80-6235-4d9d-b3ca-fac179e80568
 # ╟─3db3a103-26f2-4b63-8be0-226ec5df4cc9
 # ╠═0225f847-a8bf-45c0-b208-71d8547f0d3d
 # ╟─00000000-0000-0000-0000-000000000001

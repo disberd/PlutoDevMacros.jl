@@ -29,5 +29,5 @@ using MacroTools: rmlines, prewalk
 
     # Test the package name extraction
     @test Set([:PackageA]) == add_package_names!(Set{Symbol}(), :(using PackageA: var1, var2))
-    @test Set([:PackageA, PackageC]) == add_package_names!(Set{Symbol}(), :(using PackageA, .PackageB, PackageC))
+    @test Set([:PackageA, :PackageC]) == add_package_names!(Set{Symbol}(), :(using PackageA, .PackageB, PackageC))
 end

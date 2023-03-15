@@ -44,12 +44,8 @@ md"""
 # ╔═╡ 46126b08-73e4-4134-af04-81d4796406e2
 const parent_package = Ref{Symbol}()
 
-# ╔═╡ 8233fa3c-9ba9-4c2e-a20c-0bfc60373c37
-module _MODULE_
-end
-
 # ╔═╡ c3969684-8f43-42ca-96f8-a4937fa7f920
-const module_path = [_MODULE_]
+const module_path = Module[]
 
 # ╔═╡ 983c2ecd-df26-4fcf-9d58-7712e2adf276
 _remove_expr_var_name = :__fromparent_expr_to_remove__
@@ -586,10 +582,9 @@ function load_module(calling_file, _module)
 		keepat!(module_path, 1)
 		# We add the extraction dictionary to the module
 		# push!(mod_exp.args[end].args, esc(:(_fromparent_dict_ = $dict)))
-		with_logger(NullLogger()) do
 			eval_in_module(Expr(:toplevel, LineNumberNode(1, Symbol(calling_file)), mod_exp))
-		end
 		# Get the moduleof the parent package
+		_MODULE_ = first(module_path)
 		__module = getfield(_MODULE_, mod_name)
 		__module._fromparent_dict_ = dict
 		block = quote
@@ -736,9 +731,11 @@ md"""
 function fromparent(ex, calling_file, _module)
 	is_notebook_local(calling_file) || return nothing
 	ex isa Expr || error("You have to call this macro with an import statement or a begin-end block of import statements")
+	# We create a dummy module to use
+	isempty(module_path) && push!(module_path, Core.eval(_module, :(module $(gensym(:fromparent)) end)))
 	# Construct the basic block where the module is import under name _PackageModule_. The module is only parsed if _PackageModule_ is not already defined in the calling module
 	block, _PackageModule_ = load_module(calling_file, _module)
-	# We extract the parse dict♡
+	# We extract the parse dict
 	dict = _PackageModule_._fromparent_dict_
 	if Meta.isexpr(ex, [:import, :using])
 		# Single statement

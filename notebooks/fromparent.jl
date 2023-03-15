@@ -303,6 +303,7 @@ function add_package_names!(set, ex)
 		arg.args[1] == :(.) && continue
 		mod_name = getfirst(x -> x ∉ skip_names, arg.args)
 		mod_name isa Nothing && continue
+		mod_name ∈ (:module, :*) && continue # Ignore instructions from this module
 		push!(set, mod_name)
 	end
 	return set

@@ -2,6 +2,7 @@ module PlutoDevMacros
 
 using MacroTools
 using Requires
+using HypertextLiteral
 
 # This hack is the only way I found to access @skip_as_script as PlutoDevMacros.@skip_as_script
 # @eval const $(Symbol("@skip_as_script")) = $(Symbol("@plutohookskip"))
@@ -11,14 +12,29 @@ using Requires
 
 include("../notebooks/basics.jl") # @only_in_nb, @only_out_nb, is_notebook_local, plutodump, @current_pluto_cell_id, @current_pluto_notebook_file
 module Script include("../notebooks/htlscript.jl") end # HTLScript, HTLBypass, HTLScriptPart, combine_scripts
-module FromParent include("../notebooks/parent_import.jl") end
-# include("../notebooks/parent_import.jl")
+# module FromParent include("../notebooks/parent_import.jl") end
+module FromParent include("../notebooks/fromparent.jl") end
 include("../notebooks/mapexpr.jl") # hasexpr, default_exprlist, include_mapexpr
 include("../notebooks/plutoinclude_macro.jl") # hasexpr, default_exprlist, include_mapexpr
 # include("../notebooks/pluto_traits.jl") # This defines and exports the @plutotraits macro
 
 # function __init__()
-# 	@require WhereTraits="c9d4e05b-6318-49cb-9b56-e0e2b0ceadd8" include("../notebooks/pluto_traits.jl") # This defines and exports the @plutotraits macro
+#     if isdefined(Main, :PlutoRunner)
+#         @info @htl("""
+#         <script>
+#             console.log('This is a script that is ran inside Pluto when loading PlutoDevMacros')
+#             const current_log = currentScript.closest('pluto-log-dot-positioner')
+#             const logs = current_log.parentElement
+#             if (logs.children.length > 1) {
+#                 current_log.style.display = "none"
+#             } else {
+#                 logs.parentElement.style.display = "none"
+#             }
+#         </script>""")
+#         @info "GESU"
+#     else
+        
+#     end
 # end
 
 end # module

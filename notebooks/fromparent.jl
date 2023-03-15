@@ -269,6 +269,8 @@ function skip_basic_exprs(ex, dict)
 	# We skip Expr/quote inside the Expr
 	ex.head == :call && ex.args[1] == :Expr && return _skip(ex)
 	ex.head == :quote && return _skip(ex)
+	# We avoid calls to other @fromparent
+	ex.head == :macrocall && ex.args[1] ∈ Symbol.(("@fromparent", "@removeexpr")) && return _skip(ex)
 	# We leave the rest untouched
 	return ex
 end

@@ -36,6 +36,14 @@ end
 ExtendedTableOfContents(;hide_preamble = false)
   ╠═╡ =#
 
+# ╔═╡ 7fa3dce0-b927-4a03-8f2d-ca6a231037aa
+md"""
+# Exports
+"""
+
+# ╔═╡ 73aeb955-db10-4eed-9fa3-b9d21809fb9f
+export @fromparent, @removeexpr
+
 # ╔═╡ 9f71009b-141b-43aa-ae71-6748ccc61b6d
 md"""
 # Variables
@@ -582,7 +590,7 @@ function load_module(calling_file, _module)
 		keepat!(module_path, 1)
 		# We add the extraction dictionary to the module
 		# push!(mod_exp.args[end].args, esc(:(_fromparent_dict_ = $dict)))
-			eval_in_module(Expr(:toplevel, LineNumberNode(1, Symbol(calling_file)), mod_exp))
+		eval_in_module(Expr(:toplevel, LineNumberNode(1, Symbol(calling_file)), mod_exp))
 		# Get the moduleof the parent package
 		_MODULE_ = first(module_path)
 		__module = getfield(_MODULE_, mod_name)
@@ -1109,9 +1117,10 @@ version = "17.4.0+0"
 # ╠═982cd9c4-c32b-11ed-2e41-ff955d3dc55f
 # ╠═fbbcf94e-0cfe-4b18-8fd2-2706b6d55fd9
 # ╠═59f5445b-6295-49ab-8e58-8a55fa5b100f
+# ╠═7fa3dce0-b927-4a03-8f2d-ca6a231037aa
+# ╠═73aeb955-db10-4eed-9fa3-b9d21809fb9f
 # ╟─9f71009b-141b-43aa-ae71-6748ccc61b6d
 # ╠═46126b08-73e4-4134-af04-81d4796406e2
-# ╠═8233fa3c-9ba9-4c2e-a20c-0bfc60373c37
 # ╠═c3969684-8f43-42ca-96f8-a4937fa7f920
 # ╠═983c2ecd-df26-4fcf-9d58-7712e2adf276
 # ╟─a10949ca-75e7-416e-85c7-1259a9743f1f

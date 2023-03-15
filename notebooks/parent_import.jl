@@ -405,7 +405,7 @@ end
 export @fromparent, @removeexpr
 
 # ╔═╡ d1b36c20-63d0-4105-9418-cdb05645ca99
-@removeexpr [
+is_notebook_local() && @removeexpr [
 	:(using MacroTools),
 	:(using Requires),
 ]
@@ -703,41 +703,112 @@ md"""
 """
 
 # ╔═╡ 0225f847-a8bf-45c0-b208-71d8547f0d3d
-function filterednames(m::Module)
-	excluded = (:eval, :include, :_fromparent_dict_, nameof(m))
-	filter(names(m;all=true)) do s
+function filterednames(m::Module; all = true)
+	excluded = (:eval, :include, :_fromparent_dict_)
+	filter(names(m;all)) do s
 		Base.isgensym(s) && return false
 		s in excluded && return false
 		return true
 	end
 end
 
+# ╔═╡ 30ac951a-4c34-4c81-9633-95f1ce58147e
+# Just support the import module or import module.submodule
+function parseinput_simple(ex, _PackageModule_)
+	Meta.isexpr(ex, [:using, :import]) || error("Only import or using are supported")
+	length(ex.args) == 1 || error("Load only one package per line")
+	mod_path, imported_names = if Meta.isexpr(ex.args[1], :(:))
+		m, n... = ex.args[1].args 
+		m.args, map(x -> x.args[1], n)
+	else
+		m = ex.args[1].args
+		m, Symbol[]
+	end
+	# We check that all packages start with `module`
+	first(mod_path) === :module || error("Only statements starting with `module` are supported")
+	# We check that the catchall is only used alone
+	:* ∈ imported_names && length(imported_names) > 1 && error("You can only use :* as a unique imported name")
+	# If we just have an import module statement we skip it as that is done already
+	ex.head === :import && mod_path == [:module] && isempty(imported_names) && return nothing
+	# Now we change the name from :module to :_PackageModule_
+	mod_path[1] = :_PackageModule_
+	# If it's just importing a package, we have to simply bring that package into scope
+	if isempty(imported_names) && ex.head == :import
+		return :(import $(:.).$(mod_path[1:end-1]...): $(mod_path[end]))
+	end
+	# In all other cases we need to access the specific imported module
+	_mod = _PackageModule_
+	for field in mod_path[2:end]
+		_mod = getfield(_mod, field)
+	end
+	if isempty(imported_names) && ex.head == :using
+		# We are using the module so we just import all the exported names
+		names = filterednames(_mod; all=false)
+		# We create the import expression
+		mod_name = Expr(:., :., mod_path...)
+		names_expr = map(x -> Expr(:., x), names)
+		arg = Expr(:(:), mod_name, names_expr...)
+		return Expr(:import, arg)
+	end
+	if first(imported_names) == :*
+		# We import all of the variables in the module, including non exported names
+		names = filterednames(_mod; all=true)
+		@info _mod, names
+		# We create the import expression
+		mod_name = Expr(:., :., mod_path...)
+		names_expr = map(x -> Expr(:., x), names)
+		arg = Expr(:(:), mod_name, names_expr...)
+		return Expr(:import, arg)
+	end
+	# If we reached here we have a number of specified imports, so we just stick to those
+	mod_name = Expr(:., :., mod_path...)
+	names_expr = ex.args[1].args[2:end]
+	arg = Expr(:(:), mod_name, names_expr...)
+	return Expr(:import, arg)
+end
+
 # ╔═╡ 30c5de94-b453-454a-a3fd-93b86c45c7f1
 function fromparent(ex, calling_file, _module)
+	is_notebook_local(calling_file) || return nothing
+	ex isa Expr || error("You have to call this macro with an import statement or a begin-end block of import statements")
 	# Construct the basic block where the module is import under name _PackageModule_. The module is only parsed if _PackageModule_ is not already defined in the calling module
 	block, _PackageModule_ = maybe_load_module(calling_file, _module)
 	# We extract the parse dict
 	dict = _PackageModule_._fromparent_dict_
-	# We parse the input expr, for now just to verify that the catchall expression is provided, otherwise an error is thrown
-	exout, parentpath, catchall = parseinput(ex, dict)
-
-	exout isa Nothing && return block
-	parentmodule = _PackageModule_
-	for sym ∈ parentpath[2:end]
-		parentmodule = getproperty(parentmodule, sym)
-	end
-	# Extract all names to import
-	to_import = filterednames(parentmodule)
-	# We create the expression to import all the names
-	
-	if isempty(to_import)
-		@warn "The parent module has no name to import"
+	if Meta.isexpr(ex, [:import, :using])
+		# Single statement
+		push!(block.args, parseinput_simple(ex, _PackageModule_))
+	elseif ex.head == :block
+		for arg in ex.args
+			arg isa LineNumberNode && continue
+			push!(block.args, parseinput_simple(arg, _PackageModule_))
+		end
 	else
-		import_expr = Expr(:(:), Expr(:(.), :(.), parentpath...), map(x -> Expr(:(.), x), to_import)...)
-		# Add this expr to the block
-		push!(block.args, Expr(:import, import_expr))
+		error("You have to call this macro with an import statement or a begin-end block of import statements")
 	end
 	return block
+
+	# ## THIS PART WE JUST IGNORE IT for the moment
+	# # We parse the input expr, for now just to verify that the catchall expression is provided, otherwise an error is thrown
+	# exout, parentpath, catchall = parseinput(ex, dict)
+
+	# exout isa Nothing && return block
+	# parentmodule = _PackageModule_
+	# for sym ∈ parentpath[2:end]
+	# 	parentmodule = getproperty(parentmodule, sym)
+	# end
+	# # Extract all names to import
+	# to_import = filterednames(parentmodule)
+	# # We create the expression to import all the names
+	
+	# if isempty(to_import)
+	# 	@warn "The parent module has no name to import"
+	# else
+	# 	import_expr = Expr(:(:), Expr(:(.), :(.), parentpath...), map(x -> Expr(:(.), x), to_import)...)
+	# 	# Add this expr to the block
+	# 	push!(block.args, Expr(:import, import_expr))
+	# end
+	# return block
 end
 
 # ╔═╡ 36601158-bb28-4800-8972-559e822bcabf
@@ -1095,6 +1166,7 @@ version = "17.4.0+0"
 # ╟─b777c029-b9cc-4833-9d87-b3374b57a695
 # ╟─e1305481-7d47-4841-b603-8adbb5df1f12
 # ╟─30fbe651-9849-40e6-ad44-7d5a1a0e5097
+# ╠═30ac951a-4c34-4c81-9633-95f1ce58147e
 # ╠═3756fc1e-b64c-4fe5-bf7b-cc6094fc00a7
 # ╠═ffe2d1ab-49bb-4ed7-8d72-e4711b1bb2ee
 # ╟─e4175daf-bef5-4d91-9794-85458371d03d

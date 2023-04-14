@@ -60,6 +60,68 @@ md"""
 # Helper Functions
 """
 
+# ╔═╡ 08dbb1fd-1735-4c49-9ab7-6f7c69c4aeb7
+md"""
+## simulate manual rerun
+"""
+
+# ╔═╡ cc6abd01-926d-4202-b646-c178331e0eb6
+begin
+"""
+	simulate_manual_rerun(cell_id::Base.UUID; PlutoRunner)
+	simulate_manual_rerun(cell_id::String; PlutoRunner)
+	simulate_manual_rerun(cell_id::Array; PlutoRunner)
+This function takes as input a cell_id or an array of cell_ids (either as `UUID` or as `String`) and simulate a manual rerun for each of the provided cell_ids.
+
+This is useful when one wants to programmatically rerun a cell with a macro and recompile the macro like it's done upon manual rerun, but doesn't require to click on the run button on the cell.
+
+This is using internal Pluto API so it might break if the Pluto internals change until PlutoDevMacros itself is updated.
+It works by deleting the cached expression of the cell before triggering a re-run using `PlutoRunner.run_channel`
+"""
+function simulate_manual_rerun(cell_id::Base.UUID; PlutoRunner)
+	delete!(PlutoRunner.cell_expanded_exprs, cell_id)
+	delete!(PlutoRunner.computers, cell_id)
+	push!(PlutoRunner.run_channel, cell_id)
+	return nothing
+end
+# String version
+simulate_manual_rerun(cell_id::String; kwargs...) = simulate_manual_rerun(Base.UUID(cell_id);kwargs...)
+# Array version
+function simulate_manual_rerun(cell_ids::Array; kwargs...)
+	for cell_id in cell_ids
+		simulate_manual_rerun(cell_id;kwargs...)
+	end
+end
+end
+
+# ╔═╡ e4b957b5-0496-4d33-9515-d8503e484940
+# ╠═╡ skip_as_script = true
+#=╠═╡
+macro test_manual()
+	rand()
+end
+  ╠═╡ =#
+
+# ╔═╡ f787327f-8532-482c-a077-4582645a7467
+# ╠═╡ skip_as_script = true
+#=╠═╡
+simulate_manual_rerun("c805925b-981b-4b49-bf49-2f40ad69ea2a"; PlutoRunner)
+  ╠═╡ =#
+
+# ╔═╡ ff589fad-fece-4b1a-b314-327a5be664d8
+# ╠═╡ skip_as_script = true
+#=╠═╡
+_test_manual_flag = 1
+  ╠═╡ =#
+
+# ╔═╡ c805925b-981b-4b49-bf49-2f40ad69ea2a
+#=╠═╡
+let
+	_test_manual_flag
+	@test_manual
+end
+  ╠═╡ =#
+
 # ╔═╡ dfcee900-e383-4aae-ba9e-593f4a7979cc
 md"""
 ## execute only in notebook
@@ -1282,6 +1344,12 @@ version = "17.4.0+0"
 # ╠═46126b08-73e4-4134-af04-81d4796406e2
 # ╠═983c2ecd-df26-4fcf-9d58-7712e2adf276
 # ╟─a10949ca-75e7-416e-85c7-1259a9743f1f
+# ╟─08dbb1fd-1735-4c49-9ab7-6f7c69c4aeb7
+# ╠═cc6abd01-926d-4202-b646-c178331e0eb6
+# ╠═e4b957b5-0496-4d33-9515-d8503e484940
+# ╠═f787327f-8532-482c-a077-4582645a7467
+# ╠═ff589fad-fece-4b1a-b314-327a5be664d8
+# ╠═c805925b-981b-4b49-bf49-2f40ad69ea2a
 # ╟─dfcee900-e383-4aae-ba9e-593f4a7979cc
 # ╠═8cb1d823-85fc-4871-ae48-3c1fe0d8fe12
 # ╠═57935d8e-6e11-466f-b4cb-b7353fa3335b

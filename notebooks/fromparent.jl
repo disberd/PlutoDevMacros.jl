@@ -46,11 +46,11 @@ md"""
 # Variables
 """
 
+# ╔═╡ fac9159a-236f-4684-a963-c96d0c37aa4e
+const fromparent_module = Ref{Module}()
+
 # ╔═╡ 46126b08-73e4-4134-af04-81d4796406e2
 const parent_package = Ref{Symbol}()
-
-# ╔═╡ c3969684-8f43-42ca-96f8-a4937fa7f920
-const module_path = Module[]
 
 # ╔═╡ 983c2ecd-df26-4fcf-9d58-7712e2adf276
 _remove_expr_var_name = :__fromparent_expr_to_remove__
@@ -534,31 +534,29 @@ md"""
 """
 
 # ╔═╡ 1fafe21c-1d98-4f62-ad34-2bee849e644b
-function eval_module_expr(ex)
+function eval_module_expr(parent_module, ex)
 	mod_name = ex.args[2]
-	parent_module = last(module_path)
-	# We create or overwrite the current module in the parent
-	push!(module_path, Core.eval(parent_module, :(module $mod_name end)))
-	# We process the instructions within the module
 	block = ex.args[3]
+	# If the block is empty, we just skip this block
+	isempty(block.args) && return nothing
+	# We create or overwrite the current module in the parent
+	new_module = Core.eval(parent_module, :(module $mod_name end))
+	# We process the instructions within the module
 	args = if length(block.args) > 1 || !Meta.isexpr(block.args[1], :toplevel)
 		block.args
 	else
 		block.args[1].args
 	end
-	eval_toplevel(args)
-	# Now we remove the module from the path
-	pop!(module_path)
+	eval_toplevel(new_module, args)
 	nothing
 end
 
 # ╔═╡ 9df8ec58-b145-45b8-991e-e654f1a7e055
-function eval_in_module(line_and_ex)
-	_mod = last(module_path)
+function eval_in_module(_mod, line_and_ex)
 	loc, ex = line_and_ex.args
 	ex isa Expr || return nothing
-	Meta.isexpr(ex, :toplevel) && return eval_toplevel(ex.args)
-	Meta.isexpr(ex, :module) && return eval_module_expr(ex)
+	Meta.isexpr(ex, :toplevel) && return eval_toplevel(_mod, ex.args)
+	Meta.isexpr(ex, :module) && return eval_module_expr(_mod, ex)
 	Core.eval(_mod, line_and_ex)
 	return nothing
 end
@@ -581,15 +579,26 @@ function load_module(calling_file, _module)
 		`import $(join(collect(missing_packages),", "))`
 		""")
 	end
+	# If the module Reference inside fromparent_module is not assigned, we create the module in the calling workspace and assign it
+	if !isassigned(fromparent_module) 
+		fromparent_module[] = Core.eval(_module, :(module $(gensym(:fromparent)) 
+			# We import PlutoRunner in this module, or we just create a dummy module otherwise
+			PlutoRunner = let p = parentmodule(@__MODULE__)
+				if isdefined(p, :PlutoRunner)
+					p.PlutoRunner
+				else
+					@eval baremodule PlutoRunner
+					end
+				end
+			end
+		end))
+	end
 	# We reset the module path in case it was not cleaned
 	mod_name = mod_exp.args[2]
 	parent_package[] = mod_name
-	keepat!(module_path, 1)
-	# We add the extraction dictionary to the module
-	# push!(mod_exp.args[end].args, esc(:(_fromparent_dict_ = $dict)))
-	eval_in_module(Expr(:toplevel, LineNumberNode(1, Symbol(calling_file)), mod_exp))
+	_MODULE_ = fromparent_module[]
+	eval_in_module(_MODULE_,Expr(:toplevel, LineNumberNode(1, Symbol(calling_file)), mod_exp))
 	# Get the moduleof the parent package
-	_MODULE_ = first(module_path)
 	__module = getfield(_MODULE_, mod_name)
 	__module._fromparent_dict_ = dict
 	block = quote
@@ -599,8 +608,7 @@ function load_module(calling_file, _module)
 end
 
 # ╔═╡ ce4640f6-eef4-41c9-a484-d14c376a69ef
-function eval_toplevel(args)
-	_mod = last(module_path)
+function eval_toplevel(_mod, args)
 	# Taken/addapted from `include_string` in `base/loading.jl`
 	loc = LineNumberNode(1, nameof(_mod))
 	line_and_ex = Expr(:toplevel, loc, nothing)
@@ -613,7 +621,7 @@ function eval_toplevel(args)
 		# Wrap things to be eval'd in a :toplevel expr to carry line
 		# information as part of the expr.
 		line_and_ex.args[2] = ex
-		eval_in_module(line_and_ex)
+		eval_in_module(_mod, line_and_ex)
 	end
 	return nothing
 end
@@ -773,7 +781,9 @@ function parseinput(ex, _PackageModule_, dict)
 		deleteat!(args, 1)
 	elseif first_name ∈ (:., :*)
 		# Here transform the relative module name to the one based on `._PackageModule_`
-		target_path = get(dict, "Target Path", [])  
+		target_path = get(dict, "Target Path", []) |> reverse
+		# We remove the first element of target path as that is the main package name, and we access it via _PackageModule_
+		popfirst!(target_path)
 		isempty(target_path) && error("The current file was not found included in the module, so you can't use relative path imports")
 		# We pop the first argument which is either `:.` or `:*` since we are in this branch
 		popfirst!(args)
@@ -785,7 +795,7 @@ function parseinput(ex, _PackageModule_, dict)
 				pop!(target_path)
 			end
 			# If args[1] is equal to the last element of the target path, we also pop it.
-			args[1] === last(target_path) && popfirst!(args)
+			!isempty(target_path) && args[1] === last(target_path) && popfirst!(args)
 		end
 		# We prepend the target_path to the args
 		prepend!(args, target_path)
@@ -895,8 +905,6 @@ md"""
 function fromparent(ex, calling_file, _module)
 	is_notebook_local(calling_file) || return process_outside_pluto!(ex)
 	ex isa Expr || error("You have to call this macro with an import statement or a begin-end block of import statements")
-	# We create a dummy module to use
-	isempty(module_path) && push!(module_path, Core.eval(_module, :(module $(gensym(:fromparent)) end)))
 	# Construct the basic block where the module is import under name _PackageModule_. The module is only parsed if _PackageModule_ is not already defined in the calling module
 	block, _PackageModule_ = load_module(calling_file, _module)
 	# We extract the parse dict
@@ -930,21 +938,11 @@ md"""
 # Tests
 """
 
-# ╔═╡ 1bd7847d-68c1-4140-9ab6-1151e73a9d52
+# ╔═╡ 04ba3742-7d2d-46f3-8798-fe7dd442e4ac
 # ╠═╡ skip_as_script = true
 #=╠═╡
-let
-	target = "/home/amengali/Repos/github/mine/PlutoDevMacros/notebooks/mapexpr.jl"
-	dict = get_parent_data(target)
-	dict["Expr to Remove"] = [
-		:(using Requires)
-		LineNumberNode(13, "/home/amengali/Repos/github/mine/PlutoDevMacros/src/PlutoDevMacros.jl")
-	]
-	dict["Stop After Line"] = LineNumberNode(15, "/home/amengali/Repos/github/mine/PlutoDevMacros/src/PlutoDevMacros.jl")
-	_mod = @__MODULE__
-	ex, data = extract_module_expression(dict, _mod);
-	keepat!(module_path, 1)
-	eval_in_module(Expr(:toplevel, LineNumberNode(1, :TOP), ex))
+@macroexpand @fromparent begin
+	import module
 end
   ╠═╡ =#
 
@@ -1280,8 +1278,8 @@ version = "17.4.0+0"
 # ╠═7fa3dce0-b927-4a03-8f2d-ca6a231037aa
 # ╠═73aeb955-db10-4eed-9fa3-b9d21809fb9f
 # ╟─9f71009b-141b-43aa-ae71-6748ccc61b6d
+# ╠═fac9159a-236f-4684-a963-c96d0c37aa4e
 # ╠═46126b08-73e4-4134-af04-81d4796406e2
-# ╠═c3969684-8f43-42ca-96f8-a4937fa7f920
 # ╠═983c2ecd-df26-4fcf-9d58-7712e2adf276
 # ╟─a10949ca-75e7-416e-85c7-1259a9743f1f
 # ╟─dfcee900-e383-4aae-ba9e-593f4a7979cc
@@ -1369,6 +1367,6 @@ version = "17.4.0+0"
 # ╠═8ebd991e-e4b1-478c-9648-9c164954f167
 # ╠═a757df08-31a3-462c-96b1-6db481704d4a
 # ╟─1f2efdc0-6afd-4645-b186-93d46287e160
-# ╠═1bd7847d-68c1-4140-9ab6-1151e73a9d52
+# ╠═04ba3742-7d2d-46f3-8798-fe7dd442e4ac
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

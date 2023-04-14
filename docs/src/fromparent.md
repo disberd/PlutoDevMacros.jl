@@ -8,7 +8,7 @@ When called from within a Pluto notebook, the `@fromparent` macro will do the fo
 4. Parse the code of the package up to the point where `calling_file` is `included`, expanding all the included files encountered along the way using `Meta.parseall`
 
 The parsing is stopped if the calling file is found as it is assumed that each file only has access to the expression that are defined in files included before it in the package.
-The parsed code is evaluated inside a temporary module that is created in the calling Pluto notebook workspace (with a gensymd name created with `gensym(:fromparent)`) and that is inserted in the const variable `PlutoDevMacros.module_path`.
+The parsed code is evaluated inside a temporary module that is created in the calling Pluto notebook workspace (with a gensymd name created with `gensym(:fromparent)`) and that is inserted in the const module Ref `PlutoDevMacros.fromparent_module`.
 
 Having the main module where the parsed expression is evaluated being inside the Pluto workspace (rather than directly created inside PlutoDevMacros) is important to have access to the various packages that are loaded in the notebooks. **TO INVESTIGATE BETTER** as it was giving error initially when the module was defined inside PlutoDevMacros.
 

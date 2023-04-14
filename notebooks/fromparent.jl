@@ -503,7 +503,7 @@ function process_include(ex, dict)
 		# We save the reason why we stopped parsing to allow skipping following parsing and we just return the expression to be removed
 		dict["Stopped Parsing"] = "Target Found"
 		# We also save a copy of the module path where the target resides
-		dict["Target Path"] = dict["Module Path"]
+		dict["Target Path"] = deepcopy(dict["Module Path"])
 		return _remove(ex)
 	else
 		# We directly process the include and return the processed expression

@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.22
+# v0.19.24
 
 using Markdown
 using InteractiveUtils
@@ -40,9 +40,6 @@ ExtendedTableOfContents(;hide_preamble = false)
 md"""
 # Exports
 """
-
-# ╔═╡ 73aeb955-db10-4eed-9fa3-b9d21809fb9f
-export @fromparent, @removeexpr
 
 # ╔═╡ 9f71009b-141b-43aa-ae71-6748ccc61b6d
 md"""
@@ -568,39 +565,37 @@ end
 
 # ╔═╡ 2fe2579c-83e9-41cb-8f92-9da30a40185f
 function load_module(calling_file, _module)
+	# If the macro was not called from a notebook, we just return nothing
+	is_notebook_local(calling_file) || return nothing
 	mod_exp, dict = extract_module_expression(calling_file, _module)
-	asd = if length(split(calling_file, "#==#")) == 1
-		# This is not a notebook
-	else
-		# This is a notebook, so we check the dependencies
-		proj_file = Core.eval(_module, :(Base.active_project()))
-		notebook_project = TOML.parsefile(proj_file)
-		notebook_deps =  Set(map(Symbol, keys(notebook_project["deps"]) |> collect))
-		loaded_packages = get(dict["Loaded Packages"][:_Overall_], :Names, Set{Symbol}())
-		missing_packages = setdiff(loaded_packages, notebook_deps, Set([:Markdown, :Random, :InteractiveUtils]))
-		if !isempty(missing_packages)
-			error("""The following packages are used in the parent module but are not currently imported in this notebook's environment:
-			$(collect(missing_packages))
-			Consider adding those in a cell with:
-			`import $(join(collect(missing_packages),", "))`
-			""")
-		end
-		# We reset the module path in case it was not cleaned
-		mod_name = mod_exp.args[2]
-		parent_package[] = mod_name
-		keepat!(module_path, 1)
-		# We add the extraction dictionary to the module
-		# push!(mod_exp.args[end].args, esc(:(_fromparent_dict_ = $dict)))
-		eval_in_module(Expr(:toplevel, LineNumberNode(1, Symbol(calling_file)), mod_exp))
-		# Get the moduleof the parent package
-		_MODULE_ = first(module_path)
-		__module = getfield(_MODULE_, mod_name)
-		__module._fromparent_dict_ = dict
-		block = quote
-			_PackageModule_ = $__module
-		end
-		return block, __module
+	# This is a notebook, so we check the dependencies
+	proj_file = Core.eval(_module, :(Base.active_project()))
+	notebook_project = TOML.parsefile(proj_file)
+	notebook_deps =  Set(map(Symbol, keys(notebook_project["deps"]) |> collect))
+	loaded_packages = get(dict["Loaded Packages"][:_Overall_], :Names, Set{Symbol}())
+	missing_packages = setdiff(loaded_packages, notebook_deps, Set([:Markdown, :Random, :InteractiveUtils]))
+	if !isempty(missing_packages)
+		error("""The following packages are used in the parent module but are not currently imported in this notebook's environment:
+		$(collect(missing_packages))
+		Consider adding those in a cell with:
+		`import $(join(collect(missing_packages),", "))`
+		""")
 	end
+	# We reset the module path in case it was not cleaned
+	mod_name = mod_exp.args[2]
+	parent_package[] = mod_name
+	keepat!(module_path, 1)
+	# We add the extraction dictionary to the module
+	# push!(mod_exp.args[end].args, esc(:(_fromparent_dict_ = $dict)))
+	eval_in_module(Expr(:toplevel, LineNumberNode(1, Symbol(calling_file)), mod_exp))
+	# Get the moduleof the parent package
+	_MODULE_ = first(module_path)
+	__module = getfield(_MODULE_, mod_name)
+	__module._fromparent_dict_ = dict
+	block = quote
+		_PackageModule_ = $__module
+	end
+	return block, __module
 end
 
 # ╔═╡ ce4640f6-eef4-41c9-a484-d14c376a69ef
@@ -645,62 +640,217 @@ We want to parse import using statements. The following cases are supported:
 
 # ╔═╡ 1ed28b37-23ee-42cf-b6ca-0b2d941c6546
 md"""
+## process outside pluto
+"""
+
+# ╔═╡ df339d19-7de8-4c75-9f86-80ce8139229a
+md"""
+## validate import
+"""
+
+# ╔═╡ f27d94cf-58be-498e-845e-1f0911628047
+function validate_import(ex)
+	Meta.isexpr(ex, [:using, :import]) || error("You have to provide a `using` or `import` statement as input")
+	length(ex.args) == 1 || error("Multiple imported modules per expression (e.g. `import moduleA, moduleB`) are not supported, please import a single module per line")
+	return nothing 
+end
+
+# ╔═╡ 665858be-c7e0-43c8-b35f-dce3bfd2d567
+md"""
+## target found
+"""
+
+# ╔═╡ 0da708b0-1e6b-4207-9118-2cf469574baf
+target_found(dict) = get(dict, "Stopped Parsing", nothing) === "Target Found"
+
+# ╔═╡ bd48f1f7-603f-4657-8237-786851783859
+md"""
+## extract import args
+"""
+
+# ╔═╡ 8c613d73-9e09-414d-9978-988edf8ee1ba
+# Extract the :(.) expressions of the module name and exported names from the module (first output is the modulename expr, second is the list of exported names)
+function extract_import_args(ex)
+	validate_import(ex)
+	arg = ex.args[1]
+	mod_expr, names_exprs... = arg.head == :(:) ? arg.args : [arg]
+	return mod_expr, names_exprs
+end
+
+# ╔═╡ 2eade0f3-c7cf-4f10-8e77-7b2372a977fd
+md"""
+## reconstruct import expr
+"""
+
+# ╔═╡ 74b7e239-1b9e-4447-a662-bd3c022cca6d
+# Does the inverse of extract_import_args. Given an expression of a module name identifier and an array of exported names identifiers, it creates the resulting import expression.
+function reconstruct_import_expr(mod_expr, names_exprs)
+	if isempty(names_exprs)
+		Expr(:import, mod_expr)
+	else
+		Expr(:import, Expr(:(:), mod_expr, names_exprs...))
+	end
+end
+
+# ╔═╡ 61a8d880-79c0-46c9-ba6a-bf727faa5bfb
+let
+	ex = :(import ASD: lol)
+	m, n = extract_import_args(ex)
+	push!(n, Expr(:., :dio))
+	reconstruct_import_expr(m,n)
+end
+
+# ╔═╡ 2649d8ca-3cbd-43a3-9fe8-7034f230c8fe
+md"""
+## contains catchall
+"""
+
+# ╔═╡ cc72b714-125b-4480-8ea3-f4572b718f83
+begin
+# Take a vector of expressions representing imported names and returns true if it contains the catchall :* symbol, which implies the need to extract all the names defined in a module
+function contains_catchall(names_exprs::Vector)
+	out = Expr(:., :*) ∈ names_exprs
+	out && length(names_exprs) > 1 && error("The catchall symbol `*` has to be the only imported name in the expression")
+	return out
+end
+
+# This is the version on the expression
+contains_catchall(import_expr::Expr) = contains_catchall(extract_import_args(import_expr)...)
+
+# This is the version with modname and imported_names expressions
+function contains_catchall(modname, imported_names)
+	import_catchall = contains_catchall(imported_names)
+	modname_catchall = modname == Expr(:.,:*)
+	modname_catchall && !isempty(imported_names) && error("The catchall can only be used either in the modname without imported names, or as the only imported name.")
+	return import_catchall || modname_catchall
+end
+end
+
+# ╔═╡ 8675a532-535c-4716-8aa5-070c99bba3a6
+function valid_outside_pluto(ex)
+	mod_name, imported_names = extract_import_args(ex)
+	mod_name.args[1] === :. || return false # We only support relative module names
+	contains_catchall(imported_names) && return false # We don't support the catchall outside import outside Pluto
+	return true
+end
+
+# ╔═╡ 1999a995-ad21-4e9a-a1a9-e1dce2e5b65b
+# We parse all the expressions in the block provided as input to @fromparent
+function process_outside_pluto!(ex)
+	ex isa LineNumberNode && return ex
+	if Meta.isexpr(ex, :block)
+		args = ex.args
+		for (i,arg) ∈ enumerate(args)
+			args[i] = process_outside_pluto!(arg)
+		end
+		return ex
+	else
+		# Single expression
+		return valid_outside_pluto(ex) ? ex : nothing
+	end
+end
+
+# ╔═╡ b578ec3d-6b08-44f5-9ff8-0d91dc56cf17
+md"""
 ## parseinput
 """
 
 # ╔═╡ 16a1dd66-7548-4076-9db5-ed171cdca0b3
 # Just support the import module or import module.submodule
-function parseinput_simple(ex, _PackageModule_)
-	Meta.isexpr(ex, [:using, :import]) || error("Only import or using are supported")
-	length(ex.args) == 1 || error("Load only one package per line")
-	mod_path, imported_names = if Meta.isexpr(ex.args[1], :(:))
-		m, n... = ex.args[1].args 
-		m.args, map(x -> x.args[1], n)
+function parseinput(ex, _PackageModule_, dict)
+	modname_expr, importednames_exprs = extract_import_args(ex)
+	# Check if we have a catchall
+	catchall = contains_catchall(ex)
+	# Check if the statement is a using or an import, this is used to check which names to eventually import, but all statements are converted into `import`
+	is_using = ex.head === :using 
+	ex.head = :import
+	# We modify the module name expression to point to the current path within the _PackageModule_ that is loaded in Pluto
+	name_init = [:., :_PackageModule_]
+	first_name = modname_expr.args[1]
+	args = modname_expr.args
+	if first_name === :module
+		# We remove the `module` from the args
+		deleteat!(args, 1)
+	elseif first_name ∈ (:., :*)
+		# Here transform the relative module name to the one based on `._PackageModule_`
+		target_path = get(dict, "Target Path", [])  
+		isempty(target_path) && error("The current file was not found included in the module, so you can't use relative path imports")
+		# We pop the first argument which is either `:.` or `:*` since we are in this branch
+		popfirst!(args)
+		if first_name === :.
+			while args[1] === :. 
+				# We pop the dot
+				popfirst!(args)
+				# We also pop the last part of the target path
+				pop!(target_path)
+			end
+			# If args[1] is equal to the last element of the target path, we also pop it.
+			args[1] === last(target_path) && popfirst!(args)
+		end
+		# We prepend the target_path to the args
+		prepend!(args, target_path)
 	else
-		m = ex.args[1].args
-		m, Symbol[]
+		error("The @fromparent macro only supports import statements that are either starting with `module`, `*` or expressing a reltive path (starting with a dot)")
 	end
-	# We check that all packages start with `module`
-	first(mod_path) === :module || error("Only statements starting with `module` are supported")
-	# We check that the catchall is only used alone
-	:* ∈ imported_names && length(imported_names) > 1 && error("You can only use :* as a unique imported name")
-	# If we just have an import module statement we skip it as that is done already
-	ex.head === :import && mod_path == [:module] && isempty(imported_names) && return nothing
-	# Now we change the name from :module to :_PackageModule_
-	mod_path[1] = :_PackageModule_
-	# If it's just importing a package, we have to simply bring that package into scope
-	if isempty(imported_names) && ex.head == :import
-		return :(import $(:.).$(mod_path[1:end-1]...): $(mod_path[end]))
+	# We now add ._PackageModule
+	prepend!(args, name_init)
+	# If we don't have a catchall and we are either importing or using just specific names from the module, we can just return the modified expression
+	if !catchall && (!is_using || !isempty(importednames_exprs))
+		return ex
 	end
 	# In all other cases we need to access the specific imported module
 	_mod = _PackageModule_
-	for field in mod_path[2:end]
+	for field in args[2:end]
 		_mod = getfield(_mod, field)
 	end
-	if isempty(imported_names) && ex.head == :using
-		# We are using the module so we just import all the exported names
-		names = filterednames(_mod; all=false)
-		# We create the import expression
-		mod_name = Expr(:., :., mod_path...)
-		names_expr = map(x -> Expr(:., x), names)
-		arg = Expr(:(:), mod_name, names_expr...)
-		return Expr(:import, arg)
-	end
-	if first(imported_names) == :*
-		# We import all of the variables in the module, including non exported names
-		names = filterednames(_mod; all=true)
-		# We create the import expression
-		mod_name = Expr(:., :., mod_path...)
-		names_expr = map(x -> Expr(:., x), names)
-		arg = Expr(:(:), mod_name, names_expr...)
-		return Expr(:import, arg)
-	end
-	# If we reached here we have a number of specified imports, so we just stick to those
-	mod_name = Expr(:., :., mod_path...)
-	names_expr = ex.args[1].args[2:end]
-	arg = Expr(:(:), mod_name, names_expr...)
-	return Expr(:import, arg)
+	# We extract the imported names either due to catchall or due to the standard using
+	imported_names = filterednames(_mod; all = (catchall ? true : false))
+	# At this point we have all the names and we just have to create the final expression
+	importednames_exprs = map(n -> Expr(:., n), imported_names)
+	return reconstruct_import_expr(modname_expr, importednames_exprs)
 end
+
+# ╔═╡ 38fe4d98-d438-4906-beaf-980e09f71c4a
+# ╠═╡ skip_as_script = true
+#=╠═╡
+module _PackageModule_
+	outer = 15
+end
+  ╠═╡ =#
+
+# ╔═╡ c75b75d1-3b50-467c-9077-1ed3bd8b4cce
+#=╠═╡
+let
+	dict = Dict("Target Path" => [:ASD, :LOL])
+	ex = :(using module: *)	
+	modname_expr, importednames_exprs = extract_import_args(ex)
+	# modname_expr.args
+	parseinput(ex, _PackageModule_, dict)
+end
+  ╠═╡ =#
+
+# ╔═╡ ccd03fcb-ba31-4213-8aec-b590d209259a
+#=╠═╡
+@eval _PackageModule_ module ASD
+	b = 3
+c = 2
+export c
+end
+  ╠═╡ =#
+
+# ╔═╡ 05be3c2b-2d42-455a-8f8b-6336e881b3a7
+#=╠═╡
+@eval _PackageModule_.ASD module LOL
+	asd = 1
+	lol = 2
+export lol
+end
+  ╠═╡ =#
+
+# ╔═╡ 2e47bc96-b717-4ca2-8bfe-d53350e4ea0f
+#=╠═╡
+_PackageModule_.ASD.b
+  ╠═╡ =#
 
 # ╔═╡ 78dd77b4-a16d-49f2-8905-1a86793e9a57
 md"""
@@ -736,9 +886,14 @@ md"""
 ## @fromparent
 """
 
+# ╔═╡ 4ce67958-abe8-4e3c-849b-313f7b806c32
+md"""
+### Basic Idea
+"""
+
 # ╔═╡ 8ebd991e-e4b1-478c-9648-9c164954f167
 function fromparent(ex, calling_file, _module)
-	is_notebook_local(calling_file) || return nothing
+	is_notebook_local(calling_file) || return process_outside_pluto!(ex)
 	ex isa Expr || error("You have to call this macro with an import statement or a begin-end block of import statements")
 	# We create a dummy module to use
 	isempty(module_path) && push!(module_path, Core.eval(_module, :(module $(gensym(:fromparent)) end)))
@@ -746,16 +901,17 @@ function fromparent(ex, calling_file, _module)
 	block, _PackageModule_ = load_module(calling_file, _module)
 	# We extract the parse dict
 	dict = _PackageModule_._fromparent_dict_
-	if Meta.isexpr(ex, [:import, :using])
-		# Single statement
-		push!(block.args, parseinput_simple(ex, _PackageModule_))
-	elseif ex.head == :block
-		for arg in ex.args
-			arg isa LineNumberNode && continue
-			push!(block.args, parseinput_simple(arg, _PackageModule_))
-	end
+	ex_args = if Meta.isexpr(ex, [:import, :using])
+		[ex]
+	elseif Meta.isexpr(ex, :block)
+		ex.args
 	else
 		error("You have to call this macro with an import statement or a begin-end block of import statements")
+	end
+	# We now process/parse all the import/using statements
+	for arg in ex_args
+		arg isa LineNumberNode && continue
+		push!(block.args, parseinput(arg, _PackageModule_, dict))
 	end
 	return block
 end
@@ -765,6 +921,9 @@ macro fromparent(ex)
 	calling_file = String(__source__.file)
 	esc(fromparent(ex, calling_file, __module__))
 end
+
+# ╔═╡ 73aeb955-db10-4eed-9fa3-b9d21809fb9f
+export @fromparent, @removeexpr
 
 # ╔═╡ 1f2efdc0-6afd-4645-b186-93d46287e160
 md"""
@@ -811,9 +970,9 @@ PlutoExtras = "~0.7.3"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.9.0-rc1"
+julia_version = "1.9.0-rc2"
 manifest_format = "2.0"
-project_hash = "401e2a5e5bc8fa181f2f881fd8d193629736e0cf"
+project_hash = "bf8c9c5ad7eb3871620af969ff113e1a173f54ea"
 
 [[deps.AbstractPlutoDingetjes]]
 deps = ["Pkg"]
@@ -1181,12 +1340,32 @@ version = "17.4.0+0"
 # ╟─01ae4ab1-17ff-4972-acb3-c98a8596522d
 # ╟─dbb8d64f-0d58-439f-9e26-e6683b817cd5
 # ╟─1ed28b37-23ee-42cf-b6ca-0b2d941c6546
+# ╠═1999a995-ad21-4e9a-a1a9-e1dce2e5b65b
+# ╟─df339d19-7de8-4c75-9f86-80ce8139229a
+# ╠═f27d94cf-58be-498e-845e-1f0911628047
+# ╟─665858be-c7e0-43c8-b35f-dce3bfd2d567
+# ╠═0da708b0-1e6b-4207-9118-2cf469574baf
+# ╠═8675a532-535c-4716-8aa5-070c99bba3a6
+# ╟─bd48f1f7-603f-4657-8237-786851783859
+# ╠═8c613d73-9e09-414d-9978-988edf8ee1ba
+# ╟─2eade0f3-c7cf-4f10-8e77-7b2372a977fd
+# ╠═74b7e239-1b9e-4447-a662-bd3c022cca6d
+# ╠═61a8d880-79c0-46c9-ba6a-bf727faa5bfb
+# ╟─2649d8ca-3cbd-43a3-9fe8-7034f230c8fe
+# ╠═cc72b714-125b-4480-8ea3-f4572b718f83
+# ╟─b578ec3d-6b08-44f5-9ff8-0d91dc56cf17
 # ╠═16a1dd66-7548-4076-9db5-ed171cdca0b3
+# ╠═c75b75d1-3b50-467c-9077-1ed3bd8b4cce
+# ╠═38fe4d98-d438-4906-beaf-980e09f71c4a
+# ╠═ccd03fcb-ba31-4213-8aec-b590d209259a
+# ╠═05be3c2b-2d42-455a-8f8b-6336e881b3a7
+# ╠═2e47bc96-b717-4ca2-8bfe-d53350e4ea0f
 # ╟─78dd77b4-a16d-49f2-8905-1a86793e9a57
 # ╟─717c123f-1d35-4499-8047-593bec35a57e
 # ╠═b8d33d27-8830-41df-b900-6339fb13bf5d
 # ╠═5b9e791d-0be0-4bf3-a7e4-2a06e88bcc40
 # ╟─942a8ae5-c861-4078-8340-85eabfba60f9
+# ╟─4ce67958-abe8-4e3c-849b-313f7b806c32
 # ╠═8ebd991e-e4b1-478c-9648-9c164954f167
 # ╠═a757df08-31a3-462c-96b1-6db481704d4a
 # ╟─1f2efdc0-6afd-4645-b186-93d46287e160

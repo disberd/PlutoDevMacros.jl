@@ -5,12 +5,13 @@
 # using InteractiveUtils
 
 # ╔═╡ bb26cad0-4720-11ec-20c0-6538c8fcc18f
-#=╠═╡ notebook_exclusive
+# ╠═╡ skip_as_script = true
+#=╠═╡
 begin
 	import Pkg
 	Pkg.activate("..")
 end
-  ╠═╡ notebook_exclusive =#
+  ╠═╡ =#
 
 # ╔═╡ c0e30b73-0973-47c8-b57c-3a0b9c534ec5
 using BenchmarkTools

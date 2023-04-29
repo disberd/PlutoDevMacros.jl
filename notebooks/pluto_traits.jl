@@ -5,19 +5,22 @@
 # using InteractiveUtils
 
 # ╔═╡ ea96e5d7-7bc0-45cf-8bf1-4acfaf5507c9
-#=╠═╡ notebook_exclusive
+# ╠═╡ skip_as_script = true
+#=╠═╡
 include("basics.jl")
-  ╠═╡ notebook_exclusive =#
+  ╠═╡ =#
 
 # ╔═╡ 0ba0aae0-5c29-449a-81db-a389baddf0dc
-#=╠═╡ notebook_exclusive
+# ╠═╡ skip_as_script = true
+#=╠═╡
 #using PlutoDevMacros
-  ╠═╡ notebook_exclusive =#
+  ╠═╡ =#
 
 # ╔═╡ 2307b8e6-6308-4902-9921-135b85273f65
-#=╠═╡ notebook_exclusive
+# ╠═╡ skip_as_script = true
+#=╠═╡
 import WhereTraits
-  ╠═╡ notebook_exclusive =#
+  ╠═╡ =#
 
 # ╔═╡ 9b6c7d3b-b70a-4cd4-9a77-f9b8d8501b9e
 import MacroTools
@@ -87,27 +90,31 @@ end
 export @plutotraits
 
 # ╔═╡ d6e472a7-bbd3-4f18-aa27-7289e6c23eab
-#=╠═╡ notebook_exclusive
+# ╠═╡ skip_as_script = true
+#=╠═╡
 @plutotraits begin
 	"Test Documentation"
 	g(a) where {iseven(a)} = "EVEN"
 end
-  ╠═╡ notebook_exclusive =#
+  ╠═╡ =#
 
 # ╔═╡ e3c59dc8-6894-487a-ae98-62594fd149ef
-#=╠═╡ notebook_exclusive
+# ╠═╡ skip_as_script = true
+#=╠═╡
 @plutotraits g(a) where {isodd(a)} = "ODD"
-  ╠═╡ notebook_exclusive =#
+  ╠═╡ =#
 
 # ╔═╡ 51bdae6a-7749-4bee-a6d0-b1055fab5ece
-#=╠═╡ notebook_exclusive
+# ╠═╡ skip_as_script = true
+#=╠═╡
 g(2)
-  ╠═╡ notebook_exclusive =#
+  ╠═╡ =#
 
 # ╔═╡ c826aa1b-fd70-452c-9716-3bfc6066e590
-#=╠═╡ notebook_exclusive
+# ╠═╡ skip_as_script = true
+#=╠═╡
 g(1)
-  ╠═╡ notebook_exclusive =#
+  ╠═╡ =#
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """

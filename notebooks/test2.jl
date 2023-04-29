@@ -5,12 +5,13 @@
 # using InteractiveUtils
 
 # ╔═╡ f9eff180-3c4d-49c2-9f4e-e3f425a96966
-#=╠═╡ notebook_exclusive
+# ╠═╡ skip_as_script = true
+#=╠═╡
 begin
 	import Pkg
 	Pkg.activate("..")
 end
-  ╠═╡ notebook_exclusive =#
+  ╠═╡ =#
 
 # ╔═╡ 941fa912-61d4-4847-8bb2-5e83eb31ca34
 begin
@@ -19,9 +20,10 @@ begin
 end
 
 # ╔═╡ f73c9b70-4c68-4d3b-be3e-067a118681e8
-#=╠═╡ notebook_exclusive
+# ╠═╡ skip_as_script = true
+#=╠═╡
 using BenchmarkTools
-  ╠═╡ notebook_exclusive =#
+  ╠═╡ =#
 
 # ╔═╡ d9b0ef51-60cc-4a30-9f8b-f6b6b2dbeec5
 @macroexpand @plutoinclude "test1.jl" "all"
@@ -39,19 +41,22 @@ struct TestStruct2 end
 asd(::TestStruct2) = "TESTSTRUCT2"
 
 # ╔═╡ f5b8ccdd-ad66-4ae4-b3e9-82452464168b
-#=╠═╡ notebook_exclusive
+# ╠═╡ skip_as_script = true
+#=╠═╡
 asd(3)
-  ╠═╡ notebook_exclusive =#
+  ╠═╡ =#
 
 # ╔═╡ a33fdee5-037c-41de-aeec-bc4383fe4826
-#=╠═╡ notebook_exclusive
+# ╠═╡ skip_as_script = true
+#=╠═╡
 @benchmark asd(TestStruct2())
-  ╠═╡ notebook_exclusive =#
+  ╠═╡ =#
 
 # ╔═╡ a646c602-529e-45c1-a170-3650318c1c2d
-#=╠═╡ notebook_exclusive
+# ╠═╡ skip_as_script = true
+#=╠═╡
 @benchmark asd(TestStruct1())
-  ╠═╡ notebook_exclusive =#
+  ╠═╡ =#
 
 # ╔═╡ Cell order:
 # ╠═f9eff180-3c4d-49c2-9f4e-e3f425a96966

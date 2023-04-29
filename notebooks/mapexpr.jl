@@ -8,7 +8,8 @@
 const default_exprlist = [Symbol("@md_str"), Symbol("@benchmark"), :(using Markdown), :PLUTO_MANIFEST_TOML_CONTENTS, :PLUTO_PROJECT_TOML_CONTENTS]
 
 # ╔═╡ 2ac5f3c6-96f8-4f24-8022-1f0470672383
-#=╠═╡ notebook_exclusive
+# ╠═╡ skip_as_script = true
+#=╠═╡
 """
     hasexpr(expr, exprlist)
 
@@ -29,7 +30,7 @@ function hasexpr(ex, exprlist::AbstractVector)
   end
   return result
 end
-  ╠═╡ notebook_exclusive =#
+  ╠═╡ =#
 
 # ╔═╡ 1663bd40-4a0c-42cd-b716-4583d0a1bb66
 # Fallback for when a single element is provided

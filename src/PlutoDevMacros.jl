@@ -14,6 +14,17 @@ include("../notebooks/basics.jl") # @only_in_nb, @only_out_nb, is_notebook_local
 module Script include("../notebooks/htlscript.jl") end # HTLScript, HTLBypass, HTLScriptPart, combine_scripts
 # module FromParent include("../notebooks/parent_import.jl") end
 module FromParent include("../notebooks/fromparent.jl") end
+
+module FromPackage
+    using TOML, LoggingExtras, HypertextLiteral
+    export @fromparent, @removeexpr
+    include("frompackage/helpers.jl")
+    include("frompackage/code_parsing.jl")
+    include("frompackage/loading.jl")
+    include("frompackage/input_parsing.jl")
+    include("frompackage/macro.jl")
+end
+
 include("../notebooks/mapexpr.jl") # hasexpr, default_exprlist, include_mapexpr
 include("../notebooks/plutoinclude_macro.jl") # hasexpr, default_exprlist, include_mapexpr
 # include("../notebooks/pluto_traits.jl") # This defines and exports the @plutotraits macro

@@ -405,7 +405,7 @@ end
 export @fromparent, @removeexpr
 
 # ╔═╡ d1b36c20-63d0-4105-9418-cdb05645ca99
-is_notebook_local() && @removeexpr [
+@removeexpr [
 	:(using MacroTools),
 	:(using Requires),
 ]
@@ -782,7 +782,7 @@ function fromparent(ex, calling_file, _module)
 		for arg in ex.args
 			arg isa LineNumberNode && continue
 			push!(block.args, parseinput_simple(arg, _PackageModule_))
-		end
+	end
 	else
 		error("You have to call this macro with an import statement or a begin-end block of import statements")
 	end

@@ -200,7 +200,7 @@ md"""
 
 # ╔═╡ 7bd53128-672e-4d59-a667-6a1d20be3c92
 function filterednames(m::Module; all = true)
-	excluded = (:eval, :include, :_fromparent_dict_, Symbol("@bind"))
+	excluded = (:eval, :include, :_fromparent_dict_, Symbol("@bind"), :_PackageModule_)
 	filter(names(m;all)) do s
 		Base.isgensym(s) && return false
 		s in excluded && return false
@@ -599,10 +599,10 @@ md"""
 function eval_module_expr(parent_module, ex)
 	mod_name = ex.args[2]
 	block = ex.args[3]
-	# If the block is empty, we just skip this block
-	isempty(block.args) && return nothing
 	# We create or overwrite the current module in the parent
 	new_module = Core.eval(parent_module, :(module $mod_name end))
+	# If the block is empty, we just skip this block
+	isempty(block.args) && return nothing
 	# We process the instructions within the module
 	args = if length(block.args) > 1 || !Meta.isexpr(block.args[1], :toplevel)
 		block.args
@@ -666,6 +666,7 @@ function load_module(calling_file, _module)
 	block = quote
 		_PackageModule_ = $__module
 	end
+	@info block, __module
 	return block, __module
 end
 
@@ -820,24 +821,16 @@ function process_outside_pluto!(ex)
 	end
 end
 
-# ╔═╡ b578ec3d-6b08-44f5-9ff8-0d91dc56cf17
+# ╔═╡ 4a16440a-1f09-4ee6-ab69-d7b735ab8884
 md"""
-## parseinput
+## process imported nameargs
 """
 
-# ╔═╡ 16a1dd66-7548-4076-9db5-ed171cdca0b3
-# Just support the import module or import module.submodule
-function parseinput(ex, _PackageModule_, dict)
-	modname_expr, importednames_exprs = extract_import_args(ex)
-	# Check if we have a catchall
-	catchall = contains_catchall(ex)
-	# Check if the statement is a using or an import, this is used to check which names to eventually import, but all statements are converted into `import`
-	is_using = ex.head === :using 
-	ex.head = :import
+# ╔═╡ ae9c22df-611d-4bdc-8d78-ab5da46e1001
+function process_imported_nameargs!(args, dict)
 	# We modify the module name expression to point to the current path within the _PackageModule_ that is loaded in Pluto
 	name_init = [:., :_PackageModule_]
-	first_name = modname_expr.args[1]
-	args = modname_expr.args
+	first_name = args[1]
 	if first_name === :module
 		# We remove the `module` from the args
 		deleteat!(args, 1)
@@ -846,6 +839,7 @@ function parseinput(ex, _PackageModule_, dict)
 		target_path = get(dict, "Target Path", []) |> reverse
 		# We remove the first element of target path as that is the main package name, and we access it via _PackageModule_
 		popfirst!(target_path)
+		@info dict
 		isempty(target_path) && error("The current file was not found included in the module, so you can't use relative path imports")
 		# We pop the first argument which is either `:.` or `:*` since we are in this branch
 		popfirst!(args)
@@ -866,13 +860,40 @@ function parseinput(ex, _PackageModule_, dict)
 	end
 	# We now add ._PackageModule
 	prepend!(args, name_init)
+end
+
+# ╔═╡ 09a8bfc0-61f8-48c7-bd0d-f74596ed4b75
+let
+	dict = Dict("Target Path" => [:LOL, :ASD])
+	ex = :(using *)	
+	modname_expr, importednames_exprs = extract_import_args(ex)
+	# modname_expr.args
+	process_imported_nameargs!(modname_expr.args, dict)
+end
+
+# ╔═╡ b578ec3d-6b08-44f5-9ff8-0d91dc56cf17
+md"""
+## parseinput
+"""
+
+# ╔═╡ 16a1dd66-7548-4076-9db5-ed171cdca0b3
+# Just support the import module or import module.submodule
+function parseinput(ex, _PackageModule_, dict)
+	modname_expr, importednames_exprs = extract_import_args(ex)
+	# Check if we have a catchall
+	catchall = contains_catchall(ex)
+	# Check if the statement is a using or an import, this is used to check which names to eventually import, but all statements are converted into `import`
+	is_using = ex.head === :using 
+	ex.head = :import
+	args = process_imported_nameargs!(modname_expr.args, dict)
 	# If we don't have a catchall and we are either importing or using just specific names from the module, we can just return the modified expression
 	if !catchall && (!is_using || !isempty(importednames_exprs))
 		return ex
 	end
 	# In all other cases we need to access the specific imported module
 	_mod = _PackageModule_
-	for field in args[2:end]
+	@info args
+	for field in args[3:end]
 		_mod = getfield(_mod, field)
 	end
 	# We extract the imported names either due to catchall or due to the standard using
@@ -885,7 +906,7 @@ end
 # ╔═╡ 38fe4d98-d438-4906-beaf-980e09f71c4a
 # ╠═╡ skip_as_script = true
 #=╠═╡
-module _PackageModule_
+module _fromparent_asd_
 	outer = 15
 end
   ╠═╡ =#
@@ -893,17 +914,18 @@ end
 # ╔═╡ c75b75d1-3b50-467c-9077-1ed3bd8b4cce
 #=╠═╡
 let
-	dict = Dict("Target Path" => [:ASD, :LOL])
-	ex = :(using module: *)	
+	dict = Dict("Target Path" => [:LOL, :ASD, :_PackageModule_])
+	ex = :(using *)	
 	modname_expr, importednames_exprs = extract_import_args(ex)
 	# modname_expr.args
-	parseinput(ex, _PackageModule_, dict)
+	# process_imported_nameargs!(modname_expr.args, dict)
+	parseinput(ex, _fromparent_asd_, dict)
 end
   ╠═╡ =#
 
 # ╔═╡ ccd03fcb-ba31-4213-8aec-b590d209259a
 #=╠═╡
-@eval _PackageModule_ module ASD
+@eval _fromparent_asd_ module ASD
 	b = 3
 c = 2
 export c
@@ -912,7 +934,7 @@ end
 
 # ╔═╡ 05be3c2b-2d42-455a-8f8b-6336e881b3a7
 #=╠═╡
-@eval _PackageModule_.ASD module LOL
+@eval _fromparent_asd_.ASD module LOL
 	asd = 1
 	lol = 2
 export lol
@@ -921,7 +943,7 @@ end
 
 # ╔═╡ 2e47bc96-b717-4ca2-8bfe-d53350e4ea0f
 #=╠═╡
-_PackageModule_.ASD.b
+_fromparent_asd_.ASD.b
   ╠═╡ =#
 
 # ╔═╡ 78dd77b4-a16d-49f2-8905-1a86793e9a57
@@ -986,10 +1008,18 @@ function fromparent(ex, calling_file, _module)
 	return block
 end
 
+# ╔═╡ b011f225-c492-44c8-9e1e-d52f7dde1e62
+fromparent(:(begin
+	import module
+	import *
+end), @__FILE__, @__MODULE__)
+
 # ╔═╡ a757df08-31a3-462c-96b1-6db481704d4a
 macro fromparent(ex)
 	calling_file = String(__source__.file)
-	esc(fromparent(ex, calling_file, __module__))
+	out = fromparent(ex, calling_file, __module__)
+	@info out
+	esc(out)
 end
 
 # ╔═╡ 73aeb955-db10-4eed-9fa3-b9d21809fb9f
@@ -1003,8 +1033,9 @@ md"""
 # ╔═╡ 04ba3742-7d2d-46f3-8798-fe7dd442e4ac
 # ╠═╡ skip_as_script = true
 #=╠═╡
-@macroexpand @fromparent begin
+@fromparent begin
 	import module
+	import *
 end
   ╠═╡ =#
 
@@ -1419,6 +1450,9 @@ version = "17.4.0+0"
 # ╠═61a8d880-79c0-46c9-ba6a-bf727faa5bfb
 # ╟─2649d8ca-3cbd-43a3-9fe8-7034f230c8fe
 # ╠═cc72b714-125b-4480-8ea3-f4572b718f83
+# ╟─4a16440a-1f09-4ee6-ab69-d7b735ab8884
+# ╠═ae9c22df-611d-4bdc-8d78-ab5da46e1001
+# ╠═09a8bfc0-61f8-48c7-bd0d-f74596ed4b75
 # ╟─b578ec3d-6b08-44f5-9ff8-0d91dc56cf17
 # ╠═16a1dd66-7548-4076-9db5-ed171cdca0b3
 # ╠═c75b75d1-3b50-467c-9077-1ed3bd8b4cce
@@ -1433,6 +1467,7 @@ version = "17.4.0+0"
 # ╟─942a8ae5-c861-4078-8340-85eabfba60f9
 # ╟─4ce67958-abe8-4e3c-849b-313f7b806c32
 # ╠═8ebd991e-e4b1-478c-9648-9c164954f167
+# ╠═b011f225-c492-44c8-9e1e-d52f7dde1e62
 # ╠═a757df08-31a3-462c-96b1-6db481704d4a
 # ╟─1f2efdc0-6afd-4645-b186-93d46287e160
 # ╠═04ba3742-7d2d-46f3-8798-fe7dd442e4ac

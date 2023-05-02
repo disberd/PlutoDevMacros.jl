@@ -9,10 +9,10 @@ should_stop_parsing(dict) = haskey(dict, "Stopped Parsing")
 
 ## Extract Module Expression
 
-extract_module_expression(filename::AbstractString, _module) = extract_module_expression(get_parent_data(filename), _module)
-function extract_module_expression(data, _module)
+extract_module_expression(packagepath::AbstractString, _module) = extract_module_expression(get_package_data(packagepath), _module)
+function extract_module_expression(package_dict, _module)
 	# We check if there are specific expressions that we want to avoid
-	get!(data, "Expr to Remove") do
+	get!(package_dict, "Expr to Remove") do
 		if isdefined(_module, _remove_expr_var_name)
 			Core.eval(_module, _remove_expr_var_name)
 		else
@@ -20,22 +20,18 @@ function extract_module_expression(data, _module)
 		end
 	end
 	
-	ast = extract_file_ast(data["file"])
-	logger = EarlyFilteredLogger(current_logger()) do log
-		log.level > Logging.Debug ? true : false
-	end
+	ast = extract_file_ast(package_dict["file"])
 	ex = let
-	# ex, found = with_logger(logger) do
-		process_ast(ast, data)
+		process_ast(ast, package_dict)
 	end
 	# We combine all the packages loaded
-	packages = data["Loaded Packages"]
+	packages = package_dict["Loaded Packages"]
 	extracted_names = map(values(packages)) do d
 		get(d, :Names, Set{Symbol}())
 	end
 	packages[:_Overall_][:Names] = union(extracted_names...)
 	mod_exp = getfirst(x -> Meta.isexpr(x, :module), ex.args)
-	mod_exp, data
+	mod_exp, package_dict
 end
 
 ## Extract File AST

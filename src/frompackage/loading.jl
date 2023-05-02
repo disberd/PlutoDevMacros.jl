@@ -48,20 +48,21 @@ end
 ## load module
 function load_module(calling_file, _module)
 	# If the macro was not called from a notebook, we just return nothing
-	is_notebook_local(calling_file) || return nothing
-	mod_exp, dict = extract_module_expression(calling_file, _module)
+	# is_notebook_local(calling_file) || return nothing
+	mod_exp, package_dict = extract_module_expression(calling_file, _module)
 	# This is a notebook, so we check the dependencies
 	proj_file = Core.eval(_module, :(Base.active_project()))
 	notebook_project = TOML.parsefile(proj_file)
 	notebook_deps =  Set(map(Symbol, keys(notebook_project["deps"]) |> collect))
-	loaded_packages = get(dict["Loaded Packages"][:_Overall_], :Names, Set{Symbol}())
+	loaded_packages = get(package_dict["Loaded Packages"][:_Overall_], :Names, Set{Symbol}())
 	missing_packages = setdiff(loaded_packages, notebook_deps, Set([:Markdown, :Random, :InteractiveUtils]))
 	if !isempty(missing_packages)
-		error("""The following packages are used in the parent module but are not currently imported in this notebook's environment:
+		msg = """The following packages are used in the parent module but are not currently imported in this notebook's environment:
 		$(collect(missing_packages))
 		Consider adding those in a cell with:
 		`import $(join(collect(missing_packages),", "))`
-		""")
+		"""
+		@warn msg
 	end
 	# If the module Reference inside fromparent_module is not assigned, we create the module in the calling workspace and assign it
 	if !isassigned(fromparent_module) 
@@ -81,13 +82,19 @@ function load_module(calling_file, _module)
 	mod_name = mod_exp.args[2]
 	parent_package[] = mod_name
 	_MODULE_ = fromparent_module[]
-	eval_in_module(_MODULE_,Expr(:toplevel, LineNumberNode(1, Symbol(calling_file)), mod_exp))
+	insert!(LOAD_PATH, 2, package_dict["project"])
+	# We try evaluating the expression within the custom module
+	try
+		eval_in_module(_MODULE_,Expr(:toplevel, LineNumberNode(1, Symbol(calling_file)), mod_exp))
+	finally
+		deleteat!(LOAD_PATH, 2)
+	end
 	# Get the moduleof the parent package
 	__module = getfield(_MODULE_, mod_name)
-	__module._fromparent_dict_ = dict
+	__module._fromparent_dict_ = package_dict
 	block = quote
 		_PackageModule_ = $__module
 	end
-	@info block, __module
+	# @info block, __module
 	return block, __module
 end

@@ -50,28 +50,25 @@ end
 is_notebook_local(calling_file::Symbol) = is_notebook_local(String(calling_file))
 
 ## get parent data
-function get_parent_data(filepath::AbstractString)
-	# Eventually remove the Pluto cell part
-	filepath = first(split(filepath, "#==#"))
-	endswith(filepath, ".jl") || error("It looks like the provided file path $filepath does not end with .jl, so it's not a julia file")
-	
-	project_file = Base.current_project(dirname(filepath))
-	project_file isa Nothing && error("The current notebook is not part of a Package")
+function get_package_data(packagepath::AbstractString)
+	project_file = Base.current_project(packagepath)
+	project_file isa Nothing && error("No project was found starting from $packagepath")
 
-	parent_dir = dirname(project_file)
-	parent_data = TOML.parsefile(project_file)
+	package_dir = dirname(project_file)
+	package_data = TOML.parsefile(project_file)
+	haskey(package_data, "name") || error("The project found at $project_file is not a package, simple environments are currently not supported")
 
 	# Check that the package file actually exists
-	parent_file = joinpath(parent_dir,"src", parent_data["name"] * ".jl")
-	isfile(parent_file) || error("The parent package main file was not found at path $parent_file")
-	parent_data["dir"] = parent_dir
-	parent_data["project"] = project_file
-	parent_data["file"] = parent_file
-	parent_data["target"] = filepath
-	parent_data["Module Path"] = Symbol[]
-	parent_data["Loaded Packages"] = Dict{Symbol, Any}(:_Overall_ => Dict{Symbol, Any}(:Names => Set{Symbol}()))
+	package_file = joinpath(package_dir,"src", package_data["name"] * ".jl")
+	isfile(package_file) || error("The package package main file was not found at path $package_file")
+	package_data["dir"] = package_dir
+	package_data["project"] = project_file
+	package_data["file"] = package_file
+	package_data["target"] = packagepath
+	package_data["Module Path"] = Symbol[]
+	package_data["Loaded Packages"] = Dict{Symbol, Any}(:_Overall_ => Dict{Symbol, Any}(:Names => Set{Symbol}()))
 	
-	return parent_data
+	return package_data
 end
 
 ## getfirst

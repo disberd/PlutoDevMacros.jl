@@ -2,6 +2,32 @@ const fromparent_module = Ref{Module}()
 const parent_package = Ref{Symbol}()
 _remove_expr_var_name = :__fromparent_expr_to_remove__
 
+## Return calling DIR, basically copied from the definigion of the @__DIR__ macro
+function __DIR__(__source__)
+    __source__.file === nothing && return nothing
+    _dirname = dirname(String(__source__.file::Symbol))
+    return isempty(_dirname) ? pwd() : abspath(_dirname)
+end
+
+struct LineNumberRange
+	first::LineNumberNode
+	last::LineNumberNode
+	function LineNumberRange(ln1::LineNumberNode, ln2::LineNumberNode)
+		@assert ln1.file === ln2.file "A range of LineNumbers can only be specified with LineNumbers from the same file"
+		first, last = ln1.line <= ln2.line ? (ln1, ln2) : (ln2, ln1)
+		new(first, last)
+	end
+end
+## Inclusion in LinuNumberRange
+function _inrange(ln::LineNumberNode, lnr::LineNumberRange)
+	ln.file === lnr.first.file || return false # The file is not the same
+	if ln.line >= lnr.first.line && ln.line <= ln.last.line
+		return true
+	else
+		return false
+	end
+end
+_inrange(ln::LineNumberNode, ln2::LineNumberNode) = ln === ln2
 
 ## simulate manual rerun
 """

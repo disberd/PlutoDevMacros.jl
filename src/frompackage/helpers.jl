@@ -1,5 +1,4 @@
 const fromparent_module = Ref{Module}()
-const parent_package = Ref{Symbol}()
 _remove_expr_var_name = :__fromparent_expr_to_remove__
 
 ## Return calling DIR, basically copied from the definigion of the @__DIR__ macro
@@ -91,8 +90,6 @@ function get_package_data(packagepath::AbstractString)
 	package_data["project"] = project_file
 	package_data["file"] = package_file
 	package_data["target"] = packagepath
-	package_data["Module Path"] = Symbol[]
-	package_data["Loaded Packages"] = Dict{Symbol, Any}(:_Overall_ => Dict{Symbol, Any}(:Names => Set{Symbol}()))
 	
 	return package_data
 end

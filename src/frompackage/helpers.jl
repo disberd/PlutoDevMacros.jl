@@ -101,11 +101,12 @@ function getfirst(p, itr)
     end
     return nothing
 end
+getfirst(itr) = getfirst(x -> true, itr)
 
 ## filterednames
-function filterednames(m::Module; all = true)
-	excluded = (:eval, :include, :_fromparent_dict_, Symbol("@bind"), :_PackageModule_)
-	filter(names(m;all)) do s
+function filterednames(m::Module; all = true, imported = true)
+	excluded = (:eval, :include, :_fromparent_dict_, Symbol("@bind"))
+	filter(names(m;all, imported)) do s
 		Base.isgensym(s) && return false
 		s in excluded && return false
 		return true

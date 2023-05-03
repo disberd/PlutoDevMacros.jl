@@ -4,20 +4,16 @@ using MacroTools
 using Requires
 using HypertextLiteral
 
-# This hack is the only way I found to access @skip_as_script as PlutoDevMacros.@skip_as_script
-# @eval const $(Symbol("@skip_as_script")) = $(Symbol("@plutohookskip"))
-
 # export @only_in_nb, @only_out_nb, include_mapexpr, @skip_as_script
 # export notebook_to_source
 
 include("../notebooks/basics.jl") # @only_in_nb, @only_out_nb, is_notebook_local, plutodump, @current_pluto_cell_id, @current_pluto_notebook_file
 module Script include("../notebooks/htlscript.jl") end # HTLScript, HTLBypass, HTLScriptPart, combine_scripts
-# module FromParent include("../notebooks/parent_import.jl") end
-module FromParent include("../notebooks/fromparent.jl") end
 
 module FromPackage
+    import ..PlutoDevMacros: @addmethod
     using LoggingExtras, HypertextLiteral
-    export @fromparent, @removeexpr
+    export @fromparent, @addmethod
     include("frompackage/helpers.jl")
     include("frompackage/code_parsing.jl")
     include("frompackage/loading.jl")

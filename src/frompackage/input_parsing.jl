@@ -1,3 +1,15 @@
+# Get the full path of the module as array of Symbols starting from Main
+function modname_path(m::Module)
+	args = [nameof(m)]
+	_m = parentmodule(m)
+	while _m !== Main
+		pushfirst!(args, nameof(_m))
+		_m = parentmodule(_m)
+	end
+	pushfirst!(args, nameof(_m))
+	return args
+end
+
 ## process outside pluto
 # We parse all the expressions in the block provided as input to @fromparent
 function process_outside_pluto!(ex)
@@ -22,7 +34,7 @@ function validate_import(ex)
 end
 
 ## target found
-target_found(dict) = get(dict, "Stopped Parsing", nothing) === "Target Found"
+target_found(dict) = haskey(dict, "Target Path")
 
 function valid_outside_pluto(ex)
 	mod_name, imported_names = extract_import_args(ex)
@@ -72,29 +84,23 @@ end
 ## process imported nameargs
 function process_imported_nameargs!(args, dict)
 	# We modify the module name expression to point to the current path within the _PackageModule_ that is loaded in Pluto
-	name_init = [:., :_PackageModule_]
+	name_init = modname_path(fromparent_module[])
+	mod_name = Symbol(dict["name"])
 	first_name = args[1]
 	if first_name === :module
-		# We remove the `module` from the args
-		deleteat!(args, 1)
+		# We substitute the `module` with the actual name of the loaded package
+		args[1] = mod_name
 	elseif first_name ∈ (:., :*)
 		# Here transform the relative module name to the one based on `._PackageModule_`
 		target_path = get(dict, "Target Path", []) |> reverse
-		# We remove the first element of target path as that is the main package name, and we access it via _PackageModule_
-		popfirst!(target_path)
-		@info dict
 		isempty(target_path) && error("The current file was not found included in the module, so you can't use relative path imports")
 		# We pop the first argument which is either `:.` or `:*` since we are in this branch
 		popfirst!(args)
-		if first_name === :.
-			while args[1] === :. 
-				# We pop the dot
-				popfirst!(args)
-				# We also pop the last part of the target path
-				pop!(target_path)
-			end
-			# If args[1] is equal to the last element of the target path, we also pop it.
-			!isempty(target_path) && args[1] === last(target_path) && popfirst!(args)
+		while getfirst(args) === :. 
+			# We pop the dot
+			popfirst!(args)
+			# We also pop the last part of the target path
+			pop!(target_path)
 		end
 		# We prepend the target_path to the args
 		prepend!(args, target_path)
@@ -107,7 +113,8 @@ end
 
 ## parseinput
 # Just support the import module or import module.submodule
-function parseinput(ex, _PackageModule_, dict)
+function parseinput(ex, dict)
+	# We get the module
 	modname_expr, importednames_exprs = extract_import_args(ex)
 	# Check if we have a catchall
 	catchall = contains_catchall(ex)
@@ -120,13 +127,12 @@ function parseinput(ex, _PackageModule_, dict)
 		return ex
 	end
 	# In all other cases we need to access the specific imported module
-	_mod = _PackageModule_
-	@info args
-	for field in args[3:end]
+	_mod = Main
+	for field in args[2:end]
 		_mod = getfield(_mod, field)
 	end
 	# We extract the imported names either due to catchall or due to the standard using
-	imported_names = filterednames(_mod; all = (catchall ? true : false))
+	imported_names = filterednames(_mod; all = catchall, imported = catchall)
 	# At this point we have all the names and we just have to create the final expression
 	importednames_exprs = map(n -> Expr(:., n), imported_names)
 	return reconstruct_import_expr(modname_expr, importednames_exprs)

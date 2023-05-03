@@ -1,3 +1,25 @@
+function extract_file_ast(filename)
+	code = read(filename, String)
+	ast = Meta.parseall(code; filename)
+	@assert Meta.isexpr(ast, :toplevel)
+	ast
+end
+
+## Extract Module Expression
+
+extract_module_expression(packagepath::AbstractString, _module) = extract_module_expression(get_package_data(packagepath), _module)
+function extract_module_expression(package_dict, _module)
+	ast = extract_file_ast(package_dict["file"])
+	mod_exp = getfirst(x -> Meta.isexpr(x, :module), ast.args)
+	mod_exp, package_dict
+end
+
+## Remove Pluto Exprs
+function remove_pluto_exprs(ex)
+	ex.head == :(=) && ex.args[1] ∈ (:PLUTO_PROJECT_TOML_CONTENTS, :PLUTO_MANIFEST_TOML_CONTENTS) && return false
+	return true
+end
+
 _is_include(ex) = Meta.isexpr(ex, :call) && ex.args[1] === :include
 _is_block(ex) = Meta.isexpr(ex, :block)
 

@@ -17,7 +17,7 @@ function eval_in_module(_mod, line_and_ex, dict)
 	# We modify the expr, which also modifies the content of line_and_ex
 	if process_expr!(ex, loc, dict)
 		# If the processing return true, we can evaluate the processed expression
-	Core.eval(_mod, line_and_ex)
+		Core.eval(_mod, line_and_ex) 
 	end
 	return nothing
 end
@@ -91,32 +91,13 @@ function eval_module_expr(parent_module, ex, dict)
 	return out isa StopEval ? out : nothing
 end
 
-## load module
-function load_module(calling_file, _module)
-	# If the macro was not called from a notebook, we just return nothing
-	# is_notebook_local(calling_file) || return nothing
-	mod_exp, package_dict = extract_module_expression(calling_file, _module)
-	# This is a notebook, so we check the dependencies
-	proj_file = Core.eval(_module, :(Base.active_project()))
-	notebook_project = Base.parsed_toml(proj_file)
-	notebook_deps =  Set(map(Symbol, keys(notebook_project["deps"]) |> collect))
-	# loaded_packages = get(package_dict["Loaded Packages"][:_Overall_], :Names, Set{Symbol}())
-	# missing_packages = setdiff(loaded_packages, notebook_deps, Set([:Markdown, :Random, :InteractiveUtils]))
-	# if !isempty(missing_packages)
-	# 	msg = """The following packages are used in the parent module but are not currently imported in this notebook's environment:
-	# 	$(collect(missing_packages))
-	# 	Consider adding those in a cell with:
-	# 	`import $(join(collect(missing_packages),", "))`
-	# 	"""
-	# 	@warn msg
-	# end
-	# If the module Reference inside fromparent_module is not assigned, we create the module in the calling workspace and assign it
+function maybe_create_module(m::Module)
 	if !isassigned(fromparent_module) 
-		fromparent_module[] = Core.eval(_module, :(module $(gensym(:fromparent)) 
+		fromparent_module[] = Core.eval(m, :(module $(gensym(:fromparent)) 
 			# We import PlutoRunner in this module, or we just create a dummy module otherwise
-			PlutoRunner = let p = parentmodule(@__MODULE__)
-				if isdefined(p, :PlutoRunner)
-					p.PlutoRunner
+			PlutoRunner = let 
+				if isdefined(Main, :PlutoRunner)
+					Main.PlutoRunner
 				else
 					@eval baremodule PlutoRunner
 					end
@@ -124,13 +105,22 @@ function load_module(calling_file, _module)
 			end
 		end))
 	end
+	return fromparent_module[]
+end
+
+## load module
+function load_module(target_file, calling_file, _module)
+	# If the macro was not called from a notebook, we just return nothing
+	# is_notebook_local(calling_file) || return nothing
+	mod_exp, package_dict = extract_module_expression(target_file, _module)
+	# If the module Reference inside fromparent_module is not assigned, we create the module in the calling workspace and assign it
+	_MODULE_ = maybe_create_module(_module)
 	# We reset the module path in case it was not cleaned
 	mod_name = mod_exp.args[2]
-	_MODULE_ = fromparent_module[]
 	insert!(LOAD_PATH, 2, package_dict["project"])
 	# We try evaluating the expression within the custom module
 	stop_reason = try
-		reason = eval_in_module(_MODULE_,Expr(:toplevel, LineNumberNode(1, Symbol(calling_file)), mod_exp), package_dict)
+		reason = eval_in_module(_MODULE_,Expr(:toplevel, LineNumberNode(1, Symbol(target_file)), mod_exp), package_dict)
 		package_dict["Stopping Reason"] = reason isa Nothing ? StopEval("Loading Complete") : reason
 	catch e
 		package_dict["Stopping Reason"] = StopEval("Loading Error")
@@ -141,9 +131,6 @@ function load_module(calling_file, _module)
 	# Get the moduleof the parent package
 	__module = getfield(_MODULE_, mod_name)
 	__module._fromparent_dict_ = package_dict
-	block = quote
-		_PackageModule_ = $__module
-	end
 	# @info block, __module
-	return block, __module
+	return package_dict
 end

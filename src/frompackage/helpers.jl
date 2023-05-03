@@ -80,7 +80,7 @@ function get_package_data(packagepath::AbstractString)
 	project_file isa Nothing && error("No project was found starting from $packagepath")
 
 	package_dir = dirname(project_file)
-	package_data = TOML.parsefile(project_file)
+	package_data = Base.parsed_toml(project_file)
 	haskey(package_data, "name") || error("The project found at $project_file is not a package, simple environments are currently not supported")
 
 	# Check that the package file actually exists

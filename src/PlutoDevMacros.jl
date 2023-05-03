@@ -16,7 +16,7 @@ module Script include("../notebooks/htlscript.jl") end # HTLScript, HTLBypass, H
 module FromParent include("../notebooks/fromparent.jl") end
 
 module FromPackage
-    using TOML, LoggingExtras, HypertextLiteral
+    using LoggingExtras, HypertextLiteral
     export @fromparent, @removeexpr
     include("frompackage/helpers.jl")
     include("frompackage/code_parsing.jl")

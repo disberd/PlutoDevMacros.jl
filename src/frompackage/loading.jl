@@ -98,7 +98,7 @@ function load_module(calling_file, _module)
 	mod_exp, package_dict = extract_module_expression(calling_file, _module)
 	# This is a notebook, so we check the dependencies
 	proj_file = Core.eval(_module, :(Base.active_project()))
-	notebook_project = TOML.parsefile(proj_file)
+	notebook_project = Base.parsed_toml(proj_file)
 	notebook_deps =  Set(map(Symbol, keys(notebook_project["deps"]) |> collect))
 	# loaded_packages = get(package_dict["Loaded Packages"][:_Overall_], :Names, Set{Symbol}())
 	# missing_packages = setdiff(loaded_packages, notebook_deps, Set([:Markdown, :Random, :InteractiveUtils]))

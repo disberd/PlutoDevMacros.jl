@@ -1,5 +1,7 @@
+import ..Script: HTLScript, HTLScriptPart, make_script, combine_scripts
+
 const fromparent_module = Ref{Module}()
-_remove_expr_var_name = :__fromparent_expr_to_remove__
+const macro_cell = Ref("undefined")
 
 ## Return calling DIR, basically copied from the definigion of the @__DIR__ macro
 function __DIR__(__source__)
@@ -120,4 +122,101 @@ function filterednames(m::Module; all = true, imported = true)
 		s in excluded && return false
 		return true
 	end
+end
+
+
+## HTML Popup
+
+_popup_style(id) = """
+	fromparent-container {
+	    height: 20px;
+	    position: fixed;
+	    top: 40px;
+		right: 10px;
+	    margin-top: 5px;
+	    padding-right: 5px;
+	    z-index: 200;
+		background: #ffffff;
+	    padding: 5px 8px;
+	    border: 3px solid #e3e3e3;
+	    border-radius: 12px;
+	    height: 35px;
+	    font-family: "Segoe UI Emoji", "Roboto Mono", monospace;
+	    font-size: 0.75rem;
+	}
+	fromparent-container.errored {
+		border-color: var(--error-cell-color)
+	}
+	fromparent-container:hover {
+	    font-weight: 800;
+		cursor: pointer;
+	}
+	body.disable_ui fromparent-container {
+		display: none;
+	}
+	pluto-log-dot-positioner[hidden] {
+		display: none;
+	}
+"""
+
+# This function, if appearing inside a capture log message in Pluto (not with
+# println, just the @info, @warn, etc ones), will hide itself. It is mostly used
+# in combination with other scripts to inject some javascript in the notebook
+# without having an ugly empty log below the cell 
+function hide_this_log()
+	body = HTLScriptPart("""
+	const logs_positioner = currentScript.closest('pluto-log-dot-positioner')
+	if (logs_positioner == undefined) {return}
+	const logs = logs_positioner.parentElement
+	const logs_container = logs.parentElement
+
+	const observer = new MutationObserver((mutationList, observer) => {
+		for (const child of logs.children) {
+			if (!child.hasAttribute('hidden')) {
+				logs.style.display = "block"
+				logs_container.style.display = "block"
+				return
+			}
+		}
+		// If we reach here all the children are hidden, so we hide the container as well		
+		logs.style.display = "none"
+		logs_container.style.display = "none"
+	})
+
+	observer.observe(logs, {subtree: true, attributes: true, childList: true})
+	logs_positioner.toggleAttribute('hidden',true)
+	""")
+	invalidation = HTLScriptPart("""
+		console.log('invalidation')
+		observer.disconnect()
+	""")
+	return HTLScript(body, invalidation)
+end
+
+function html_reload_button(cell_id; text = "Reload @frompackage", err = false)
+	id = string(cell_id)
+	container = HTLScript(@htl """
+	<script>
+			const container = document.querySelector('fromparent-container') ?? document.body.appendChild(html`<fromparent-container>`)
+			container.innerHTML = $text
+			// We set the errored state
+			container.classList.toggle('errored', $err)
+			const style = container.querySelector('style') ?? container.appendChild(html`<style>`)
+			style.innerHTML = $(_popup_style(id))
+			const cell = document.getElementById($id)
+			const actions = cell._internal_pluto_actions
+			container.onclick = (e) => {
+				if (e.ctrlKey) {
+					history.pushState({},'')			
+					cell.scrollIntoView({
+						behavior: 'auto',
+						block: 'center',				
+					})
+				} else {
+					actions.set_and_run_multiple([$id])
+				}
+			}
+	</script>
+	""")
+	make_script(combine_scripts([container, hide_this_log()]))
 end

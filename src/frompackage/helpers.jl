@@ -8,6 +8,15 @@ function __DIR__(__source__)
     return isempty(_dirname) ? pwd() : abspath(_dirname)
 end
 
+# Function to get the package dependencies from the manifest
+function package_dependencies(project_location::String)
+	project_file = Base.current_project(project_location)
+	project_file isa Nothing && error("No parent project was found starting from the path $project_location")
+	manifest_file = Base.project_file_manifest_path(project_file)
+	d = Base.get_deps(Base.parsed_toml(manifest_file))
+end
+package_dependencies(d::Dict) = package_dependencies(d["project"])
+
 struct LineNumberRange
 	first::LineNumberNode
 	last::LineNumberNode

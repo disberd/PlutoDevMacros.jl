@@ -77,8 +77,10 @@ end
 function eval_module_expr(parent_module, ex, dict)
 	mod_name = ex.args[2]
 	block = ex.args[3]
-	# We create or overwrite the current module in the parent
-	new_module = Core.eval(parent_module, :(module $mod_name end))
+	# We create or overwrite the current module in the parent, and we redirect stderr to avoid the replace warning
+	new_module = redirect_stderr(Pipe()) do # Apparently giving devnull as stream is not enough to suprress the warning, but Pipe works
+		Core.eval(parent_module, :(module $mod_name end))
+	end
 	# If the block is empty, we just skip this block
 	isempty(block.args) && return nothing
 	# We process the instructions within the module

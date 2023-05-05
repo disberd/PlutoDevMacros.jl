@@ -60,11 +60,7 @@ end
             nb = SessionActions.open(ss, path; run_async=false)
             @test eval_in_nb((ss, nb), :toplevel_variable) == TestPackage.toplevel_variable
             @test eval_in_nb((ss, nb), :hidden_toplevel_variable) == TestPackage.hidden_toplevel_variable
-            # For some reason the first cell errors with `Pkg` not defined as a
-            # package when calling Pkg.activate. The rest of the cells seem to
-            # work fine though so unclear what is happening. For the moment we
-            # don't test the first cell
-            for cell in nb.cells[2:end] 
+            for cell in nb.cells 
                 @test noerror(cell)
             end
             SessionActions.shutdown(ss, nb)
@@ -74,11 +70,7 @@ end
             ss = ServerSession(;options)
             path = joinpath(srcdir, "inner_notebook2.jl")
             nb = SessionActions.open(ss, path; run_async=false)
-            # For some reason the first cell errors with `Pkg` not defined as a
-            # package when calling Pkg.activate. The rest of the cells seem to
-            # work fine though so unclear what is happening. For the moment we
-            # don't test the first cell
-            for cell in nb.cells[2:end] 
+            for cell in nb.cells 
                 @test noerror(cell)
             end
             SessionActions.shutdown(ss, nb)
@@ -88,11 +80,7 @@ end
             ss = ServerSession(;options)
             path = joinpath(srcdir, "test_macro2.jl")
             nb = SessionActions.open(ss, path; run_async=false)
-            # For some reason the first cell errors with `Pkg` not defined as a
-            # package when calling Pkg.activate. The rest of the cells seem to
-            # work fine though so unclear what is happening. For the moment we
-            # don't test the first cell
-            for cell in nb.cells[2:end] 
+            for cell in nb.cells
                 @test noerror(cell)
             end
             SessionActions.shutdown(ss, nb)

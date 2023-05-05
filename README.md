@@ -105,6 +105,27 @@ The `@fromparent` macro only accepts the `import_block` as single argument, and 
 (@fromparent import_block) == (@frompackage @__FILE__ import_block)
 ```
 
+## @addmethod macro
+The `@fromparent`/`@frompackage` functions rely (like `@ingredients` and `@plutoinclude`) in generating temporary  modules and importing variables from those modules. This causes problems because Pluto currently does not support directly adding methods to functions imported from other modules (see #2). To circumvent this, PlutoDevMacros also exports the `@addmethod` function which simply takes care of _pre-pending_ the correct module name in the function signature.
+
+So the code
+```julia
+@addmethod func(args...;kwargs...) = something
+```
+is simply translated to
+```julia
+DefiningModule.func(args...;kwargs...) = something
+```
+where `DefiningModule` is the module where `func` is defined. When called outside of Pluto, `@addmethod` simply returns the given expression without modifying it.
+
+This is useful to avoid multiple definition errors inside Pluto but has the caveat that defining a method with `@addmethod` does not trigger a reactive run of all cells that call the modified function.
+This also mean that when removing the cell with the `@addmethod` call, the actual method added to the `DefiningModule` will not be automatically erased by Pluto and is still accessible until it is not overwritten with another method with the same signature.
+This is easy to fix in the case of adding methods to modules loaded with `@frompackage`/`@fromparent` as reloading the module is sufficient to remove the hanging method.
+
+See this video for an example:
+
+https://user-images.githubusercontent.com/12846528/236472989-da86a311-4501-4966-9f0b-1298bbd9d53b.mp4
+
 ## Use of @fromparent/@frompackage with Pluto PkgManager
 
 As the module of the Package is loaded/evaluated by the macro inside the notebook workspace, the notebook environment should also contain all the packages that are used by the target Package inside its own environment. 

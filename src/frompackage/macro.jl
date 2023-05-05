@@ -224,7 +224,7 @@ one.
 
 [Link to Video](https://user-images.githubusercontent.com/12846528/236453634-c95aa7b2-61eb-492f-85f5-6539bbb714d5.mp4)
 
-See also: [`@fromparent`](@ref)
+See also: [`@fromparent`](@ref), [`@addmethod`](@ref)
 """
 macro frompackage(target::String, ex)
 	calling_file = String(__source__.file)
@@ -239,6 +239,7 @@ it uses the calling file as the target, so:
 (@fromparent import_block) == (@frompackage @__FILE__ import_block)
 ```
 Refer to the [`@frompackage`](@ref) documentation for understanding its use.
+See also: [`@addmethod`](@ref)
 """
 macro fromparent(ex)
 	calling_file = String(__source__.file)

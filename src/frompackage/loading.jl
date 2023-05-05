@@ -132,7 +132,7 @@ function load_module(target_file, calling_file, _module)
 	end
 	# Get the moduleof the parent package
 	__module = getfield(_MODULE_, mod_name)
-	__module._fromparent_dict_ = package_dict
+	Core.eval(__module, :(_fromparent_dict_ = $package_dict))
 	# @info block, __module
 	return package_dict
 end

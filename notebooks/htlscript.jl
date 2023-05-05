@@ -10,21 +10,19 @@ using HypertextLiteral
 # ╔═╡ f2abae1a-5055-41a7-9330-04d514cd5fff
 using Random
 
-# ╔═╡ d12fb6fc-258f-456d-bf4d-bd2cd1ff3319
-# ╠═╡ skip_as_script = true
-#=╠═╡
-using BenchmarkTools
-  ╠═╡ =#
-
 # ╔═╡ 4ce0b2ab-3a7b-407e-a9d9-112e754bed82
 # ╠═╡ skip_as_script = true
 #=╠═╡
-using PlutoUI
+begin
+	using PlutoUI 
+	using PlutoExtras
+	using BenchmarkTools
+end
   ╠═╡ =#
 
 # ╔═╡ de7a0ea7-d67d-4754-843f-5731924bbd70
 #=╠═╡
-TableOfContents()
+ExtendedTableOfContents()
   ╠═╡ =#
 
 # ╔═╡ af424bad-c980-4969-91b7-299d9f029691
@@ -696,18 +694,6 @@ bpasd = HTLBypass(@htl """
 """)
   ╠═╡ =#
 
-# ╔═╡ 63b7eb42-e631-444b-a8c1-714ce9431e02
-#=╠═╡
-let
-	buf = IOBuffer()
-	lol = bpasd.buffer
-	seekstart(lol)
-	write(buf, lol)
-	seekstart(buf)
-	read(buf, String)
-end
-  ╠═╡ =#
-
 # ╔═╡ fa270576-c7aa-4941-85d1-9ae3ccc697ea
 #=╠═╡
 @htl """
@@ -750,17 +736,169 @@ end
 @htl "$dio"
   ╠═╡ =#
 
+# ╔═╡ d794d3e8-9456-4f45-8902-abc59ee722f9
+md"""
+# General Functions
+"""
+
+# ╔═╡ 4ee62fb1-8f88-4219-8ec2-6e2a16794c7b
+function formatted_js(s::Union{HTLScriptPart, HTLBypass})
+	buf = s.buffer
+	seekstart(buf)
+	codestring = strip(read(buf, String), '\n')
+	Markdown.MD(Markdown.Code("js", codestring))
+end
+
+# ╔═╡ 63b7eb42-e631-444b-a8c1-714ce9431e02
+#=╠═╡
+formatted_js(bpasd)
+  ╠═╡ =#
+
+# ╔═╡ 56e4ebcf-7b6a-415b-ab84-2d5f553e7e11
+test = HTLBypass(@htl """
+<div>
+	CIAO
+</div>
+<scriptA>
+	console.log(document.currentScript.environment)
+	console.log(html)
+</scriptA>
+""")
+
+# ╔═╡ 86b21ebc-f075-48db-9160-4a4551e56d0e
+@htl """
+<script>
+	let asd = html`$test`
+	let sp = asd.querySelector('scriptA')
+	const sc = document.createElement('script')
+	sc.innerHTML = sp.innerHTML
+	sc.environment = {asd: 3, lol: 2}
+	sp.replaceWith(sc)
+	console.log(asd)
+	return asd
+</script>
+"""
+
+# ╔═╡ 8ab65fa7-a691-449b-8cb9-ac03788ed166
+aaa = 1
+
+# ╔═╡ 789200b5-ec0e-4442-9233-76403ce057b7
+gesu = let
+	aaa
+	@htl """
+<hltblock>
+	<div>
+		<script id='gesu'>
+			const { reactive, html: thtml, watch } = await import('https://esm.sh/@arrow-js/core')
+
+			const boh = document.create
+
+			const children = {
+				true: html`<div>TRUE`,
+				false: html`<div>FALSE`
+			}
+
+			const data = reactive({
+			value: true
+			});
+			
+			const temp = thtml`
+			<button @click="\${() => data.value = !data.value}">
+			Toggle
+			</button>
+   			<span class='container'><span>
+			`
+
+			const out = html`<span>`
+			temp(out)
+			watch(() => {
+				const toReplace = out.querySelector('span.container').firstChild
+				toReplace.replaceWith(data.value ? children.true : children.false)
+			})
+			
+			return out
+		</script>
+	</div>
+</hltblock>
+"""
+end
+
+# ╔═╡ 6dd8dd17-306c-4ab3-b0ca-be38a41e40b7
+let
+	aaa
+	@htl """
+$gesu
+<script>
+	const cell = currentScript.closest('pluto-cell')
+	const htlblock = cell.querySelector('hltblock')
+	const out = htlblock.firstElementChild
+	console.log(out)
+	htlblock.remove()
+	return out
+</script>
+"""
+end
+
+# ╔═╡ 8ba70b18-75fe-4384-a104-ad836f32076e
+# ╠═╡ skip_as_script = true
+#=╠═╡
+test_bind = @htl """
+<script>	
+	const { r,t,w } = await import('https://esm.sh/@arrow-js/core')
+	const template = t`
+ 	<div @input="\${(e) => console.log('div input', e)}">MAGIC
+  		<span @click="\${(e) => {
+				e.target.value = "SPAN"
+				console.log(e, e.target, e.target.value)
+				e.target.dispatchEvent(new CustomEvent('input'))
+		}}">SPAN
+	`
+	const out = currentScript.parentElement
+	template(out)
+</script>
+"""
+  ╠═╡ =#
+
+# ╔═╡ 962b1c69-88f4-46ae-91c7-182f17c44f01
+@htl """
+<div class='gesu'>GESU
+<span class = 'bambino'>BAMBINO</span></div>
+	<script>
+		const dv = currentScript.parentElement.querySelector('div.gesu')
+		dv.addEventListener('input', (e) => {
+			console.log('div input',e)
+		})
+		const sp = dv.querySelector('span')
+		sp.addEventListener('click', e => {
+			console.log('click')
+			sp.dispatchEvent(new CustomEvent('input', {bubbles: true,}))
+		})
+	</script>
+"""
+
+# ╔═╡ 7cd6b44b-0249-46e3-b99f-e2c19db8d936
+#=╠═╡
+@bind boh test_bind
+  ╠═╡ =#
+
+# ╔═╡ 9b645f27-8f2b-4a15-937e-68a5d5487d55
+#=╠═╡
+(boh, rand())
+  ╠═╡ =#
+
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 HypertextLiteral = "ac1192a8-f4b3-4bfe-ba22-af5b92cd3ab2"
+PlutoExtras = "ed5d0301-4775-4676-b788-cf71e66ff8ed"
 PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 
 [compat]
 BenchmarkTools = "~1.3.2"
 HypertextLiteral = "~0.9.4"
+PlutoExtras = "~0.6.1"
 PlutoUI = "~0.7.48"
 """
 
@@ -768,9 +906,9 @@ PlutoUI = "~0.7.48"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.9.0-beta3"
+julia_version = "1.9.0-beta4"
 manifest_format = "2.0"
-project_hash = "e07af10889a79c29aa9a0f67446bc608367fde80"
+project_hash = "8592c55db71e5eed2d6d4ec606cb287eeea7f6c7"
 
 [[deps.AbstractPlutoDingetjes]]
 deps = ["Pkg"]
@@ -885,6 +1023,12 @@ git-tree-sha1 = "65f28ad4b594aebe22157d6fac869786a255b7eb"
 uuid = "6c6e2e6c-3030-632d-7369-2d6c69616d65"
 version = "0.1.4"
 
+[[deps.MacroTools]]
+deps = ["Markdown", "Random"]
+git-tree-sha1 = "42324d08725e200c23d4dfb549e0d5d89dede2d2"
+uuid = "1914dd2f-81c6-5fcd-8719-6d5c9610ff09"
+version = "0.5.10"
+
 [[deps.Markdown]]
 deps = ["Base64"]
 uuid = "d6f4376e-aef5-505a-96c1-9c027394607a"
@@ -910,6 +1054,11 @@ deps = ["Artifacts", "CompilerSupportLibraries_jll", "Libdl"]
 uuid = "4536629a-c528-5b80-bd46-f80d51c5b363"
 version = "0.3.21+0"
 
+[[deps.OrderedCollections]]
+git-tree-sha1 = "85f8e6578bf1f9ee0d11e7bb1b1456435479d47c"
+uuid = "bac558e1-5e72-5ebc-8fee-abe8a469f55d"
+version = "1.4.1"
+
 [[deps.Parsers]]
 deps = ["Dates", "SnoopPrecompile"]
 git-tree-sha1 = "cceb0257b662528ecdf0b4b4302eb00e767b38e7"
@@ -920,6 +1069,18 @@ version = "2.5.0"
 deps = ["Artifacts", "Dates", "Downloads", "FileWatching", "LibGit2", "Libdl", "Logging", "Markdown", "Printf", "REPL", "Random", "SHA", "Serialization", "TOML", "Tar", "UUIDs", "p7zip_jll"]
 uuid = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
 version = "1.9.0"
+
+[[deps.PlutoDevMacros]]
+deps = ["HypertextLiteral", "InteractiveUtils", "MacroTools", "Markdown", "Random", "Requires"]
+git-tree-sha1 = "fa04003441d7c80b4812bd7f9678f721498259e7"
+uuid = "a0499f29-c39b-4c5c-807c-88074221b949"
+version = "0.5.0"
+
+[[deps.PlutoExtras]]
+deps = ["AbstractPlutoDingetjes", "HypertextLiteral", "InteractiveUtils", "Markdown", "OrderedCollections", "PlutoDevMacros", "PlutoUI"]
+git-tree-sha1 = "8ec757f56d593959708dcd0b2d99b3c18cef428c"
+uuid = "ed5d0301-4775-4676-b788-cf71e66ff8ed"
+version = "0.6.1"
 
 [[deps.PlutoUI]]
 deps = ["AbstractPlutoDingetjes", "Base64", "ColorTypes", "Dates", "FixedPointNumbers", "Hyperscript", "HypertextLiteral", "IOCapture", "InteractiveUtils", "JSON", "Logging", "MIMEs", "Markdown", "Random", "Reexport", "URIs", "UUIDs"]
@@ -948,6 +1109,12 @@ git-tree-sha1 = "45e428421666073eab6f2da5c9d310d99bb12f9b"
 uuid = "189a3867-3050-52da-a836-e630ba90ab69"
 version = "1.2.2"
 
+[[deps.Requires]]
+deps = ["UUIDs"]
+git-tree-sha1 = "838a3a4188e2ded87a4f9f184b4b0d78a1e91cb7"
+uuid = "ae029012-a4dd-5104-9daa-d747884805df"
+version = "1.3.0"
+
 [[deps.SHA]]
 uuid = "ea8e919c-243c-51af-8825-aaa63cd721ce"
 version = "0.7.0"
@@ -975,7 +1142,7 @@ version = "1.9.0"
 [[deps.SuiteSparse_jll]]
 deps = ["Artifacts", "Libdl", "Pkg", "libblastrampoline_jll"]
 uuid = "bea87d4a-7f5b-5778-9afe-8cc45184846c"
-version = "5.10.1+0"
+version = "5.10.1+6"
 
 [[deps.TOML]]
 deps = ["Dates"]
@@ -1016,7 +1183,7 @@ version = "1.2.13+0"
 [[deps.libblastrampoline_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "8e850b90-86db-534c-a0d3-1478176c7d93"
-version = "5.2.0+0"
+version = "5.4.0+0"
 
 [[deps.nghttp2_jll]]
 deps = ["Artifacts", "Libdl"]
@@ -1032,7 +1199,6 @@ version = "17.4.0+0"
 # ╔═╡ Cell order:
 # ╠═3020de32-5b63-11ed-208f-1d2acb775b3b
 # ╠═f2abae1a-5055-41a7-9330-04d514cd5fff
-# ╠═d12fb6fc-258f-456d-bf4d-bd2cd1ff3319
 # ╠═a80dd217-bd5f-463c-adcd-56722f4f3027
 # ╠═4ce0b2ab-3a7b-407e-a9d9-112e754bed82
 # ╠═de7a0ea7-d67d-4754-843f-5731924bbd70
@@ -1093,5 +1259,16 @@ version = "17.4.0+0"
 # ╠═5c36a1d6-aa09-4cfc-b952-677a8867b2d8
 # ╠═579f4974-8afe-42ab-aee3-ce13a6f8dfaa
 # ╠═eb61e6ad-445f-49d1-b9f2-565a26d7e3fa
+# ╟─d794d3e8-9456-4f45-8902-abc59ee722f9
+# ╠═4ee62fb1-8f88-4219-8ec2-6e2a16794c7b
+# ╠═56e4ebcf-7b6a-415b-ab84-2d5f553e7e11
+# ╠═86b21ebc-f075-48db-9160-4a4551e56d0e
+# ╠═8ab65fa7-a691-449b-8cb9-ac03788ed166
+# ╠═789200b5-ec0e-4442-9233-76403ce057b7
+# ╠═6dd8dd17-306c-4ab3-b0ca-be38a41e40b7
+# ╠═8ba70b18-75fe-4384-a104-ad836f32076e
+# ╠═962b1c69-88f4-46ae-91c7-182f17c44f01
+# ╠═7cd6b44b-0249-46e3-b99f-e2c19db8d936
+# ╠═9b645f27-8f2b-4a15-937e-68a5d5487d55
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

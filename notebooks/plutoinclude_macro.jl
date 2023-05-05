@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.24
+# v0.19.25
 
 using Markdown
 using InteractiveUtils
@@ -14,14 +14,6 @@ macro bind(def, element)
     end
 end
 
-# ╔═╡ f5486f67-7bfc-44e2-91b9-9401d81666da
-# ╠═╡ skip_as_script = true
-#=╠═╡
-begin
-	using PlutoDevMacros
-end
-  ╠═╡ =#
-
 # ╔═╡ 661e0d86-9675-4c24-a898-5ffee2e32029
 begin
 	using MacroTools
@@ -30,7 +22,10 @@ end
 # ╔═╡ e3d5c718-d98c-4d53-8fc9-911be34c9f2d
 # ╠═╡ skip_as_script = true
 #=╠═╡
-using BenchmarkTools
+begin
+	using BenchmarkTools
+	import PlutoDevMacros
+end
   ╠═╡ =#
 
 # ╔═╡ 47c42d27-88f1-4a27-bda9-54a2439b09a1
@@ -192,9 +187,7 @@ macro plutoinclude(ex,kwargstrs...)
 end
 
 # ╔═╡ 748b8eab-2f3d-4afd-bfb4-fee3240d391b
-#=╠═╡
 export @plutoinclude
-  ╠═╡ =#
 
 # ╔═╡ 1f291bd2-9ab1-4fd2-bf50-49253726058f
 # ╠═╡ skip_as_script = true
@@ -332,9 +325,9 @@ PlutoDevMacros = "~0.5.0"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.9.0-rc2"
+julia_version = "1.9.0-rc3"
 manifest_format = "2.0"
-project_hash = "1bb6fd45839a48d8d9a16c39f2a62344b38ca8f8"
+project_hash = "b329ce92ad28a8475022c6a7c95009120252febc"
 
 [[deps.ArgTools]]
 uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
@@ -550,7 +543,7 @@ version = "1.2.13+0"
 [[deps.libblastrampoline_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "8e850b90-86db-534c-a0d3-1478176c7d93"
-version = "5.4.0+0"
+version = "5.7.0+0"
 
 [[deps.nghttp2_jll]]
 deps = ["Artifacts", "Libdl"]
@@ -564,7 +557,6 @@ version = "17.4.0+0"
 """
 
 # ╔═╡ Cell order:
-# ╠═f5486f67-7bfc-44e2-91b9-9401d81666da
 # ╠═661e0d86-9675-4c24-a898-5ffee2e32029
 # ╠═e3d5c718-d98c-4d53-8fc9-911be34c9f2d
 # ╠═748b8eab-2f3d-4afd-bfb4-fee3240d391b

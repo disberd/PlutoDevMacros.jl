@@ -1,6 +1,6 @@
 module FromPackage
     import ..PlutoDevMacros: @addmethod
-    using LoggingExtras, HypertextLiteral
+    using HypertextLiteral
     export @fromparent, @addmethod, @frompackage
 
 

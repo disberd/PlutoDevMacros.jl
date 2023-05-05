@@ -10,6 +10,8 @@ using InteractiveUtils
 begin
 	import Pkg
 	Pkg.activate(Base.current_project(@__FILE__))
+	# Revise is only used for internal testing during development to update the
+	# changes to PlutoDevMacros
 	using Revise
 end
   ╠═╡ =#
@@ -24,13 +26,13 @@ using PlutoDevMacros.FromPackage
 @addmethod testmethod(x::Float64) = "FLOAT"
 
 # ╔═╡ 3cb7f11d-8829-409c-b3c8-9359a5da0763
-testmethod("a")
+testmethod("a") == "ANY" || error("Something went wrong")
 
 # ╔═╡ b91a7413-534f-442b-bc55-a61244938820
-testmethod(3)
+testmethod(3) == "INT" || error("Something went wrong")
 
 # ╔═╡ 88b26633-0760-428e-868a-1b799076189c
-testmethod(3.0)
+testmethod(3.0) == "FLOAT" || error("Something went wrong")
 
 # ╔═╡ Cell order:
 # ╠═5fe1bfc9-9622-4266-8efa-d4032b42d847

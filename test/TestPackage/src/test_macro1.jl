@@ -10,6 +10,8 @@ using InteractiveUtils
 begin
 	import Pkg
 	Pkg.activate(Base.current_project(@__FILE__))
+	# Revise is only used for internal testing during development to update the
+	# changes to PlutoDevMacros
 	using Revise
 end
   ╠═╡ =#

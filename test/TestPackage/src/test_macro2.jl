@@ -10,6 +10,8 @@ using InteractiveUtils
 begin
 	import Pkg
 	Pkg.activate(Base.current_project(@__FILE__))
+	# Revise is only used for internal testing during development to update the
+	# changes to PlutoDevMacros
 	using Revise
 end
   ╠═╡ =#
@@ -35,7 +37,7 @@ gs = [GreatStructure("$c") for c ∈ ('a':'c')]
 c = CoolStruct(gs)
 
 # ╔═╡ 62546e81-98fe-49c0-8022-8b28389b24ba
-foo(c) # This doesn't breaks anymore!
+foo(c) # This doesn't breaks anymore! See https://github.com/disberd/PlutoDevMacros.jl/issues/2 for details
 
 # ╔═╡ Cell order:
 # ╠═85628a8b-b883-4374-918d-e080f4ab7d2e

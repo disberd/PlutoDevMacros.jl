@@ -46,6 +46,9 @@ function frompackage(ex, target_file, caller, _module; macroname)
 		arg isa LineNumberNode && continue
 		push!(args, parseinput(arg, dict))
 	end
+	# We add the expression that cleans the load path 
+	proj_file = Base.current_project(target_file)
+	push!(out.args, :(LOAD_PATH[2] == $proj_file && deleteat!(LOAD_PATH, 2)))
 	# We add the html button
 	text = "Reload $macroname"
 	push!(args, :($html_reload_button($cell_id; text = $text)))
@@ -65,6 +68,10 @@ function _combined(ex, target, calling_file, __module__; macroname)
 			# We add a log to maintain the reload button
 			push!(out.args, :(@info $html_reload_button($cell_id; text = $text, err = true)))
 		end
+		# We have to also remove the project from the load path
+		proj = Base.current_project(target)
+		push!(out.args, :(LOAD_PATH[2] == $proj_file && deleteat!(LOAD_PATH, 2)))
+		# Outputting the CaptureException as last statement allows pretty printing of errors inside Pluto
 		push!(out.args,	:(CapturedException($e, $bt)))
 		out
 	end

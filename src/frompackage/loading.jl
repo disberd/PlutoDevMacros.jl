@@ -119,7 +119,9 @@ function load_module(target_file, calling_file, _module)
 	_MODULE_ = maybe_create_module(_module)
 	# We reset the module path in case it was not cleaned
 	mod_name = mod_exp.args[2]
-	insert!(LOAD_PATH, 2, package_dict["project"])
+	proj_file = Base.current_project(target_file)
+	# We inject the project in the LOAD_PATH if it is not present already
+	length(LOAD_PATH) > 1 && LOAD_PATH[2] != proj_file && insert!(LOAD_PATH, 2, proj_file)
 	# We try evaluating the expression within the custom module
 	stop_reason = try
 		reason = eval_in_module(_MODULE_,Expr(:toplevel, LineNumberNode(1, Symbol(target_file)), mod_exp), package_dict)
@@ -127,8 +129,6 @@ function load_module(target_file, calling_file, _module)
 	catch e
 		package_dict["Stopping Reason"] = StopEval("Loading Error")
 		rethrow(e)
-	finally
-		deleteat!(LOAD_PATH, 2)
 	end
 	# Get the moduleof the parent package
 	__module = getfield(_MODULE_, mod_name)

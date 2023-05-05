@@ -87,13 +87,13 @@ function process_imported_nameargs!(args, dict)
 	name_init = modname_path(fromparent_module[])
 	mod_name = Symbol(dict["name"])
 	first_name = args[1]
-	if first_name === :module
-		# We substitute the `module` with the actual name of the loaded package
+	if first_name === :PackageModule
+		# We substitute the `PackageModule` with the actual name of the loaded package
 		args[1] = mod_name
-	elseif first_name ∈ (:., :*)
-		# Here transform the relative module name to the one based on `._PackageModule_`
+	elseif first_name ∈ (:., :*, :ParentModule)
+		# Here transform the relative module name to the one based on the full loaded module path
 		target_path = get(dict, "Target Path", []) |> reverse
-		isempty(target_path) && error("The current file was not found included in the module, so you can't use relative path imports")
+		isempty(target_path) && error("The current file was not found included in the loaded module $mod_name, so you can't use relative path imports")
 		# We pop the first argument which is either `:.` or `:*` since we are in this branch
 		popfirst!(args)
 		while getfirst(args) === :. 
@@ -105,14 +105,13 @@ function process_imported_nameargs!(args, dict)
 		# We prepend the target_path to the args
 		prepend!(args, target_path)
 	else
-		error("The @fromparent macro only supports import statements that are either starting with `module`, `*` or expressing a reltive path (starting with a dot)")
+		error("The @frompackage/@fromparent macros only supports import statements that are either starting with `PackageModule`, `ParentModule`, `*` or expressing a reltive module path (starting with a dot)")
 	end
 	# We now add ._PackageModule
 	prepend!(args, name_init)
 end
 
 ## parseinput
-# Just support the import module or import module.submodule
 function parseinput(ex, dict)
 	# We get the module
 	modname_expr, importednames_exprs = extract_import_args(ex)

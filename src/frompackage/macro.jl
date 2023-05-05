@@ -24,7 +24,7 @@ function frompackage(ex, target_file, caller, _module; macroname)
 	cell_id = split(caller, "#==#")[2]
 	id_name = _id_name(cell_id)
 	ex isa Expr || error("You have to call this macro with an import statement or a begin-end block of import statements")
-	# Construct the basic block where the module is import under name _PackageModule_. The module is only parsed if _PackageModule_ is not already defined in the calling module
+	# Try to load the module of the target package in the calling workspace and return the dict with extracted paramteres
 	dict = if is_call_unique(cell_id, _module)
 		load_module(target_file, caller, _module)
 	else

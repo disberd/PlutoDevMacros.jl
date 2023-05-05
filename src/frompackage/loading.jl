@@ -95,7 +95,7 @@ end
 
 function maybe_create_module(m::Module)
 	if !isassigned(fromparent_module) 
-		fromparent_module[] = Core.eval(m, :(module $(gensym(:fromparent)) 
+		fromparent_module[] = Core.eval(m, :(module $(gensym(:frompackage)) 
 			# We import PlutoRunner in this module, or we just create a dummy module otherwise
 			PlutoRunner = let 
 				if isdefined(Main, :PlutoRunner)

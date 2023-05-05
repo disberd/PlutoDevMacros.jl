@@ -18,4 +18,9 @@ module Issue2
     include("test_macro2.jl")
 end
 
+module SpecificImport
+    include("specific_imports1.jl")
+    include("specific_imports2.jl")
+end
+
 end # module TestPackage

@@ -10,16 +10,7 @@ using HypertextLiteral
 include("../notebooks/basics.jl") # @only_in_nb, @only_out_nb, is_notebook_local, plutodump, @current_pluto_cell_id, @current_pluto_notebook_file
 module Script include("../notebooks/htlscript.jl") end # HTLScript, HTLBypass, HTLScriptPart, combine_scripts
 
-module FromPackage
-    import ..PlutoDevMacros: @addmethod
-    using LoggingExtras, HypertextLiteral
-    export @fromparent, @addmethod
-    include("frompackage/helpers.jl")
-    include("frompackage/code_parsing.jl")
-    include("frompackage/loading.jl")
-    include("frompackage/input_parsing.jl")
-    include("frompackage/macro.jl")
-end
+include("frompackage/FromPackage.jl")
 
 include("../notebooks/mapexpr.jl") # hasexpr, default_exprlist, include_mapexpr
 include("../notebooks/plutoinclude_macro.jl") # hasexpr, default_exprlist, include_mapexpr

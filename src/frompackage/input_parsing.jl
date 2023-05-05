@@ -87,7 +87,7 @@ function process_imported_nameargs!(args, dict)
 	name_init = modname_path(fromparent_module[])
 	mod_name = Symbol(dict["name"])
 	first_name = args[1]
-	if first_name === :PackageModule
+	if first_name ∈ (:PackageModule, mod_name)
 		# We substitute the `PackageModule` with the actual name of the loaded package
 		args[1] = mod_name
 	elseif first_name ∈ (:., :*, :ParentModule)

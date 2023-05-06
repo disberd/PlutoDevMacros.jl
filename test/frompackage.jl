@@ -1,4 +1,4 @@
-import PlutoDevMacros.FromPackage: process_outside_pluto!, load_module, modname_path, fromparent_module, parseinput
+import PlutoDevMacros.FromPackage: process_outside_pluto!, load_module, modname_path, fromparent_module, parseinput, get_package_data
 
 using Test
 import Pluto: update_save_run!, update_run!, WorkspaceManager, ClientSession, ServerSession, Notebook, Cell, project_relative_path, SessionActions, load_notebook, Configuration
@@ -19,16 +19,26 @@ function noerror(cell; verbose=true)
     !cell.errored
 end
 
+# We point at the helpers file inside the FromPackage submodule, we only load the constants in the Loaded submodule
+target = "../src/frompackage/helpers.jl"
+# We simulate a caller from a notebook by appending a fake cell-id
+caller = join([ @__FILE__, "#==#", "00000000-0000-0000-0000-000000000000" ])
 @testset "FromPackage" begin
     @testset "Outside Pluto" begin
-        ex = :(import .ASD: lol)
-        @test deepcopy(ex) == process_outside_pluto!(ex)
-        ex = :(import .ASD: *)
-        @test nothing === process_outside_pluto!(ex)
-        ex = :(import PlutoDevMacros: lol)
-        @test nothing === process_outside_pluto!(ex)
-        ex = :(import *)
-        @test nothing === process_outside_pluto!(ex)
+        dict = get_package_data(target)
+        valid(ex) = ex == process_outside_pluto!(deepcopy(ex), dict)
+        invalid(ex) = nothing === process_outside_pluto!(deepcopy(ex), dict)
+
+        @test valid(:(import .ASD: lol))
+        @test invalid(:(import .ASD: *))
+        @test invalid(:(import PlutoDevMacros: lol)) # PlutoDevMacros is the name of the target package, we don't allow that
+        @test invalid(:(import *))
+
+        @test valid(:(import HypertextLiteral)) # This is a direct dependency
+        @test valid(:(import Random)) # This is a direct dependency and a stdlib
+        @test invalid(:(import Tricks)) # This is an indirect dependency, from HypertextLiteral
+        @test invalid(:(import Base64)) # This is an stdlib, but on in the proj
+        @test invalid(:(import DataFrames)) # This is not a dependency
 
 
         # Here we test that the loaded TestPackage has the intended functionality
@@ -45,10 +55,6 @@ end
 
     @testset "Inside Pluto" begin
         @testset "Input Parsing" begin
-            # We point at the helpers file inside the FromPackage submodule, we only load the constants in the Loaded submodule
-            target = "../src/frompackage/helpers.jl"
-            # We simulate a caller from a notebook by appending a fake cell-id
-            caller = join([ @__FILE__, "#==#", "00000000-0000-0000-0000-000000000000" ])
             @testset "Target included in Package" begin
                 # We create here the dummy module of PlutoDevMacros as it would be loaded by @frompackage inside Pluto
                 dict = load_module(target, caller, Main)
@@ -63,7 +69,7 @@ end
                 @test_throws "catch-all" f(ex) 
 
                 ex = :(using DataFrames)
-                @test_throws "only supports import" f(ex) 
+                @test_throws "import expression is not supported" f(ex) 
 
                 # FromPackage imports
                 ex = :(import PlutoDevMacros)
@@ -123,40 +129,43 @@ end
             end
         end
 
-        options = Configuration.from_flat_kwargs(;disable_writing_notebook_files = true)
-        srcdir = joinpath(@__DIR__, "TestPackage/src/")
-        eval_in_nb(sn, expr) = WorkspaceManager.eval_fetch_in_workspace(sn, expr)
+        @testset "With Pluto Session" begin
+            options = Configuration.from_flat_kwargs(;disable_writing_notebook_files = true)
+            srcdir = joinpath(@__DIR__, "TestPackage/src/")
+            eval_in_nb(sn, expr) = WorkspaceManager.eval_fetch_in_workspace(sn, expr)
 
-        @testset "notebook1.jl" begin
-            ss = ServerSession(;options)
-            path = joinpath(srcdir, "notebook1.jl")
-            nb = SessionActions.open(ss, path; run_async=false)
-            @test eval_in_nb((ss, nb), :toplevel_variable) == TestPackage.toplevel_variable
-            @test eval_in_nb((ss, nb), :hidden_toplevel_variable) == TestPackage.hidden_toplevel_variable
-            for cell in nb.cells 
-                @test noerror(cell)
+            @testset "notebook1.jl" begin
+                ss = ServerSession(;options)
+                path = joinpath(srcdir, "notebook1.jl")
+                nb = SessionActions.open(ss, path; run_async=false)
+                @test eval_in_nb((ss, nb), :toplevel_variable) == TestPackage.toplevel_variable
+                @test eval_in_nb((ss, nb), :hidden_toplevel_variable) == TestPackage.hidden_toplevel_variable
+                for cell in nb.cells 
+                    @test noerror(cell)
+                end
+                SessionActions.shutdown(ss, nb)
             end
-            SessionActions.shutdown(ss, nb)
-        end
 
-        @testset "inner_notebook2.jl" begin
-            ss = ServerSession(;options)
-            path = joinpath(srcdir, "inner_notebook2.jl")
-            nb = SessionActions.open(ss, path; run_async=false)
-            for cell in nb.cells 
-                @test noerror(cell)
+            @testset "inner_notebook2.jl" begin
+                ss = ServerSession(;options)
+                path = joinpath(srcdir, "inner_notebook2.jl")
+                nb = SessionActions.open(ss, path; run_async=false)
+                for cell in nb.cells 
+                    @test noerror(cell)
+                end
+                eval_in_nb((ss,nb), :(BenchmarkTools isa Module))
+                SessionActions.shutdown(ss, nb)
             end
-            SessionActions.shutdown(ss, nb)
-        end
 
-        @testset "test_macro2.jl" begin
-            ss = ServerSession(;options)
-            path = joinpath(srcdir, "test_macro2.jl")
-            nb = SessionActions.open(ss, path; run_async=false)
-            for cell in nb.cells
-                @test noerror(cell)
+            @testset "test_macro2.jl" begin
+                ss = ServerSession(;options)
+                path = joinpath(srcdir, "test_macro2.jl")
+                nb = SessionActions.open(ss, path; run_async=false)
+                for cell in nb.cells
+                    @test noerror(cell)
+                end
+                SessionActions.shutdown(ss, nb)
             end
-            SessionActions.shutdown(ss, nb)
         end
     end
 end

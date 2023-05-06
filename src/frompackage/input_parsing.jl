@@ -1,3 +1,22 @@
+# We define here the types to identify the imports
+abstract type ImportType end
+for name in (:FromParentImport, :FromPackageImport, :FromDepsImport, :RelativeImport)
+	expr = :(struct $name <: ImportType
+		mod_name::Symbol
+	end) 
+	eval(expr)
+end
+
+function import_type(first_name::Symbol, dict)
+	mod_name = Symbol(dict["name"])
+	first_name ∈ (:PackageModule, mod_name) && return FromPackageImport(mod_name)	
+	first_name === :. && return RelativeImport(mod_name)
+	first_name ∈ (:*, :ParentModule) && return FromParentImport(mod_name)
+	String(first_name) ∈ keys(dict["deps"]) && return FromDepsImport(mod_name)
+	# If we reach here we don't have a supported import type
+	error("The @frompackage/@fromparent macros only supports import statements that are either starting with `PackageModule`, `ParentModule`, `*` or expressing a reltive module path (starting with a dot)")
+end
+
 # Get the full path of the module as array of Symbols starting from Main
 function modname_path(m::Module)
 	args = [nameof(m)]
@@ -37,6 +56,10 @@ end
 target_found(dict) = haskey(dict, "Target Path")
 
 function valid_outside_pluto(ex)
+	# We could support FromDeps imports also outside Pluto, but that would
+	# require extracting the package dependencies also outside of Pluto, so we
+	# avoid that. This forces the user to specifically put using statements
+	# within the main module file as it is usually done
 	mod_name, imported_names = extract_import_args(ex)
 	mod_name.args[1] === :. || return false # We only support relative module names
 	contains_catchall(imported_names) && return false # We don't support the catchall outside import outside Pluto
@@ -81,35 +104,39 @@ function contains_catchall(modname, imported_names)
 	return import_catchall || modname_catchall
 end
 
-## process imported nameargs
+## process imported nameargs, generic version
 function process_imported_nameargs!(args, dict)
 	# We modify the module name expression to point to the current path within the _PackageModule_ that is loaded in Pluto
-	name_init = modname_path(fromparent_module[])
-	mod_name = Symbol(dict["name"])
 	first_name = args[1]
-	if first_name ∈ (:PackageModule, mod_name)
-		# We substitute the `PackageModule` with the actual name of the loaded package
-		args[1] = mod_name
-	elseif first_name ∈ (:., :*, :ParentModule)
-		# Here transform the relative module name to the one based on the full loaded module path
-		target_path = get(dict, "Target Path", []) |> reverse
-		isempty(target_path) && error("The current file was not found included in the loaded module $mod_name, so you can't use relative path imports")
-		# We pop the first argument which is either `:.` or `:*` since we are in this branch
-		popfirst!(args)
-		while getfirst(args) === :. 
-			# We pop the dot
-			popfirst!(args)
-			# We also pop the last part of the target path
-			pop!(target_path)
-		end
-		# We prepend the target_path to the args
-		prepend!(args, target_path)
-	else
-		error("The @frompackage/@fromparent macros only supports import statements that are either starting with `PackageModule`, `ParentModule`, `*` or expressing a reltive module path (starting with a dot)")
-	end
-	# We now add ._PackageModule
+	type = import_type(first_name, dict)
+	# We process the args based on the type and return them
+	process_imported_nameargs!(args, dict, type)
+	return args, type
+end
+## Per-type versions
+function process_imported_nameargs!(args, dict, t::FromPackageImport)
+	name_init = modname_path(fromparent_module[])
+	args[1] = t.mod_name
 	prepend!(args, name_init)
 end
+function process_imported_nameargs!(args, dict, t::Union{FromParentImport, RelativeImport})
+	mod_name = Symbol(dict["name"])
+	name_init = modname_path(fromparent_module[])
+	# Here transform the relative module name to the one based on the full loaded module path
+	target_path = get(dict, "Target Path", []) |> reverse
+	isempty(target_path) && error("The current file was not found included in the loaded module $(t.mod_name), so you can't use relative path imports")
+	# We pop the first argument which is either `:.`, `:FromParent` or `:*`
+	popfirst!(args)
+	while getfirst(args) === :. 
+		# We pop the dot
+		popfirst!(args)
+		# We also pop the last part of the target path
+		pop!(target_path)
+	end
+	# We prepend the target_path to the args
+	prepend!(args, name_init, target_path)
+end
+process_imported_nameargs!(args, dict, ::FromDepsImport) = args
 
 ## parseinput
 function parseinput(ex, dict)
@@ -117,10 +144,18 @@ function parseinput(ex, dict)
 	modname_expr, importednames_exprs = extract_import_args(ex)
 	# Check if we have a catchall
 	catchall = contains_catchall(ex)
-	# Check if the statement is a using or an import, this is used to check which names to eventually import, but all statements are converted into `import`
+	# Check if the statement is a using or an import, this is used to check
+	# which names to eventually import, but all statements are converted into
+	# `import` if they are not of type FromDepsImport
 	is_using = ex.head === :using 
+	args, type = process_imported_nameargs!(modname_expr.args, dict)
+	# Check that we don't catchall with imported dependencies
+	if catchall && type isa FromDepsImport
+		error("You can't use the catch-all name identifier (*) while importing dependencies of the Package Environment")
+	end
+	# In case we have simply a dependency improt, we maintain the expression
+	type isa FromDepsImport && return ex
 	ex.head = :import
-	args = process_imported_nameargs!(modname_expr.args, dict)
 	# If we don't have a catchall and we are either importing or using just specific names from the module, we can just return the modified expression
 	if !catchall && (!is_using || !isempty(importednames_exprs))
 		return ex

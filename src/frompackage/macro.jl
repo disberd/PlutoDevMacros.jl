@@ -45,8 +45,6 @@ function frompackage(ex, target_file, caller, _module; macroname)
 	else
 		error("Multiple Calls: The $macroname is already present in cell with id $(macro_cell[]), you can only have one call-site per notebook")
 	end
-	# Check if we are inside a direct macroexpand code, and clean the LOAD_PATH if we do as we won't be executing the retured expression
-	is_macroexpand(stacktrace(), cell_id) && clean_loadpath(proj_file)
 	args = []
 	# We extract the parse dict
 	ex_args = if Meta.isexpr(ex, [:import, :using])
@@ -61,6 +59,8 @@ function frompackage(ex, target_file, caller, _module; macroname)
 		arg isa LineNumberNode && continue
 		push!(args, parseinput(arg, dict))
 	end
+	# Check if we are inside a direct macroexpand code, and clean the LOAD_PATH if we do as we won't be executing the retured expression
+	is_macroexpand(stacktrace(), cell_id) && clean_loadpath(proj_file)
 	# We wrap the import expressions inside a try-catch, as those also correctly work from there.
 	# This also allow us to be able to catch the error in case something happens during loading and be able to gracefully clean the work space
 	text = "Reload $macroname"
@@ -93,11 +93,13 @@ function _combined(ex, target, calling_file, __module__; macroname)
 		out = Expr(:block)
 		if !(e isa ErrorException && startswith(e.msg, "Multiple Calls: The"))
 			text = "Reload $macroname"
-			# We add a log to maintain the reload button
-			push!(out.args, :(@info $html_reload_button($cell_id; text = $text, err = true)))
+			# We send a log to maintain the reload button
+			@info html_reload_button(cell_id; text, err = true)
 		end
 		# We have to also remove the project from the load path
 		clean_loadpath(proj_file)
+		# If we are at macroexpand, simply rethrow here, ohterwise output the expression with the error
+		is_macroexpand(stacktrace(), cell_id) && rethrow()
 		# Outputting the CaptureException as last statement allows pretty printing of errors inside Pluto
 		push!(out.args,	:(CapturedException($e, $bt)))
 		out

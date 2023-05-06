@@ -156,14 +156,15 @@ function parseinput(ex, dict)
 	# In case we have simply a dependency improt, we maintain the expression
 	type isa FromDepsImport && return ex
 	ex.head = :import
-	# If we don't have a catchall and we are either importing or using just specific names from the module, we can just return the modified expression
-	if !catchall && (!is_using || !isempty(importednames_exprs))
-		return ex
-	end
-	# In all other cases we need to access the specific imported module
+	# We try going towards the intended submodule, just to verify that in case
+	# of relative imports, the provided submodule name actually exists
 	_mod = Main
 	for field in args[2:end]
 		_mod = getfield(_mod, field)
+	end
+	# If we don't have a catchall and we are either importing or using just specific names from the module, we can just return the modified expression
+	if !catchall && (!is_using || !isempty(importednames_exprs))
+		return ex
 	end
 	# We extract the imported names either due to catchall or due to the standard using
 	imported_names = filterednames(_mod; all = catchall, imported = catchall)

@@ -1,4 +1,4 @@
-import PlutoDevMacros.FromPackage: process_outside_pluto!
+import PlutoDevMacros.FromPackage: process_outside_pluto!, load_module, modname_path, fromparent_module, parseinput
 
 using Test
 import Pluto: update_save_run!, update_run!, WorkspaceManager, ClientSession, ServerSession, Notebook, Cell, project_relative_path, SessionActions, load_notebook, Configuration
@@ -10,6 +10,8 @@ import TestPackage: testmethod
 import TestPackage.Issue2
 pop!(LOAD_PATH)
 
+
+
 function noerror(cell; verbose=true)
     if cell.errored && verbose
         @show cell.output.body
@@ -19,21 +21,13 @@ end
 
 @testset "FromPackage" begin
     @testset "Outside Pluto" begin
-        rmnothing(ex::Expr) = Expr(ex.head, filter(x -> x !== :nothing && !isnothing(x), ex.args)...)
-        rmnothing(x) = x
-        function expr_equal(ex1, ex2)
-            ex1 = prewalk(rmlines, deepcopy(ex1))
-            ex1 = postwalk(rmnothing, ex1)
-            ex2 = prewalk(rmlines, deepcopy(ex2))
-            ex2 = postwalk(rmnothing, ex2)
-            ex1 == ex2
-        end
-
         ex = :(import .ASD: lol)
         @test deepcopy(ex) == process_outside_pluto!(ex)
         ex = :(import .ASD: *)
         @test nothing === process_outside_pluto!(ex)
-        ex = :(import module: lol)
+        ex = :(import PlutoDevMacros: lol)
+        @test nothing === process_outside_pluto!(ex)
+        ex = :(import *)
         @test nothing === process_outside_pluto!(ex)
 
 
@@ -50,6 +44,85 @@ end
 
 
     @testset "Inside Pluto" begin
+        @testset "Input Parsing" begin
+            # We point at the helpers file inside the FromPackage submodule, we only load the constants in the Loaded submodule
+            target = "../src/frompackage/helpers.jl"
+            # We simulate a caller from a notebook by appending a fake cell-id
+            caller = join([ @__FILE__, "#==#", "00000000-0000-0000-0000-000000000000" ])
+            @testset "Target included in Package" begin
+                # We create here the dummy module of PlutoDevMacros as it would be loaded by @frompackage inside Pluto
+                dict = load_module(target, caller, Main)
+                f(ex) = parseinput(deepcopy(ex), dict)
+
+                parent_path = modname_path(fromparent_module[])
+                # FromDeps imports
+                ex = :(using MacroTools)
+                @test ex == f(ex) # This should work as MacroTools is a deps of PlutoDevMacros
+
+                ex = :(using MacroTools: *)
+                @test_throws "catch-all" f(ex) 
+
+                ex = :(using DataFrames)
+                @test_throws "only supports import" f(ex) 
+
+                # FromPackage imports
+                ex = :(import PlutoDevMacros)
+                expected = :(import $(parent_path...).PlutoDevMacros)
+                @test expected == f(ex) # This works because PlutoDevMacros is the name of the loaded package
+
+                ex = :(import PackageModule.Script)
+                expected = :(import $(parent_path...).PlutoDevMacros.Script)
+                @test expected == f(ex)
+
+                ex = :(using PackageModule.Script)
+                expected = :(import $(parent_path...).PlutoDevMacros.Script: HTLBypass, HTLScript, HTLScriptPart, Script, combine_scripts)
+                @test expected == f(ex)
+
+                # Relative imports
+                ex = :(import ..Script)
+                expected = :(import $(parent_path...).PlutoDevMacros.Script)
+                @test expected == f(ex) # This should work as Script is a valid sibling module of FromPackage
+
+                ex = :(import ..NonExistant)
+                @test_throws UndefVarError f(ex) # It can't find the module
+
+                # FromParent import
+                ex = :(import *)
+                expected = :(import $(parent_path...).PlutoDevMacros.FromPackage: @addmethod, @frompackage, @fromparent, FromPackage, _cell_data)
+                @test expected == f(ex)
+
+                ex = :(import ParentModule: *)
+                @test expected == f(ex)
+
+                ex = :(import ParentModule: _cell_data)
+                expected = :(import $(parent_path...).PlutoDevMacros.FromPackage: _cell_data)
+                @test expected == f(ex)
+
+                ex = :(using ParentModule)
+                expected = :(import $(parent_path...).PlutoDevMacros.FromPackage: @addmethod, @frompackage, @fromparent, FromPackage)
+                @test expected == f(ex)
+            end
+            @testset "Target not included in Package" begin
+                dict = load_module(caller, caller, Main)
+                f(ex) = parseinput(deepcopy(ex), dict)
+                parent_path = modname_path(fromparent_module[])
+
+                ex = :(import PackageModule.Script)
+                expected = :(import $(parent_path...).PlutoDevMacros.Script)
+                @test expected == f(ex)
+
+                # FromParent import
+                ex = :(import *)
+                @test_throws "The current file was not found" f(ex)
+
+                ex = :(import ParentModule: *)
+                @test_throws "The current file was not found" f(ex)
+
+                ex = :(import ParentModule: _cell_data)
+                @test_throws "The current file was not found" f(ex)
+            end
+        end
+
         options = Configuration.from_flat_kwargs(;disable_writing_notebook_files = true)
         srcdir = joinpath(@__DIR__, "TestPackage/src/")
         eval_in_nb(sn, expr) = WorkspaceManager.eval_fetch_in_workspace(sn, expr)

@@ -14,8 +14,8 @@ function import_type(first_name::Symbol, dict)
 	first_name ∈ (:*, :ParentModule) && return FromParentImport(mod_name)
 	(;direct, indirect) = dict["PkgInfo"]
 	String(first_name) ∈ keys(direct) && return FromDepsImport(mod_name)
-	String(first_name) ∈ _stdlibs && return FromDepsImport(mod_name)
-	String(first_name) ∈ keys(indirect) && return FromDepsImport(mod_name)
+	# String(first_name) ∈ _stdlibs && return FromDepsImport(mod_name)
+	# String(first_name) ∈ keys(indirect) && return FromDepsImport(mod_name)
 	# If we reach here we don't have a supported import type
 	error("The provided import expression is not supported, please look at @frompackage documentation to see the supported imports")
 end
@@ -68,8 +68,8 @@ function valid_outside_pluto(ex, dict)
 	s = String(first_name)
 	(;direct, indirect) = dict["PkgInfo"]
 	s ∈ keys(direct) && return true
-	s ∈ _stdlibs && return true
-	s ∈ keys(indirect) && return true
+	# s ∈ _stdlibs && return true
+	# s ∈ keys(indirect) && return true
 	return false
 end
 

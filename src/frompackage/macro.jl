@@ -84,6 +84,9 @@ function frompackage(ex, target_file, caller, _module; macroname)
 end
 
 function _combined(ex, target, calling_file, __module__; macroname)
+	# Enforce absolute path to handle different OSs
+	target = abspath(target)
+	calling_file = abspath(calling_file)
 	_, cell_id = _cell_data(calling_file)
 	proj_file = Base.current_project(target)
 	out = try

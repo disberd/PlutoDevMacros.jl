@@ -5,7 +5,7 @@ end
 StopEval(reason::String) = StopEval(reason, LineNumberNode(0))
 
 # Function to clean the filepath from the Pluto cell delimiter if present
-cleanpath(path::String) = first(split(path, "#==#"))
+cleanpath(path::String) = first(split(path, "#==#")) |> abspath
 
 ## general
 function eval_in_module(_mod, line_and_ex, dict)
@@ -33,7 +33,7 @@ function eval_include_expr(_mod, loc, ex, dict)
 		filename_str
 	else
 		calling_dir = dirname(String(loc.file))
-		normpath(calling_dir, filename_str)
+		abspath(calling_dir, filename_str)
 	end
 	# We check whether the file to be included is the target put as input to the macro
 	if filepath == cleanpath(dict["target"]) 

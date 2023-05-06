@@ -77,12 +77,6 @@ uuid = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
 [[deps.Logging]]
 uuid = "56ddb016-857b-54e1-b83d-db4d58db5568"
 
-[[deps.LoggingExtras]]
-deps = ["Dates", "Logging"]
-git-tree-sha1 = "cedb76b37bc5a6c702ade66be44f831fa23c681e"
-uuid = "e6f89c97-d47a-5376-807f-9c37f3926c36"
-version = "1.0.0"
-
 [[deps.LoweredCodeUtils]]
 deps = ["JuliaInterpreter"]
 git-tree-sha1 = "60168780555f3e663c536500aa790b6368adc02a"
@@ -123,10 +117,10 @@ uuid = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
 version = "1.9.0"
 
 [[deps.PlutoDevMacros]]
-deps = ["HypertextLiteral", "InteractiveUtils", "LoggingExtras", "MacroTools", "Markdown", "Random", "Requires", "TOML"]
+deps = ["HypertextLiteral", "InteractiveUtils", "MacroTools", "Markdown", "Pkg", "Random", "TOML"]
 path = "../.."
 uuid = "a0499f29-c39b-4c5c-807c-88074221b949"
-version = "0.5.0"
+version = "0.5.1"
 
 [[deps.Printf]]
 deps = ["Unicode"]

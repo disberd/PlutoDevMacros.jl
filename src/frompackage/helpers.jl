@@ -1,7 +1,15 @@
 import ..Script: HTLScript, HTLScriptPart, make_script, combine_scripts
+import Pkg, TOML
+const _stdlibs = first.(values(Pkg.Types.stdlibs()))
 
 const fromparent_module = Ref{Module}()
 const macro_cell = Ref("undefined")
+
+struct PkgInfo 
+	name::String
+	uuid::String
+	version::String
+end
 
 ## Return calling DIR, basically copied from the definigion of the @__DIR__ macro
 function __DIR__(__source__)
@@ -14,8 +22,19 @@ end
 function package_dependencies(project_location::String)
 	project_file = Base.current_project(project_location)
 	project_file isa Nothing && error("No parent project was found starting from the path $project_location")
+	proj_dict = TOML.parsefile(project_file)
+	# We identify the names of the direct project dependencies
+	proj_deps = keys(proj_dict["deps"])
 	manifest_file = Base.project_file_manifest_path(project_file)
-	d = Base.get_deps(Base.parsed_toml(manifest_file))
+	manifest_deps = Base.get_deps(TOML.parsefile(manifest_file))
+	direct = Dict{String, PkgInfo}()
+	indirect = Dict{String, PkgInfo}()
+	for (k,vv) in manifest_deps
+		v = vv[1]
+		d = k ∈ proj_deps ? direct : indirect
+		d[k] = PkgInfo(k, v["uuid"], get(v,"version", "stdlib"))
+	end
+	direct, indirect
 end
 package_dependencies(d::Dict) = package_dependencies(d["project"])
 
@@ -95,11 +114,11 @@ is_notebook_local(calling_file::Symbol) = is_notebook_local(String(calling_file)
 
 ## get parent data
 function get_package_data(packagepath::AbstractString)
-	project_file = Base.current_project(packagepath)
+	project_file = Base.current_project(packagepath) |> abspath
 	project_file isa Nothing && error("No project was found starting from $packagepath")
 
-	package_dir = dirname(project_file)
-	package_data = Base.parsed_toml(project_file)
+	package_dir = dirname(project_file) |> abspath
+	package_data = TOML.parsefile(project_file)
 	haskey(package_data, "name") || error("The project found at $project_file is not a package, simple environments are currently not supported")
 
 	# Check that the package file actually exists
@@ -109,6 +128,10 @@ function get_package_data(packagepath::AbstractString)
 	package_data["project"] = project_file
 	package_data["file"] = package_file
 	package_data["target"] = packagepath
+
+	# We extract the PkgInfo for all packages in this environment
+	d,i = package_dependencies(project_file)
+	package_data["PkgInfo"] = (;direct = d, indirect = i)
 	
 	return package_data
 end

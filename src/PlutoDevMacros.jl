@@ -1,7 +1,6 @@
 module PlutoDevMacros
 
 using MacroTools
-using Requires
 using HypertextLiteral
 
 # export @only_in_nb, @only_out_nb, include_mapexpr, @skip_as_script

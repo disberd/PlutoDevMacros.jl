@@ -22,6 +22,7 @@ function is_macroexpand(trace, cell_id)
 		frame = popfirst!(trace)
 		frame.func == :macroexpand && break
 	end
+	length(trace) < 1 && return false
 	caller_frame = popfirst!(trace)
 	file, id = _cell_data(String(caller_frame.file))
 	if id == cell_id
@@ -34,7 +35,7 @@ end
 ## @frompackage
 
 function frompackage(ex, target_file, caller, _module; macroname)
-	is_notebook_local(caller) || return process_outside_pluto!(ex)
+	is_notebook_local(caller) || return process_outside_pluto!(ex, get_package_data(target_file))
 	_, cell_id = _cell_data(caller)
 	proj_file = Base.current_project(target_file)
 	id_name = _id_name(cell_id)

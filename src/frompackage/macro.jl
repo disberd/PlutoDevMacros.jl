@@ -16,6 +16,20 @@ function is_call_unique(cell_id, _module)
 	end
 end
 
+function is_macroexpand(trace, cell_id)
+	for _ ∈ eachindex(trace)
+		# We go throught the stack until we find the call to :macroexpand
+		frame = popfirst!(trace)
+		frame.func == :macroexpand && break
+	end
+	caller_frame = popfirst!(trace)
+	file, id = _cell_data(String(caller_frame.file))
+	if id == cell_id
+		@info "@macroexpand call"
+		return true
+	end
+	return false
+end
 
 ## @frompackage
 
@@ -31,8 +45,6 @@ function frompackage(ex, target_file, caller, _module; macroname)
 		error("Multiple Calls: The $macroname is already present in cell with id $(macro_cell[]), you can only have one call-site per notebook")
 	end
 	args = []
-	# We put the cell id variable
-	push!(args, :($id_name = true))
 	# We extract the parse dict
 	ex_args = if Meta.isexpr(ex, [:import, :using])
 		[ex]
@@ -46,35 +58,51 @@ function frompackage(ex, target_file, caller, _module; macroname)
 		arg isa LineNumberNode && continue
 		push!(args, parseinput(arg, dict))
 	end
-	# We add the expression that cleans the load path 
 	proj_file = Base.current_project(target_file)
-	push!(out.args, :(LOAD_PATH[2] == $proj_file && deleteat!(LOAD_PATH, 2)))
-	# We add the html button
+	# We wrap the import expressions inside a try-catch, as those also correctly work from there.
+	# This also allow us to be able to catch the error in case something happens during loading and be able to gracefully clean the work space
 	text = "Reload $macroname"
-	push!(args, :($html_reload_button($cell_id; text = $text)))
-	out = Expr(:block, args...)
+	out = quote
+		# We put the cell id variable
+		$id_name = true
+		try
+			$(args...)
+			# We add the reload button as last expression so it's sent to the cell output
+			$html_reload_button($cell_id; text = $text)
+		catch e
+			# We also send the reload button as an @info log, so that we can use the cell output to format the error nicely
+			@info $html_reload_button($cell_id; text = $text)
+			rethrow()
+		finally
+			# We add the expression that cleans the load path 
+			$clean_loadpath($proj_file)
+		end
+	end
 	return out
 end
 
 function _combined(ex, target, calling_file, __module__; macroname)
-	try
+	_, cell_id = _cell_data(calling_file)
+	proj = Base.current_project(target)
+	out = try
 		frompackage(ex, target, calling_file, __module__; macroname)
 	catch e
 		bt = stacktrace(catch_backtrace())
 		out = Expr(:block)
 		if !(e isa ErrorException && startswith(e.msg, "Multiple Calls: The"))
-			cell_id = split(calling_file, "#==#")[2]
 			text = "Reload $macroname"
 			# We add a log to maintain the reload button
 			push!(out.args, :(@info $html_reload_button($cell_id; text = $text, err = true)))
 		end
 		# We have to also remove the project from the load path
-		proj = Base.current_project(target)
-		push!(out.args, :(LOAD_PATH[2] == $proj_file && deleteat!(LOAD_PATH, 2)))
+		clean_loadpath(proj)
 		# Outputting the CaptureException as last statement allows pretty printing of errors inside Pluto
 		push!(out.args,	:(CapturedException($e, $bt)))
 		out
 	end
+	# Check if we are inside a direct macroexpand code, and clean the LOAD_PATH if we do
+	is_macroexpand(stacktrace(), cell_id) && clean_loadpath(proj)
+	out
 end
 
 """

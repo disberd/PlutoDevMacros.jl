@@ -121,7 +121,7 @@ function load_module(target_file, calling_file, _module)
 	mod_name = mod_exp.args[2]
 	proj_file = Base.current_project(target_file)
 	# We inject the project in the LOAD_PATH if it is not present already
-	length(LOAD_PATH) > 1 && LOAD_PATH[2] != proj_file && insert!(LOAD_PATH, 2, proj_file)
+	add_loadpath(proj_file)
 	# We try evaluating the expression within the custom module
 	stop_reason = try
 		reason = eval_in_module(_MODULE_,Expr(:toplevel, LineNumberNode(1, Symbol(target_file)), mod_exp), package_dict)

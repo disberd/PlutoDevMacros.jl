@@ -66,6 +66,14 @@ function simulate_manual_rerun(cell_ids::Array; kwargs...)
 	end
 end
 
+# Functions to add and remove from the LOAD_PATH
+function add_loadpath(entry::String)
+	length(LOAD_PATH) > 1 && LOAD_PATH[2] != entry && insert!(LOAD_PATH, 2, entry)
+end
+function clean_loadpath(entry::String)
+	LOAD_PATH[2] == entry && deleteat!(LOAD_PATH, 2)
+end
+
 ## execute only in notebook
 # We have to create our own simple check to only execute some stuff inside the notebook where they are defined. We have stuff in basics.jl but we don't want to include that in this notebook
 function is_notebook_local()

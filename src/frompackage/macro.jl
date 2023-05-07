@@ -196,7 +196,11 @@ of the module when importing it into the notebook.
 *`import Module1, Module2` are not supported. In case multiple imports are
 *needed, use multiple statements within a `begin...end` block.
 
-Here are the kind of import statements that are supported by the macro:
+The type of import statements that are supported by the macro are of 4 Types:
+- Relative Imports 
+- Imports from the Package module
+- Import from the Parent module (or submodule)
+- Direct dependency import.
 
 ### Relative Imports
 Relative imports are the ones where the module name starts with a dot (.). These
@@ -209,29 +213,51 @@ module requires loading and inspecting the full Package module and is thus only
 functional inside of Pluto. **This kind of statement is deleted when
 @frompackage is called outside of Pluto**.
 
-### `FromPackage` imports
-These are all the import statements that have the name `FromPackage` as the
-first identifier, e.g.: - `using FromPackage.SubModule` - `import FromPackage:
-varname` - `import FromPackage.SubModule.SubSubModule: *` These statements are
-processed by the macro and transformed so that `FromPackage` actually points to
+### Imports from Package module
+These are all the import statements that have the name `PackageModule` as the
+first identifier, e.g.: - `using PackageModule.SubModule` - `import PackageModule:
+varname` - `import PackageModule.SubModule.SubSubModule: *` These statements are
+processed by the macro and transformed so that `PackageModule` actually points to
 the module that was loaded by the macro.
 
-### `FromParent` imports
-These statements are similar to `FromPackage` ones, with two main difference:
+### Imports from Package module (or submodule)
+These statements are similar to the previous (imports from Package module) ones, with two main difference:
 - They only work if the `target` file is actually a file that is included in the
 loaded Package, giving an error otherwise
-- `FromParent` does not point to the loaded Package, but the module that
+- `ParentModule` does not point to the loaded Package, but the module that
 contains the line that calls `include(target)`. If `target`  is loaded from the
-Package main module, and not from one of its submodules, then `FromParent` wil
-point to the same module as `FromPackage`.
+Package main module, and not from one of its submodules, then `ParentModule` will
+point to the same module as `PackageModule`.
 
-### Catch-All
-The last supported statement is `import *`, which is equivalent to `import
-FromParent: *`. 
+#### Catch-All
+A special kind parent module import is the form:
+```julia
+import *
+```
+which is equivalent to `import FromParent: *`. 
 
 This tries to reproduce within the namespace of the calling notebook, the
 namespace that would be visible by the notebook file when it is loaded as part
 of the Package module outside of Pluto.
+
+### Imports from Direct dependencies
+
+All import statements whose first module identifier is a direct dependency of
+the loaded Package are also supported both inside and outside Pluto. These kind
+of statements can not be used in combination with the `catch-all` imported name
+(*).
+
+This feature is useful when trying to combine `@frompackage` with the integrated
+Pluto PkgManager. In this case, is preferable to keep in the Pluto notebook
+environment just the packages that are not also part of the loaded Package
+environment, and load the eventual packages that are also direct dependencies of
+the loaded Package directly from within the `@frompackage` `import_block`.
+
+Doing so minimizes the risk of having issues caused by versions collision
+between dependencies that are shared both by the notebook environment and the
+loaded Package environment. Combining the use of `@frompackage` with the Pluto
+PkgManager is a very experimental feature that comes with significant caveats.
+Please read the [related section](https://github.com/disberd/PlutoDevMacros.jl#use-of-fromparentfrompackage-with-pluto-pkgmanager) on the Package README
 
 
 ## Reload Button

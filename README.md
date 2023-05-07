@@ -66,30 +66,62 @@ All supported statements also allow the following (catch-all) notation `import M
 
 **Each import statement can only contain one module**, so statements like `import Module1, Module2` are not supported. In case multiple imports are needed, use multiple statements within a `begin...end` block.
 
-Here are the kind of import statements that are supported by the macro:
+The type of import statements that are supported by the macro are of 4 Types:
+- Relative Imports 
+- Imports from the Package module
+- Import from the Parent module (or submodule)
+- Direct dependency import.
 
-### Relative Imports
+#### Relative Imports
 Relative imports are the ones where the module name starts with a dot (.). These are mostly relevant when the loaded module contains multiple submodules and they are **the only supported statement that is kept also outside of Pluto**.
 
 While _catch-all_ notation is supported also with relative imports (e.g. `import ..SiblingModule: *`), the extraction of all the names from the desired relative module requires loading and inspecting the full Package module and is thus only functional inside of Pluto. **This kind of statement is deleted when @frompackage is called outside of Pluto**.
 
-#### `FromPackage` imports
-These are all the import statements that have the name `FromPackage` as the first identifier, e.g.:
-- `using FromPackage.SubModule`
-- `import FromPackage: varname`
-- `import FromPackage.SubModule.SubSubModule: *`
-These statements are processed by the macro and transformed so that `FromPackage` actually points to the module that was loaded by the macro.
+#### Imports from Package module
+These are all the import statements that have the name `PackageModule` as the
+first identifier, e.g.: - `using PackageModule.SubModule` - `import PackageModule:
+varname` - `import PackageModule.SubModule.SubSubModule: *` These statements are
+processed by the macro and transformed so that `PackageModule` actually points to
+the module that was loaded by the macro.
 
-#### `FromParent` imports
-These statements are similar to `FromPackage` ones, with two main difference:
-- They only work if the `target` file is actually a file that is included in the loaded Package, giving an error otherwise
-- `FromParent` does not point to the loaded Package, but the module that contains the line that calls `include(target)`. If `target`  is loaded from the Package main module, and not from one of its submodules, then `FromParent` wil point to the same module as `FromPackage`.
+#### Imports from Package module (or submodule)
+These statements are similar to the previous (imports from Package module) ones, with two main difference:
+- They only work if the `target` file is actually a file that is included in the
+loaded Package, giving an error otherwise
+- `ParentModule` does not point to the loaded Package, but the module that
+contains the line that calls `include(target)`. If `target`  is loaded from the
+Package main module, and not from one of its submodules, then `ParentModule` will
+point to the same module as `PackageModule`.
 
-#### Catch-All
-The last supported statement is `import *`, which is equivalent to `import FromParent: *`. 
+##### Catch-All
+A special kind parent module import is the form:
+```julia
+import *
+```
+which is equivalent to `import FromParent: *`. 
 
-This tries to reproduce within the namespace of the calling notebook, the namespace that would be visible by the notebook file when it is loaded as part of the Package module outside of Pluto.
+This tries to reproduce within the namespace of the calling notebook, the
+namespace that would be visible by the notebook file when it is loaded as part
+of the Package module outside of Pluto.
 
+#### Imports from Direct dependencies
+
+All import statements whose first module identifier is a direct dependency of
+the loaded Package are also supported both inside and outside Pluto. These kind
+of statements can not be used in combination with the `catch-all` imported name
+(*).
+
+This feature is useful when trying to combine `@frompackage` with the integrated
+Pluto PkgManager. In this case, is preferable to keep in the Pluto notebook
+environment just the packages that are not also part of the loaded Package
+environment, and load the eventual packages that are also direct dependencies of
+the loaded Package directly from within the `@frompackage` `import_block`.
+
+Doing so minimizes the risk of having issues caused by versions collision
+between dependencies that are shared both by the notebook environment and the
+loaded Package environment. Combining the use of `@frompackage` with the Pluto
+PkgManager is a very experimental feature that comes with significant caveats.
+Please read the [related section](#use-of-fromparentfrompackage-with-pluto-pkgmanager) at the end of this README
 
 ### Reload Button
 The macro, when called within Pluto, also creates a convenient button that can be used to re-execute the cell calling the macro to reloade the Package code due to a change. It can also be used to quickly navigate to the position of the cell containing the macro by using Ctrl+Click. The reload button will change appearance (getting a red border) when the macrocall encountered an error either due to incorrect import statement (like if a `FromParent` import is used without a proper target) or due to an error encountered when loading the package code.
@@ -134,9 +166,10 @@ Ideally this is achieved by deactivating the Pluto PkgManger by activating an en
 
 This is sometime inconvenient, as the Pluto PkgManager has many advantages. If one wants to maintain the PkgManager, the notebook should also contain a cell import all the packages of the loaded module.
 
-This macro currently has a hack to allow loading the target Package module without having to add all of its dependencies to the notebook environment.
-It does so by adding the Package environment to the `LOAD_PATH` just before attempting to load it, and removing it from the `LOAD_PATH` just after.
-https://github.com/disberd/PlutoDevMacros.jl/blob/8e481f552fdce1562cc9e45970cb11e8b54faa71/src/frompackage/loading.jl#L122-L132
+This macro currently has a hack to allow loading the target Package module (and its direct dependencies) without having to add all of its dependencies to the notebook environment.
+It does so by adding the Package environment to the `LOAD_PATH` just before attempting to load it, and removing it from the `LOAD_PATH` just after evaluating the various import statements.
+
+The macro tries to catch all possible exceptions that are thrown either during macro compilation or during the resulting expression evaluation (using a try catch) to correctly clean `LOAD_PATH` after the macro is executed.
 
 This approach is quite brittle, as it may cause issues in case the notebook and the package environment share some dependencies at different version. In this case, the one that was loaded first is the actual version used within the notebook (and within the Package module when loaded in the notebook).
 

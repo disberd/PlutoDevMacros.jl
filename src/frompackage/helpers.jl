@@ -47,10 +47,15 @@ struct LineNumberRange
 		new(first, last)
 	end
 end
+LineNumberRange(ln::LineNumberNode) = LineNumberRange(ln, ln)
+LineNumberRange(file::String, first::Int, last::Int) = LineNumberRange(
+	LineNumberNode(first, Symbol(file)),
+	LineNumberNode(last, Symbol(file))
+)
 ## Inclusion in LinuNumberRange
 function _inrange(ln::LineNumberNode, lnr::LineNumberRange)
 	ln.file === lnr.first.file || return false # The file is not the same
-	if ln.line >= lnr.first.line && ln.line <= ln.last.line
+	if ln.line >= lnr.first.line && ln.line <= lnr.last.line
 		return true
 	else
 		return false

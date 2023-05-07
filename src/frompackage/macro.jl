@@ -42,7 +42,10 @@ function frompackage(ex, target_file, caller, _module; macroname)
 	ex isa Expr || error("You have to call this macro with an import statement or a begin-end block of import statements")
 	# Try to load the module of the target package in the calling workspace and return the dict with extracted paramteres
 	dict = if is_call_unique(cell_id, _module)
-		load_module(target_file, caller, _module)
+		mod_exp, dict = extract_module_expression(target_file, _module)
+		# We try to extract eventual lines to skip
+		process_skiplines!(ex, dict)
+		load_module(mod_exp, dict, _module)
 	else
 		error("Multiple Calls: The $macroname is already present in cell with id $(macro_cell[]), you can only have one call-site per notebook")
 	end

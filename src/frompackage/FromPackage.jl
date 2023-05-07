@@ -1,5 +1,5 @@
 module FromPackage
-    import ..PlutoDevMacros: @addmethod
+    import ..PlutoDevMacros: @addmethod, _cell_data
     using HypertextLiteral
     export @fromparent, @addmethod, @frompackage
 

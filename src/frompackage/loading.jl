@@ -5,7 +5,7 @@ end
 StopEval(reason::String) = StopEval(reason, LineNumberNode(0))
 
 # Function to clean the filepath from the Pluto cell delimiter if present
-cleanpath(path::String) = first(split(path, "#==#"))
+cleanpath(path::String) = first(split(path, "#==#")) |> abspath
 
 ## general
 function eval_in_module(_mod, line_and_ex, dict)
@@ -33,7 +33,7 @@ function eval_include_expr(_mod, loc, ex, dict)
 		filename_str
 	else
 		calling_dir = dirname(String(loc.file))
-		normpath(calling_dir, filename_str)
+		abspath(calling_dir, filename_str)
 	end
 	# We check whether the file to be included is the target put as input to the macro
 	if filepath == cleanpath(dict["target"]) 
@@ -96,15 +96,6 @@ end
 function maybe_create_module(m::Module)
 	if !isassigned(fromparent_module) 
 		fromparent_module[] = Core.eval(m, :(module $(gensym(:frompackage)) 
-			# We import PlutoRunner in this module, or we just create a dummy module otherwise
-			PlutoRunner = let 
-				if isdefined(Main, :PlutoRunner)
-					Main.PlutoRunner
-				else
-					@eval baremodule PlutoRunner
-					end
-				end
-			end
 		end))
 	end
 	return fromparent_module[]
@@ -119,7 +110,9 @@ function load_module(target_file, calling_file, _module)
 	_MODULE_ = maybe_create_module(_module)
 	# We reset the module path in case it was not cleaned
 	mod_name = mod_exp.args[2]
-	insert!(LOAD_PATH, 2, package_dict["project"])
+	proj_file = Base.current_project(target_file)
+	# We inject the project in the LOAD_PATH if it is not present already
+	add_loadpath(proj_file)
 	# We try evaluating the expression within the custom module
 	stop_reason = try
 		reason = eval_in_module(_MODULE_,Expr(:toplevel, LineNumberNode(1, Symbol(target_file)), mod_exp), package_dict)
@@ -127,8 +120,6 @@ function load_module(target_file, calling_file, _module)
 	catch e
 		package_dict["Stopping Reason"] = StopEval("Loading Error")
 		rethrow(e)
-	finally
-		deleteat!(LOAD_PATH, 2)
 	end
 	# Get the moduleof the parent package
 	__module = getfield(_MODULE_, mod_name)

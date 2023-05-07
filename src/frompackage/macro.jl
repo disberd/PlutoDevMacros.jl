@@ -16,12 +16,28 @@ function is_call_unique(cell_id, _module)
 	end
 end
 
+function is_macroexpand(trace, cell_id)
+	for _ ∈ eachindex(trace)
+		# We go throught the stack until we find the call to :macroexpand
+		frame = popfirst!(trace)
+		frame.func == :macroexpand && break
+	end
+	length(trace) < 1 && return false
+	caller_frame = popfirst!(trace)
+	file, id = _cell_data(String(caller_frame.file))
+	if id == cell_id
+		# @info "@macroexpand call"
+		return true
+	end
+	return false
+end
 
 ## @frompackage
 
 function frompackage(ex, target_file, caller, _module; macroname)
-	is_notebook_local(caller) || return process_outside_pluto!(ex)
-	cell_id = split(caller, "#==#")[2]
+	is_notebook_local(caller) || return process_outside_pluto!(ex, get_package_data(target_file))
+	_, cell_id = _cell_data(caller)
+	proj_file = Base.current_project(target_file)
 	id_name = _id_name(cell_id)
 	ex isa Expr || error("You have to call this macro with an import statement or a begin-end block of import statements")
 	# Try to load the module of the target package in the calling workspace and return the dict with extracted paramteres
@@ -31,8 +47,6 @@ function frompackage(ex, target_file, caller, _module; macroname)
 		error("Multiple Calls: The $macroname is already present in cell with id $(macro_cell[]), you can only have one call-site per notebook")
 	end
 	args = []
-	# We put the cell id variable
-	push!(args, :($id_name = true))
 	# We extract the parse dict
 	ex_args = if Meta.isexpr(ex, [:import, :using])
 		[ex]
@@ -46,28 +60,55 @@ function frompackage(ex, target_file, caller, _module; macroname)
 		arg isa LineNumberNode && continue
 		push!(args, parseinput(arg, dict))
 	end
-	# We add the html button
+	# Check if we are inside a direct macroexpand code, and clean the LOAD_PATH if we do as we won't be executing the retured expression
+	is_macroexpand(stacktrace(), cell_id) && clean_loadpath(proj_file)
+	# We wrap the import expressions inside a try-catch, as those also correctly work from there.
+	# This also allow us to be able to catch the error in case something happens during loading and be able to gracefully clean the work space
 	text = "Reload $macroname"
-	push!(args, :($html_reload_button($cell_id; text = $text)))
-	out = Expr(:block, args...)
+	out = quote
+		# We put the cell id variable
+		$id_name = true
+		try
+			$(args...)
+			# We add the reload button as last expression so it's sent to the cell output
+			$html_reload_button($cell_id; text = $text)
+		catch e
+			# We also send the reload button as an @info log, so that we can use the cell output to format the error nicely
+			@info $html_reload_button($cell_id; text = $text)
+			rethrow()
+		finally
+			# We add the expression that cleans the load path 
+			$clean_loadpath($proj_file)
+		end
+	end
 	return out
 end
 
 function _combined(ex, target, calling_file, __module__; macroname)
-	try
+	# Enforce absolute path to handle different OSs
+	target = abspath(target)
+	calling_file = abspath(calling_file)
+	_, cell_id = _cell_data(calling_file)
+	proj_file = Base.current_project(target)
+	out = try
 		frompackage(ex, target, calling_file, __module__; macroname)
 	catch e
 		bt = stacktrace(catch_backtrace())
 		out = Expr(:block)
 		if !(e isa ErrorException && startswith(e.msg, "Multiple Calls: The"))
-			cell_id = split(calling_file, "#==#")[2]
 			text = "Reload $macroname"
-			# We add a log to maintain the reload button
-			push!(out.args, :(@info $html_reload_button($cell_id; text = $text, err = true)))
+			# We send a log to maintain the reload button
+			@info html_reload_button(cell_id; text, err = true)
 		end
+		# We have to also remove the project from the load path
+		clean_loadpath(proj_file)
+		# If we are at macroexpand, simply rethrow here, ohterwise output the expression with the error
+		is_macroexpand(stacktrace(), cell_id) && rethrow()
+		# Outputting the CaptureException as last statement allows pretty printing of errors inside Pluto
 		push!(out.args,	:(CapturedException($e, $bt)))
 		out
 	end
+	out
 end
 
 """
@@ -155,7 +196,11 @@ of the module when importing it into the notebook.
 *`import Module1, Module2` are not supported. In case multiple imports are
 *needed, use multiple statements within a `begin...end` block.
 
-Here are the kind of import statements that are supported by the macro:
+The type of import statements that are supported by the macro are of 4 Types:
+- Relative Imports 
+- Imports from the Package module
+- Import from the Parent module (or submodule)
+- Direct dependency import.
 
 ### Relative Imports
 Relative imports are the ones where the module name starts with a dot (.). These
@@ -168,29 +213,51 @@ module requires loading and inspecting the full Package module and is thus only
 functional inside of Pluto. **This kind of statement is deleted when
 @frompackage is called outside of Pluto**.
 
-### `FromPackage` imports
-These are all the import statements that have the name `FromPackage` as the
-first identifier, e.g.: - `using FromPackage.SubModule` - `import FromPackage:
-varname` - `import FromPackage.SubModule.SubSubModule: *` These statements are
-processed by the macro and transformed so that `FromPackage` actually points to
+### Imports from Package module
+These are all the import statements that have the name `PackageModule` as the
+first identifier, e.g.: - `using PackageModule.SubModule` - `import PackageModule:
+varname` - `import PackageModule.SubModule.SubSubModule: *` These statements are
+processed by the macro and transformed so that `PackageModule` actually points to
 the module that was loaded by the macro.
 
-### `FromParent` imports
-These statements are similar to `FromPackage` ones, with two main difference:
+### Imports from Package module (or submodule)
+These statements are similar to the previous (imports from Package module) ones, with two main difference:
 - They only work if the `target` file is actually a file that is included in the
 loaded Package, giving an error otherwise
-- `FromParent` does not point to the loaded Package, but the module that
+- `ParentModule` does not point to the loaded Package, but the module that
 contains the line that calls `include(target)`. If `target`  is loaded from the
-Package main module, and not from one of its submodules, then `FromParent` wil
-point to the same module as `FromPackage`.
+Package main module, and not from one of its submodules, then `ParentModule` will
+point to the same module as `PackageModule`.
 
-### Catch-All
-The last supported statement is `import *`, which is equivalent to `import
-FromParent: *`. 
+#### Catch-All
+A special kind parent module import is the form:
+```julia
+import *
+```
+which is equivalent to `import FromParent: *`. 
 
 This tries to reproduce within the namespace of the calling notebook, the
 namespace that would be visible by the notebook file when it is loaded as part
 of the Package module outside of Pluto.
+
+### Imports from Direct dependencies
+
+All import statements whose first module identifier is a direct dependency of
+the loaded Package are also supported both inside and outside Pluto. These kind
+of statements can not be used in combination with the `catch-all` imported name
+(*).
+
+This feature is useful when trying to combine `@frompackage` with the integrated
+Pluto PkgManager. In this case, is preferable to keep in the Pluto notebook
+environment just the packages that are not also part of the loaded Package
+environment, and load the eventual packages that are also direct dependencies of
+the loaded Package directly from within the `@frompackage` `import_block`.
+
+Doing so minimizes the risk of having issues caused by versions collision
+between dependencies that are shared both by the notebook environment and the
+loaded Package environment. Combining the use of `@frompackage` with the Pluto
+PkgManager is a very experimental feature that comes with significant caveats.
+Please read the [related section](https://github.com/disberd/PlutoDevMacros.jl#use-of-fromparentfrompackage-with-pluto-pkgmanager) on the Package README
 
 
 ## Reload Button

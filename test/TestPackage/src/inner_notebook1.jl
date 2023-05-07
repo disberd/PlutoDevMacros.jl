@@ -20,7 +20,13 @@ end
 using PlutoDevMacros.FromPackage
 
 # ╔═╡ e1c8bbbd-da6f-4550-9f2c-30337d4962ad
-@fromparent import ..TestPackage: testmethod
+@fromparent begin
+	import ..TestPackage: testmethod
+	import BenchmarkTools # This is a direct dependency of the package
+end
+
+# ╔═╡ c83b0017-bb5e-48bd-96e6-5192b6151233
+BenchmarkTools isa Module
 
 # ╔═╡ c30c2104-9fb1-4afd-a119-6da9d50ae2b6
 testmethod(3)
@@ -38,6 +44,7 @@ testmethod(3)
 # ╠═f90b0ae3-0e16-4b83-8546-23d4450812b2
 # ╠═8aa0221b-8f13-4ee8-8cc6-a19fdce2468b
 # ╠═e1c8bbbd-da6f-4550-9f2c-30337d4962ad
+# ╠═c83b0017-bb5e-48bd-96e6-5192b6151233
 # ╠═c30c2104-9fb1-4afd-a119-6da9d50ae2b6
 # ╠═596410f6-81b7-48ae-a761-e5cca4a996ba
 # ╠═a1430424-c9b8-4517-9105-c4daa72fdeea

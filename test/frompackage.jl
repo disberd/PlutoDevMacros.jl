@@ -56,8 +56,7 @@ caller = join([ @__FILE__, "#==#", "00000000-0000-0000-0000-000000000000" ])
     @testset "Inside Pluto" begin
         @testset "Input Parsing" begin
             @testset "Target included in Package" begin
-                # We create here the dummy module of PlutoDevMacros as it would be loaded by @frompackage inside Pluto
-                dict = load_module(target, caller, Main)
+                dict = load_module(target, Main)
                 f(ex) = parseinput(deepcopy(ex), dict)
 
                 parent_path = modname_path(fromparent_module[])
@@ -109,7 +108,7 @@ caller = join([ @__FILE__, "#==#", "00000000-0000-0000-0000-000000000000" ])
                 @test expected == f(ex)
             end
             @testset "Target not included in Package" begin
-                dict = load_module(caller, caller, Main)
+                dict = load_module(caller, Main)
                 f(ex) = parseinput(deepcopy(ex), dict)
                 parent_path = modname_path(fromparent_module[])
 

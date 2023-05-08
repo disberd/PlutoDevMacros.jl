@@ -11,7 +11,7 @@ cleanpath(path::String) = first(split(path, "#==#")) |> abspath
 function eval_in_module(_mod, line_and_ex, dict)
 	loc, ex = line_and_ex.args
 	ex isa Expr || return nothing
-	lines_to_skip = dict["Lines to Skip"]
+	lines_to_skip = get(dict,"Lines to Skip",())
 	should_skip(loc, lines_to_skip) && return nothing
 	Meta.isexpr(ex, :toplevel) && return eval_toplevel(_mod, ex.args,dict)
 	Meta.isexpr(ex, :module) && return eval_module_expr(_mod, ex,dict)
@@ -104,8 +104,14 @@ end
 
 ## load module
 function load_module(target_file::String, _module)
-	mod_exp, dict = extract_module_expression(target_file, _module)
-	load_module(mod_exp, dict, _module)
+	package_dict = get_package_data(target_file)
+	mod_exp, _ = extract_module_expression(package_dict, _module)
+	load_module(mod_exp, package_dict, _module)
+end
+function load_module(package_dict::Dict, _module)
+	target_file = package_dict["target"]
+	mod_exp, _ = extract_module_expression(target_file, _module)
+	load_module(mod_exp, package_dict, _module)
 end
 function load_module(mod_exp::Expr, package_dict::Dict, _module)
 	target_file = package_dict["target"]

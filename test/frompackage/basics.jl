@@ -168,7 +168,7 @@ end
         ex = quote
             import HypertextLiteral
             @skiplines begin
-                "frompackage/FromPackage.jl:8-100" # We are skipping from line 8, so we only load helpers.jl
+                "frompackage/FromPackage.jl:::8-100" # We are skipping from line 8, so we only load helpers.jl
             end
         end
         process_skiplines!(ex, dict)
@@ -185,7 +185,7 @@ end
         ex = quote
             import HypertextLiteral
             @skiplines begin
-                $("$(fullpath):9-100") # We are skipping from line 9
+                $("$(fullpath):::9-100") # We are skipping from line 9
             end
         end
         process_skiplines!(ex, dict)

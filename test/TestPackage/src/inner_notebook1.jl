@@ -22,7 +22,7 @@ using PlutoDevMacros.FromPackage
 # ╔═╡ e1c8bbbd-da6f-4550-9f2c-30337d4962ad
 @fromparent begin
 	import ..TestPackage: testmethod
-	import BenchmarkTools # This is a direct dependency of the package
+	import >.BenchmarkTools # This is a direct dependency of the package
 end
 
 # ╔═╡ c83b0017-bb5e-48bd-96e6-5192b6151233

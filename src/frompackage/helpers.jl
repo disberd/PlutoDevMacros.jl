@@ -5,6 +5,8 @@ const _stdlibs = first.(values(Pkg.Types.stdlibs()))
 const fromparent_module = Ref{Module}()
 const macro_cell = Ref("undefined")
 
+get_temp_module() = fromparent_module[]
+
 struct PkgInfo 
 	name::String
 	uuid::String
@@ -48,7 +50,7 @@ struct LineNumberRange
 	end
 end
 LineNumberRange(ln::LineNumberNode) = LineNumberRange(ln, ln)
-LineNumberRange(file::String, first::Int, last::Int) = LineNumberRange(
+LineNumberRange(file::AbstractString, first::Int, last::Int) = LineNumberRange(
 	LineNumberNode(first, Symbol(file)),
 	LineNumberNode(last, Symbol(file))
 )

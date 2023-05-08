@@ -1,4 +1,4 @@
-import PlutoDevMacros.FromPackage: process_outside_pluto!, load_module, modname_path, fromparent_module, parseinput, get_package_data
+import PlutoDevMacros.FromPackage: process_outside_pluto!, load_module, modname_path, fromparent_module, parseinput, get_package_data, @fromparent, _combined, process_skiplines!, get_temp_module
 
 using Test
 
@@ -10,18 +10,20 @@ import TestPackage.Issue2
 pop!(LOAD_PATH)
 
 # We point at the helpers file inside the FromPackage submodule, we only load the constants in the Loaded submodule
-target = "../src/frompackage/helpers.jl"
+inpackage_target = "../src/frompackage/helpers.jl"
+outpackage_target = ".."
 # We simulate a caller from a notebook by appending a fake cell-id
-caller = join([abspath(".."), "#==#", "00000000-0000-0000-0000-000000000000"])
+outpluto_caller = abspath("..")
+inpluto_caller = join([outpluto_caller, "#==#", "00000000-0000-0000-0000-000000000000"])
 
 @testset "Outside Pluto" begin
-    dict = get_package_data(target)
+    dict = get_package_data(inpackage_target)
     valid(ex) = ex == process_outside_pluto!(deepcopy(ex), dict)
     invalid(ex) = nothing === process_outside_pluto!(deepcopy(ex), dict)
 
     @test valid(:(import .ASD: lol))
     @test invalid(:(import .ASD: *))
-    @test invalid(:(import PlutoDevMacros: lol)) # PlutoDevMacros is the name of the target package, we don't allow that
+    @test invalid(:(import PlutoDevMacros: lol)) # PlutoDevMacros is the name of the inpackage_target package, we don't allow that
     @test invalid(:(import *))
 
     @test valid(:(import HypertextLiteral)) # This is a direct dependency
@@ -45,8 +47,8 @@ end
 
 @testset "Inside Pluto" begin
     @testset "Input Parsing" begin
-        @testset "Target included in Package" begin
-            dict = load_module(target, Main)
+        @testset "inpackage_target included in Package" begin
+            dict = load_module(inpackage_target, Main)
             f(ex) = parseinput(deepcopy(ex), dict)
 
             parent_path = modname_path(fromparent_module[])
@@ -97,8 +99,8 @@ end
             expected = :(import $(parent_path...).PlutoDevMacros.FromPackage: @addmethod, @frompackage, @fromparent, FromPackage)
             @test expected == f(ex)
         end
-        @testset "Target not included in Package" begin
-            dict = load_module(caller, Main)
+        @testset "inpackage_target not included in Package" begin
+            dict = load_module(inpluto_caller, Main)
             f(ex) = parseinput(deepcopy(ex), dict)
             parent_path = modname_path(fromparent_module[])
 
@@ -116,5 +118,67 @@ end
             ex = :(import ParentModule: _cell_data)
             @test_throws "The current file was not found" f(ex)
         end
+    end
+end
+
+# Clean the given expression by removing `nothing` and LineNumberNodes
+function clean_expr(ex)
+    ex = deepcopy(ex)
+    ex isa LineNumberNode && return nothing
+    ex isa Expr || return ex
+    Meta.isexpr(ex, :block) || return ex
+    args = filter(!isnothing, map(clean_expr, ex.args))
+    return Expr(:block, args...)
+end
+
+@testset "Skip Lines" begin
+    @testset "Outside Pluto" begin
+        # Outside of Pluto the @skiplines macro is simply removed from the exp
+        f(ex) = _combined(ex, inpackage_target, outpluto_caller, Main; macroname = "@frompackage") |> clean_expr
+        ex = quote
+            import DataFrames
+            import HypertextLiteral
+            @skiplines begin
+                "frompackage/FromPackage.jl:8-100"
+            end
+        end
+        out_ex = quote
+            import HypertextLiteral
+        end
+        @test clean_expr(out_ex) == f(ex)
+    end
+    @testset "Inside Pluto" begin
+        dict = get_package_data(outpackage_target)
+        ex = quote
+            import HypertextLiteral
+            @skiplines begin
+                "frompackage/FromPackage.jl:8-100" # We are skipping from line 8, so we only load helpers.jl
+            end
+        end
+        process_skiplines!(ex, dict)
+        load_module(dict, Main)
+        _m = get_temp_module().PlutoDevMacros.FromPackage
+
+        @test isdefined(_m, :_cell_data) # This is directly at the top of the module
+        @test isdefined(_m, :macro_cell) # this variable is defined inside helpers.jl
+        @test !isdefined(_m, :extract_file_ast) # This is defined inside code_parsing.jl, which should be skipped as it's line FromPackage.jl:8
+
+        # Now we test providing lines as abs path
+        dict = get_package_data(outpackage_target)
+        fullpath = abspath("../src/frompackage/FromPackage.jl")
+        ex = quote
+            import HypertextLiteral
+            @skiplines begin
+                $("$(fullpath):9-100") # We are skipping from line 9
+            end
+        end
+        process_skiplines!(ex, dict)
+        load_module(dict, Main)
+        _m = get_temp_module().PlutoDevMacros.FromPackage
+
+        @test isdefined(_m, :_cell_data) # This is directly at the top of the module
+        @test isdefined(_m, :macro_cell) # this variable is defined inside helpers.jl
+        @test isdefined(_m, :extract_file_ast) # This is defined inside code_parsing.jl
+        @test !isdefined(_m, :load_module) # This is defined inside loading.jl, which should be skipped as it's line FromPackage.jl:9
     end
 end

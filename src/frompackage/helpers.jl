@@ -5,6 +5,8 @@ const _stdlibs = first.(values(Pkg.Types.stdlibs()))
 const fromparent_module = Ref{Module}()
 const macro_cell = Ref("undefined")
 
+get_temp_module() = fromparent_module[]
+
 struct PkgInfo 
 	name::String
 	uuid::String
@@ -47,10 +49,15 @@ struct LineNumberRange
 		new(first, last)
 	end
 end
+LineNumberRange(ln::LineNumberNode) = LineNumberRange(ln, ln)
+LineNumberRange(file::AbstractString, first::Int, last::Int) = LineNumberRange(
+	LineNumberNode(first, Symbol(file)),
+	LineNumberNode(last, Symbol(file))
+)
 ## Inclusion in LinuNumberRange
 function _inrange(ln::LineNumberNode, lnr::LineNumberRange)
 	ln.file === lnr.first.file || return false # The file is not the same
-	if ln.line >= lnr.first.line && ln.line <= ln.last.line
+	if ln.line >= lnr.first.line && ln.line <= lnr.last.line
 		return true
 	else
 		return false

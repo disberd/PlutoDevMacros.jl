@@ -23,7 +23,17 @@ end
 _is_include(ex) = Meta.isexpr(ex, :call) && ex.args[1] === :include
 _is_block(ex) = Meta.isexpr(ex, :block)
 
-# process_expr, performs potential modification to ex and return true if this expression has to be kept/evaluated
+function should_skip(loc, lines_to_skip)
+	# We skip the line as it's in the list of lines to skip
+	skip = any(lines_to_skip) do lr
+		_inrange(loc, lr)
+	end
+	# skip && @info "Skipping $loc"
+	skip
+end
+
+# process_expr, performs potential modification to ex and return true if this
+# expression has to be kept/evaluated
 function process_expr!(ex, loc, dict) 
 	ex isa Nothing && return false # We skip nothings
 	ex isa Expr || return true # Apart from Nothing, we keep everything that is not an expr

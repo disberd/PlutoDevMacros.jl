@@ -11,12 +11,13 @@ cleanpath(path::String) = first(split(path, "#==#")) |> abspath
 function eval_in_module(_mod, line_and_ex, dict)
 	loc, ex = line_and_ex.args
 	ex isa Expr || return nothing
+	lines_to_skip = get(dict,"Lines to Skip",())
+	should_skip(loc, lines_to_skip) && return nothing
 	Meta.isexpr(ex, :toplevel) && return eval_toplevel(_mod, ex.args,dict)
 	Meta.isexpr(ex, :module) && return eval_module_expr(_mod, ex,dict)
 	Meta.isexpr(ex, :call) && ex.args[1] === :include && return eval_include_expr(_mod, loc, ex, dict)
-	# We modify the expr, which also modifies the content of line_and_ex
+	# If the processing return true, we can evaluate the processed expression
 	if process_expr!(ex, loc, dict)
-		# If the processing return true, we can evaluate the processed expression
 		Core.eval(_mod, line_and_ex) 
 	end
 	return nothing
@@ -102,10 +103,18 @@ function maybe_create_module(m::Module)
 end
 
 ## load module
-function load_module(target_file, calling_file, _module)
-	# If the macro was not called from a notebook, we just return nothing
-	# is_notebook_local(calling_file) || return nothing
-	mod_exp, package_dict = extract_module_expression(target_file, _module)
+function load_module(target_file::String, _module)
+	package_dict = get_package_data(target_file)
+	mod_exp, _ = extract_module_expression(package_dict, _module)
+	load_module(mod_exp, package_dict, _module)
+end
+function load_module(package_dict::Dict, _module)
+	target_file = package_dict["target"]
+	mod_exp, _ = extract_module_expression(target_file, _module)
+	load_module(mod_exp, package_dict, _module)
+end
+function load_module(mod_exp::Expr, package_dict::Dict, _module)
+	target_file = package_dict["target"]
 	# If the module Reference inside fromparent_module is not assigned, we create the module in the calling workspace and assign it
 	_MODULE_ = maybe_create_module(_module)
 	# We reset the module path in case it was not cleaned

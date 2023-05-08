@@ -25,8 +25,15 @@ using PlutoDevMacros.FromPackage
 # PackageModule and ParentModule can point to the same module in case the file is not part of a submodule of the package module.
 @fromparent begin
 	using PackageModule # This just loads the exported names from TestPackage, which is only toplevel_variable
+	import ^: Issue2
 	import ParentModule: inner_variable1 # This only imports `inner_variable` from the module containing the current file, which is the SpecificImport module
 end
+
+# ╔═╡ 2f91c9eb-48c7-45ad-a475-3ac003d83c3b
+# ╠═╡ skip_as_script = true
+#=╠═╡
+Issue2
+  ╠═╡ =#
 
 # ╔═╡ b03c28ca-9ad3-4ca0-a025-d0ca7799a6b2
 # This cell will not error outside of Pluto (when executing the code of this notebook that is included in TestPackage) because inner_variable2 is visible outside of Pluto 
@@ -43,5 +50,6 @@ toplevel_variable + inner_variable1
 # ╠═414ea677-fc22-42d1-b28c-36d0666f466e
 # ╠═d8bb9b0c-b777-4b92-aab4-688358059f6d
 # ╠═da3cb2df-c686-45ed-abad-d4556c253ffa
+# ╠═2f91c9eb-48c7-45ad-a475-3ac003d83c3b
 # ╠═b03c28ca-9ad3-4ca0-a025-d0ca7799a6b2
 # ╠═ea26eaf9-bc34-4d53-b3af-641fec5039dd

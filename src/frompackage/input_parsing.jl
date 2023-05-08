@@ -102,9 +102,9 @@ end
 function import_type(args, dict)
 	first_name = args[1]
 	mod_name = Symbol(dict["name"])
-	first_name ∈ (:PackageModule, mod_name, :<) && return FromPackageImport(mod_name)	
+	first_name ∈ (:PackageModule, mod_name, :^) && return FromPackageImport(mod_name)	
 	first_name === :. && return RelativeImport(mod_name)
-	first_name ∈ (:*, :ParentModule, :^) && return FromParentImport(mod_name)
+	first_name ∈ (:*, :ParentModule, :<) && return FromParentImport(mod_name)
 	(;direct, indirect) = dict["PkgInfo"]
 	first_name === :> && String(args[2]) ∈ keys(direct) && return FromDepsImport(mod_name)
 	# String(first_name) ∈ _stdlibs && return FromDepsImport(mod_name)

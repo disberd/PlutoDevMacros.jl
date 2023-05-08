@@ -142,8 +142,8 @@ end
         mainfile = f("PlutoDevMacros.jl")
 
         p = "frompackage/helpers.jl"
-        @test iseq(parse_skipline("$(f(p)):3-5", mainfile), LineNumberRange(f(p),3,5))
-        @test iseq(parse_skipline("$(f(p)):3", mainfile), LineNumberRange(f(p),3,3))
+        @test iseq(parse_skipline("$(f(p)):::3-5", mainfile), LineNumberRange(f(p),3,5))
+        @test iseq(parse_skipline("$(f(p)):::3", mainfile), LineNumberRange(f(p),3,3))
         @test iseq(parse_skipline("$(f(p))", mainfile), LineNumberRange(f(p),1,10^6))
         @test iseq(parse_skipline("3-5", mainfile), LineNumberRange(mainfile,3,5))
         @test iseq(parse_skipline("5", mainfile), LineNumberRange(mainfile,5,5))

@@ -223,7 +223,15 @@ varname` - `import PackageModule.SubModule.SubSubModule: *` These statements are
 processed by the macro and transformed so that `PackageModule` actually points to
 the module that was loaded by the macro.
 
-### Imports from Package module (or submodule)
+As alternative, `^` can also be used to represent the `PackageModule`, so one can write the two expressions below interchangeably
+```julia
+@fromparent import PackageModule: var_name
+@fromparent import ^: var_name
+```
+This is to avoid triggering the Pkg statusmark within Pluto which always appears when a valid name of a package is typed (`^` is not valid so it doesn't create the status mark). See image below:
+![image](https://user-images.githubusercontent.com/12846528/236888015-454183e6-44c1-4cd0-b9f8-9faf67aa0da6.png)
+
+### Imports from Parent module (or submodule)
 These statements are similar to the previous (imports from Package module) ones, with two main difference:
 - They only work if the `target` file is actually a file that is included in the
 loaded Package, giving an error otherwise
@@ -245,10 +253,22 @@ of the Package module outside of Pluto.
 
 ### Imports from Direct dependencies
 
-All import statements whose first module identifier is a direct dependency of
-the loaded Package are also supported both inside and outside Pluto. These kind
-of statements can not be used in combination with the `catch-all` imported name
-(*).
+It is possible to to import direct dependencie of the target Package from within the `@frompackage` macro. To do so, one must prepend the package name with `>.`, so for example if one wants to load the `BenchmarkTools` package from the macro, assuming that it is indeed a direct dependency of the target package, one can do:
+```julia
+@frompackage target begin
+    using >.BenchmarkTools
+end
+```
+This modification is necessary when trying to use `@frompackage` in combination with the Pluto PkgManager, as explained in https://github.com/disberd/PlutoDevMacros.jl/pull/10.
+
+These kind of statements (import/using from Direct Dependencies) are also supported both inside and outside Pluto, which means for example that the following code will effectively translate to `using BenchmarkTools` both inside and outside of Pluto"
+```julia
+@frompackage target begin
+    using >.BenchmarkTools
+end
+```
+These kind of statements can not be used in combination with the `catch-all`
+imported name (*).
 
 This feature is useful when trying to combine `@frompackage` with the integrated
 Pluto PkgManager. In this case, is preferable to keep in the Pluto notebook
@@ -260,7 +280,8 @@ Doing so minimizes the risk of having issues caused by versions collision
 between dependencies that are shared both by the notebook environment and the
 loaded Package environment. Combining the use of `@frompackage` with the Pluto
 PkgManager is a very experimental feature that comes with significant caveats.
-Please read the [related section](https://github.com/disberd/PlutoDevMacros.jl#use-of-fromparentfrompackage-with-pluto-pkgmanager) on the Package README
+Please read the [related section](#use-of-fromparentfrompackage-with-pluto-pkgmanager) at the end of this README
+
 
 ## Skipping Package Parts
 The macro also allows to specify parts of the source code of the target Package that have to be skipped when loading it within Pluto. This is achieved by adding a statement inside the `import_block` like the following:
@@ -284,11 +305,11 @@ When calling the macro from outside of Pluto, the eventual statement with `@skip
 
 ### Example
 
-For an example consider the source file of the `TestPackage` defined within the test subfolder with the contents shown below:
+For an example consider the source file of the `TestPackage.jl` defined within the test subfolder with the contents shown below:
 ![image](https://user-images.githubusercontent.com/12846528/236829189-dc30414a-d936-4a63-831b-963664249558.png)
 
-The notebook locate at gives an example of how to use the new functionality.
-Considering the notebook to be located in the main folder of the TestPackage folder, the following call to `@fromparent` is used to import the `TestPackage` in the notebook's workspace while removing some of the code that is present in the original source of `TestPackage`:
+The notebook called `out_notebook.jl` located in the main folder of `TestPackage` gives an example of how to use the new functionality.
+The following call to `@fromparent` is used to import the `TestPackage` in the notebook's workspace while removing some of the code that is present in the original source of `TestPackage`:
 ```julia
 @fromparent begin
 	import TestPackage

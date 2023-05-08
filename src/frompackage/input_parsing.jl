@@ -99,13 +99,14 @@ function parse_skipline(str, mainfile)
 	return LineNumberRange(full_path, firstline, lastline)
 end
 
-function import_type(first_name::Symbol, dict)
+function import_type(args, dict)
+	first_name = args[1]
 	mod_name = Symbol(dict["name"])
-	first_name ∈ (:PackageModule, mod_name) && return FromPackageImport(mod_name)	
+	first_name ∈ (:PackageModule, mod_name, :^) && return FromPackageImport(mod_name)	
 	first_name === :. && return RelativeImport(mod_name)
-	first_name ∈ (:*, :ParentModule) && return FromParentImport(mod_name)
+	first_name ∈ (:*, :ParentModule, :<) && return FromParentImport(mod_name)
 	(;direct, indirect) = dict["PkgInfo"]
-	String(first_name) ∈ keys(direct) && return FromDepsImport(mod_name)
+	first_name === :> && String(args[2]) ∈ keys(direct) && return FromDepsImport(mod_name)
 	# String(first_name) ∈ _stdlibs && return FromDepsImport(mod_name)
 	# String(first_name) ∈ keys(indirect) && return FromDepsImport(mod_name)
 	# If we reach here we don't have a supported import type
@@ -136,7 +137,7 @@ function process_outside_pluto!(ex, dict)
 		return ex
 	else
 		# Single expression
-		return valid_outside_pluto(ex, dict) ? ex : nothing
+		return valid_outside_pluto!(ex, dict) ? ex : nothing
 	end
 end
 
@@ -150,18 +151,24 @@ end
 ## target found
 target_found(dict) = haskey(dict, "Target Path")
 
-function valid_outside_pluto(ex, dict)
+function valid_outside_pluto!(ex, dict)
 	ex isa Expr || return false
 	Meta.isexpr(ex, :macrocall) && return false
 	package_name = Symbol(dict["name"])
 	mod_name, imported_names = extract_import_args(ex)
 	first_name = mod_name.args[1]
-	first_name ∈ (:FromPackage, :FromParent, :*, package_name) && return false
+	first_name ∈ (:FromPackage, :FromParent, :*, package_name, :<, :^) && return false
 	contains_catchall(imported_names) && return false # We don't support the catchall outside import outside Pluto
 	first_name === :. && return true
-	s = String(first_name)
-	(;direct, indirect) = dict["PkgInfo"]
-	s ∈ keys(direct) && return true
+	# Now we try to check for direct dependencies
+	if first_name === :>
+		args = mod_name.args
+		# We remove the 
+		popfirst!(args)
+		s = String(args[1])
+		(;direct, indirect) = dict["PkgInfo"]
+		s ∈ keys(direct) && return true
+	end
 	# s ∈ _stdlibs && return true
 	# s ∈ keys(indirect) && return true
 	return false
@@ -208,8 +215,7 @@ end
 ## process imported nameargs, generic version
 function process_imported_nameargs!(args, dict)
 	# We modify the module name expression to point to the current path within the _PackageModule_ that is loaded in Pluto
-	first_name = args[1]
-	type = import_type(first_name, dict)
+	type = import_type(args, dict)
 	# We process the args based on the type and return them
 	process_imported_nameargs!(args, dict, type)
 	return args, type
@@ -237,7 +243,13 @@ function process_imported_nameargs!(args, dict, t::Union{FromParentImport, Relat
 	# We prepend the target_path to the args
 	prepend!(args, name_init, target_path)
 end
-process_imported_nameargs!(args, dict, ::FromDepsImport) = args
+function process_imported_nameargs!(args, dict, ::FromDepsImport)
+	args[1] = :_DirectDeps_
+	mod_name = Symbol(dict["name"])
+	pushfirst!(args, mod_name)
+	name_init = modname_path(fromparent_module[])
+	prepend!(args, name_init)
+end
 
 ## parseinput
 function parseinput(ex, dict)
@@ -254,8 +266,6 @@ function parseinput(ex, dict)
 	if catchall && type isa FromDepsImport
 		error("You can't use the catch-all name identifier (*) while importing dependencies of the Package Environment")
 	end
-	# In case we have simply a dependency import, we maintain the expression
-	type isa FromDepsImport && return ex
 	ex.head = :import
 	# We try going towards the intended submodule, just to verify that in case
 	# of relative imports, the provided submodule name actually exists

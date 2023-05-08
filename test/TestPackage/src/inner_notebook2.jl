@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.24
+# v0.19.25
 
 using Markdown
 using InteractiveUtils
@@ -20,7 +20,10 @@ end
 using PlutoDevMacros.FromPackage
 
 # ╔═╡ d9d182c7-abc8-4097-97da-459e351e01ba
-@fromparent import *
+@fromparent begin
+	import *
+	using >.BenchmarkTools
+end
 
 # ╔═╡ eaf576ed-ea38-4bb8-b2c8-4ba6ea6b2ac9
 @addmethod testmethod(x::Float64) = "FLOAT"

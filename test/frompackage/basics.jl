@@ -18,7 +18,7 @@ inpluto_caller = join([outpluto_caller, "#==#", "00000000-0000-0000-0000-0000000
 
 @testset "Outside Pluto" begin
     dict = get_package_data(inpackage_target)
-    valid(ex) = ex == process_outside_pluto!(deepcopy(ex), dict)
+    valid(ex) = nothing !== process_outside_pluto!(deepcopy(ex), dict)
     invalid(ex) = nothing === process_outside_pluto!(deepcopy(ex), dict)
 
     @test valid(:(import .ASD: lol))
@@ -26,11 +26,11 @@ inpluto_caller = join([outpluto_caller, "#==#", "00000000-0000-0000-0000-0000000
     @test invalid(:(import PlutoDevMacros: lol)) # PlutoDevMacros is the name of the inpackage_target package, we don't allow that
     @test invalid(:(import *))
 
-    @test valid(:(import HypertextLiteral)) # This is a direct dependency
-    @test valid(:(import Random)) # This is a direct dependency and a stdlib
-    @test invalid(:(import Tricks)) # This is an indirect dependency, from HypertextLiteral
-    @test invalid(:(import Base64)) # This is an stdlib, but on in the proj
-    @test invalid(:(import DataFrames)) # This is not a dependency
+    @test valid(:(import >.HypertextLiteral)) # This is a direct dependency
+    @test valid(:(import >.Random)) # This is a direct dependency and a stdlib
+    @test invalid(:(import >.Tricks)) # This is an indirect dependency, from HypertextLiteral
+    @test invalid(:(import >.Base64)) # This is an stdlib, but on in the proj
+    @test invalid(:(import >.DataFrames)) # This is not a dependency
 
 
     # Here we test that the loaded TestPackage has the intended functionality
@@ -47,16 +47,23 @@ end
 
 @testset "Inside Pluto" begin
     @testset "Input Parsing" begin
-        @testset "inpackage_target included in Package" begin
+        @testset "target included in Package" begin
             dict = load_module(inpackage_target, Main)
             f(ex) = parseinput(deepcopy(ex), dict)
 
+
             parent_path = modname_path(fromparent_module[])
             # FromDeps imports
-            ex = :(using MacroTools)
-            @test ex == f(ex) # This should work as MacroTools is a deps of PlutoDevMacros
+            ex = :(using >.MacroTools)
 
-            ex = :(using MacroTools: *)
+            MacroTools = get_temp_module().PlutoDevMacros._DirectDeps_.MacroTools
+
+            mod_path = Expr(:., vcat(parent_path, [:PlutoDevMacros, :_DirectDeps_, :MacroTools])...)
+            exported_names = map(x -> Expr(:., x), names(MacroTools))
+            expected = Expr(:import, Expr(:(:), mod_path, exported_names...))
+            @test expected == f(ex) # This should work as MacroTools is a deps of PlutoDevMacros
+
+            ex = :(using >.MacroTools: *)
             @test_throws "catch-all" f(ex)
 
             ex = :(using DataFrames)
@@ -99,7 +106,7 @@ end
             expected = :(import $(parent_path...).PlutoDevMacros.FromPackage: @addmethod, @frompackage, @fromparent, FromPackage)
             @test expected == f(ex)
         end
-        @testset "inpackage_target not included in Package" begin
+        @testset "target not included in Package" begin
             dict = load_module(inpluto_caller, Main)
             f(ex) = parseinput(deepcopy(ex), dict)
             parent_path = modname_path(fromparent_module[])
@@ -153,7 +160,7 @@ end
         f(ex) = _combined(ex, inpackage_target, outpluto_caller, Main; macroname = "@frompackage") |> clean_expr
         ex = quote
             import DataFrames
-            import HypertextLiteral
+            import >.HypertextLiteral
             @skiplines begin
                 "frompackage/FromPackage.jl:8-100"
             end
@@ -166,7 +173,7 @@ end
     @testset "Inside Pluto" begin
         dict = get_package_data(outpackage_target)
         ex = quote
-            import HypertextLiteral
+            import >.HypertextLiteral
             @skiplines begin
                 "frompackage/FromPackage.jl:::8-100" # We are skipping from line 8, so we only load helpers.jl
             end
@@ -183,7 +190,7 @@ end
         dict = get_package_data(outpackage_target)
         fullpath = abspath("../src/frompackage/FromPackage.jl")
         ex = quote
-            import HypertextLiteral
+            import >.HypertextLiteral
             @skiplines begin
                 $("$(fullpath):::9-100") # We are skipping from line 9
             end

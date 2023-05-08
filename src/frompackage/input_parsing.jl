@@ -244,9 +244,11 @@ function process_imported_nameargs!(args, dict, t::Union{FromParentImport, Relat
 	prepend!(args, name_init, target_path)
 end
 function process_imported_nameargs!(args, dict, ::FromDepsImport)
-	# Remove the first argument as it's :>
-	popfirst!(args)
-	args
+	args[1] = :_DirectDeps_
+	mod_name = Symbol(dict["name"])
+	pushfirst!(args, mod_name)
+	name_init = modname_path(fromparent_module[])
+	prepend!(args, name_init)
 end
 
 ## parseinput
@@ -264,8 +266,6 @@ function parseinput(ex, dict)
 	if catchall && type isa FromDepsImport
 		error("You can't use the catch-all name identifier (*) while importing dependencies of the Package Environment")
 	end
-	# In case we have simply a dependency import, we maintain the expression
-	type isa FromDepsImport && return ex
 	ex.head = :import
 	# We try going towards the intended submodule, just to verify that in case
 	# of relative imports, the provided submodule name actually exists

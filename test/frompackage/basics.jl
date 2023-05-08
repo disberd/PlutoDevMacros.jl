@@ -51,10 +51,16 @@ end
             dict = load_module(inpackage_target, Main)
             f(ex) = parseinput(deepcopy(ex), dict)
 
+
             parent_path = modname_path(fromparent_module[])
             # FromDeps imports
             ex = :(using >.MacroTools)
-            expected = :(using MacroTools)
+
+            MacroTools = get_temp_module().PlutoDevMacros._DirectDeps_.MacroTools
+
+            mod_path = Expr(:., vcat(parent_path, [:PlutoDevMacros, :_DirectDeps_, :MacroTools])...)
+            exported_names = map(x -> Expr(:., x), names(MacroTools))
+            expected = Expr(:import, Expr(:(:), mod_path, exported_names...))
             @test expected == f(ex) # This should work as MacroTools is a deps of PlutoDevMacros
 
             ex = :(using >.MacroTools: *)

@@ -32,27 +32,60 @@ function process_skiplines!(ex, dict)
 	return ex
 end
 
+function isdoc(ex)
+	Meta.isexpr(ex, :macrocall) || return false
+	arg = ex.args[1]
+	arg isa GlobalRef || return false
+	arg.mod === Core && arg.name === Symbol("@doc")
+end
+
+maybe_expand_docs(ex) = isdoc(ex) ? (ex.args[3], ex.args[4]) : (ex,)
+
 function parse_skiplines(ex, dict)
 	@assert length(ex.args) == 3 "The @skipline call only accept a single String or a begin end block of strings as only argument"
 	temp = ex.args[3]
 	skiplines_vector = dict["Lines to Skip"]
-	srcpath = dict["file"] |> dirname
+	mainfile = dict["file"]
 	if temp isa String 
-		push!(skiplines_vector, parse_skipline(ex, srcpath))
+		push!(skiplines_vector, parse_skipline(temp, mainfile))
 		return
 	end
+	dump(temp)
 	# Here instead we have a block of arguments
 	for arg in temp.args
 		arg isa LineNumberNode && continue
-		push!(skiplines_vector, parse_skipline(arg, srcpath))
+		for str in maybe_expand_docs(arg)
+			push!(skiplines_vector, parse_skipline(str, mainfile))
+		end
 	end
 end
 
-function parse_skipline(str, srcpath)
+function parse_skipline(str, mainfile)
+	srcpath = dirname(mainfile)
 	@assert str isa String "The @skipline call only accept a single String or a begin end block of strings as only argument"
 	out = split(str, ":")
-	@assert length(out) == 2 "The lines to skip have to be provided as a string that is of the form `filepath:firstline-lastline`"
-	path, lines = out
+	errmsg = """Unuspported format in string `$str`
+	The following formats are supported when specifying lines to skip:
+	- `filepath:firstline-lastline` # Skip a range of lines in given file
+	- `filepath:line` # Skip a single line in given file
+	- `filepath` # skip the full given file
+	- `line` # Skip a single line in the package main file
+	- `firstline-lastline` # Skip a range of lines in the package main file
+	"""
+	@assert length(out) ∈ (1,2) errmsg
+ 	path, lines = if length(out) == 1
+		t = out[1]
+		if endswith(t, ".jl")
+			# It's a path
+			t, "1-1000000"
+		else
+			# It's a line or line range
+			mainfile, t
+		end
+	else
+		out
+	end
+
 	full_path = isabspath(path) ? path : abspath(srcpath, path)
 	@assert isfile(full_path) "No file was found at $full_path"
 	range = split(lines, '-')

@@ -162,7 +162,7 @@ Considering the notebook to be located in the main folder of the TestPackage fol
 end
 ```
 The output of the notebook is also pasted here for reference:
-![image](https://user-images.githubusercontent.com/12846528/236829732-09853734-3dff-46bb-ad3a-51035126cd83.png)
+![image](https://user-images.githubusercontent.com/12846528/236832303-eb2fdc0f-08fd-47e7-9c1d-35f1f1b637fd.png)
 
 ### Reload Button
 The macro, when called within Pluto, also creates a convenient button that can be used to re-execute the cell calling the macro to reloade the Package code due to a change. It can also be used to quickly navigate to the position of the cell containing the macro by using Ctrl+Click. The reload button will change appearance (getting a red border) when the macrocall encountered an error either due to incorrect import statement (like if a `FromParent` import is used without a proper target) or due to an error encountered when loading the package code.

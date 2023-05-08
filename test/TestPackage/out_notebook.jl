@@ -31,7 +31,7 @@ this_file = relpath(split(@__FILE__,"#==#")[1], dirname(dirname(dirname(@__DIR__
 	@skiplines begin
 		"11" # Skip line 11 in the main file TestPackage.jl.
 		"test_macro2.jl" # This skips the whole file test_macro2.jl
-		"22-23" # This skips from line 21 to 22 in the main file, including extrema.
+		"22-23" # This skips from line 22 to 23 in the main file, including extrema.
 		"test_macro1.jl:::28-10000" # This skips parts of test_macro1.jl
 	end
 end

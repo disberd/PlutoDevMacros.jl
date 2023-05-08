@@ -301,8 +301,7 @@ Considering the notebook to be located in the main folder of the TestPackage fol
 end
 ```
 The output of the notebook is also pasted here for reference:
-![image](https://user-images.githubusercontent.com/12846528/236829732-09853734-3dff-46bb-ad3a-51035126cd83.png)
-
+![image](https://user-images.githubusercontent.com/12846528/236832303-eb2fdc0f-08fd-47e7-9c1d-35f1f1b637fd.png)
 
 
 ## Reload Button

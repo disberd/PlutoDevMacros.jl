@@ -50,7 +50,6 @@ function parse_skiplines(ex, dict)
 		push!(skiplines_vector, parse_skipline(temp, mainfile))
 		return
 	end
-	dump(temp)
 	# Here instead we have a block of arguments
 	for arg in temp.args
 		arg isa LineNumberNode && continue

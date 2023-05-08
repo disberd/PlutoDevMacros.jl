@@ -1,4 +1,4 @@
-import PlutoDevMacros.FromPackage: process_outside_pluto!, load_module, modname_path, fromparent_module, parseinput, get_package_data, @fromparent, _combined, process_skiplines!, get_temp_module
+import PlutoDevMacros.FromPackage: process_outside_pluto!, load_module, modname_path, fromparent_module, parseinput, get_package_data, @fromparent, _combined, process_skiplines!, get_temp_module, LineNumberRange, parse_skipline
 
 using Test
 
@@ -10,10 +10,10 @@ import TestPackage.Issue2
 pop!(LOAD_PATH)
 
 # We point at the helpers file inside the FromPackage submodule, we only load the constants in the Loaded submodule
-inpackage_target = "../src/frompackage/helpers.jl"
-outpackage_target = ".."
+outpackage_target = abspath(@__DIR__,"../..")
+inpackage_target = joinpath(outpackage_target, "src/frompackage/helpers.jl")
 # We simulate a caller from a notebook by appending a fake cell-id
-outpluto_caller = abspath("..")
+outpluto_caller = abspath(@__DIR__,"../..")
 inpluto_caller = join([outpluto_caller, "#==#", "00000000-0000-0000-0000-000000000000"])
 
 @testset "Outside Pluto" begin
@@ -132,6 +132,22 @@ function clean_expr(ex)
 end
 
 @testset "Skip Lines" begin
+    @testset "Parsing" begin
+        function iseq(lr1::LineNumberRange, lr2::LineNumberRange)
+            lr1.first == lr2.first && lr1.last == lr2.last
+        end
+
+        srcdir = abspath(@__DIR__,"../../src")
+        f(path) = joinpath(srcdir,path)
+        mainfile = f("PlutoDevMacros.jl")
+
+        p = "frompackage/helpers.jl"
+        @test iseq(parse_skipline("$(f(p)):3-5", mainfile), LineNumberRange(f(p),3,5))
+        @test iseq(parse_skipline("$(f(p)):3", mainfile), LineNumberRange(f(p),3,3))
+        @test iseq(parse_skipline("$(f(p))", mainfile), LineNumberRange(f(p),1,10^6))
+        @test iseq(parse_skipline("3-5", mainfile), LineNumberRange(mainfile,3,5))
+        @test iseq(parse_skipline("5", mainfile), LineNumberRange(mainfile,5,5))
+    end
     @testset "Outside Pluto" begin
         # Outside of Pluto the @skiplines macro is simply removed from the exp
         f(ex) = _combined(ex, inpackage_target, outpluto_caller, Main; macroname = "@frompackage") |> clean_expr

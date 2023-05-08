@@ -49,3 +49,13 @@ end
     end
     SessionActions.shutdown(ss, nb)
 end
+
+@testset "out_notebook.jl" begin
+    ss = ServerSession(; options)
+    path = abspath(srcdir, "../out_notebook.jl")
+    nb = SessionActions.open(ss, path; run_async=false)
+    for cell in nb.cells
+        @test noerror(cell)
+    end
+    SessionActions.shutdown(ss, nb)
+end

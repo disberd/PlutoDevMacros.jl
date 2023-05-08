@@ -47,7 +47,7 @@ end
 
 @testset "Inside Pluto" begin
     @testset "Input Parsing" begin
-        @testset "inpackage_target included in Package" begin
+        @testset "target included in Package" begin
             dict = load_module(inpackage_target, Main)
             f(ex) = parseinput(deepcopy(ex), dict)
 
@@ -100,7 +100,7 @@ end
             expected = :(import $(parent_path...).PlutoDevMacros.FromPackage: @addmethod, @frompackage, @fromparent, FromPackage)
             @test expected == f(ex)
         end
-        @testset "inpackage_target not included in Package" begin
+        @testset "target not included in Package" begin
             dict = load_module(inpluto_caller, Main)
             f(ex) = parseinput(deepcopy(ex), dict)
             parent_path = modname_path(fromparent_module[])

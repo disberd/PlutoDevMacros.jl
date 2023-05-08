@@ -47,15 +47,14 @@ end
 
 @testset "Inside Pluto" begin
     @testset "Input Parsing" begin
-        @testset "target included in Package" begin
+        @testset "inpackage_target included in Package" begin
             dict = load_module(inpackage_target, Main)
             f(ex) = parseinput(deepcopy(ex), dict)
 
             parent_path = modname_path(fromparent_module[])
             # FromDeps imports
             ex = :(using MacroTools)
-            expected = :(using $(parent_path...).PlutoDevMacros._DirectDeps_.MacroTools)
-            @test expected == f(ex) # This should work as MacroTools is a deps of PlutoDevMacros
+            @test ex == f(ex) # This should work as MacroTools is a deps of PlutoDevMacros
 
             ex = :(using MacroTools: *)
             @test_throws "catch-all" f(ex)
@@ -100,7 +99,7 @@ end
             expected = :(import $(parent_path...).PlutoDevMacros.FromPackage: @addmethod, @frompackage, @fromparent, FromPackage)
             @test expected == f(ex)
         end
-        @testset "target not included in Package" begin
+        @testset "inpackage_target not included in Package" begin
             dict = load_module(inpluto_caller, Main)
             f(ex) = parseinput(deepcopy(ex), dict)
             parent_path = modname_path(fromparent_module[])

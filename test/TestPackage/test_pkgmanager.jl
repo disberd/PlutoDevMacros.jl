@@ -10,7 +10,7 @@ using PlutoDevMacros.FromPackage
 # ╔═╡ e12b4f7a-0d4a-4fa2-a850-faa6cb626795
 @fromparent begin
 	import PackageModule: toplevel_variable
-	import <.Issue2: GreatStructure
+	import ^.Issue2: GreatStructure
 	import >.TOML
 	using >.BenchmarkTools
 end
@@ -139,8 +139,8 @@ version = "1.9.0"
 
 [[deps.PlutoDevMacros]]
 deps = ["HypertextLiteral", "InteractiveUtils", "MacroTools", "Markdown", "Pkg", "Random", "TOML"]
-git-tree-sha1 = "c1e02c0590486e0f55a955af158d858335aa4473"
-repo-rev = "98a0a5d"
+git-tree-sha1 = "ee4747eaa6993d368541ace033570bba1a0a07bb"
+repo-rev = "f0fb042"
 repo-url = "https://github.com/disberd/PlutoDevMacros.jl.git"
 uuid = "a0499f29-c39b-4c5c-807c-88074221b949"
 version = "0.5.2"

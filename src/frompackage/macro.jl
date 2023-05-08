@@ -262,6 +262,48 @@ loaded Package environment. Combining the use of `@frompackage` with the Pluto
 PkgManager is a very experimental feature that comes with significant caveats.
 Please read the [related section](https://github.com/disberd/PlutoDevMacros.jl#use-of-fromparentfrompackage-with-pluto-pkgmanager) on the Package README
 
+## Skipping Package Parts
+The macro also allows to specify parts of the source code of the target Package that have to be skipped when loading it within Pluto. This is achieved by adding a statement inside the `import_block` like the following:
+```julia
+@skiplines lines
+```
+The `@skiplines` macro is not defined within the package, it's just processed during the parsing of the `@frompackage` macro.
+
+`lines` is expected to either be a single String, or a group of Strings within a `begin ... end` block.
+Each string represent a part of a file that has to be skipped, with the following formats being supported:
+1. `filpeath:::firstline-lastline`: This specifies that all the lines between `firstline` and `lastline` (extrema included) in the file present at `filepath` must be skipped when loading the Package module
+2. `filepath:::line`: Like 1. but a single line is skipped
+3. `filepath`: Like 1. but the full file located at `filepath` is ignored when loading the module 
+4. `line`: Ignores line number `line` in the Package entry point (i.e. the file at `src/PackageName.jl` in the folder of PackageName)
+5. `firstline-lastline`: Like 4., but ignores a range of lines.
+
+In all of the examples above `filepath` can be provided as either an absolute path, or as a relative path **starting from the `src` subfolder of the Package folder**
+
+The functionality of skipping lines is only used when `@frompackage` is called inside Pluto. 
+When calling the macro from outside of Pluto, the eventual statement with `@skiplines` is discarded.
+
+### Example
+
+For an example consider the source file of the `TestPackage` defined within the test subfolder with the contents shown below:
+![image](https://user-images.githubusercontent.com/12846528/236829189-dc30414a-d936-4a63-831b-963664249558.png)
+
+The notebook locate at gives an example of how to use the new functionality.
+Considering the notebook to be located in the main folder of the TestPackage folder, the following call to `@fromparent` is used to import the `TestPackage` in the notebook's workspace while removing some of the code that is present in the original source of `TestPackage`:
+```julia
+@fromparent begin
+	import TestPackage
+	@skiplines begin
+		"11" # Skip line 11 in the main file TestPackage.jl.
+		"test_macro2.jl" # This skips the whole file test_macro2.jl
+		"22-23" # This skips from line 21 to 22 in the main file, including extrema.
+		"test_macro1.jl:::28-10000" # This skips parts of test_macro1.jl
+	end
+end
+```
+The output of the notebook is also pasted here for reference:
+![image](https://user-images.githubusercontent.com/12846528/236829732-09853734-3dff-46bb-ad3a-51035126cd83.png)
+
+
 
 ## Reload Button
 The macro, when called within Pluto, also creates a convenient button that can

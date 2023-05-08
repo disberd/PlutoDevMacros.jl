@@ -19,14 +19,20 @@ end
 # ╔═╡ bd0d177f-ab66-493d-89a6-a9faca81cd11
 using PlutoDevMacros.FromPackage
 
+# ╔═╡ da2f67c7-530e-4e65-8876-06588a5f4411
+# ╠═╡ skip_as_script = true
+#=╠═╡
+this_file = relpath(split(@__FILE__,"#==#")[1], dirname(dirname(dirname(@__DIR__))))
+  ╠═╡ =#
+
 # ╔═╡ ca13553c-d246-437a-9962-2a2045c7dd12
 @fromparent begin
 	import TestPackage
 	@skiplines begin
-		"11" # Skip line 11 in the main file TestPackage.jl. This does not load module Inner
+		"11" # Skip line 11 in the main file TestPackage.jl.
 		"test_macro2.jl" # This skips the whole file test_macro2.jl
-		"22-23" # This skips from line 21 to 22 in the main file, including extrema. This translates to module SpecificImport being empty
-		"test_macro1.jl:28-10000" # This skips parts of test_macro1.jl
+		"22-23" # This skips from line 21 to 22 in the main file, including extrema.
+		"test_macro1.jl:::28-10000" # This skips parts of test_macro1.jl
 	end
 end
 
@@ -59,6 +65,7 @@ isdefined(TestPackage, :SpecificImport) || error("This is unexpected")
 # ╔═╡ Cell order:
 # ╠═931a8c2c-ed76-11ed-3721-396dae146ad4
 # ╠═bd0d177f-ab66-493d-89a6-a9faca81cd11
+# ╠═da2f67c7-530e-4e65-8876-06588a5f4411
 # ╠═ca13553c-d246-437a-9962-2a2045c7dd12
 # ╠═09d5606d-d68e-4610-ae11-f3712e2d6aa2
 # ╠═16a4e5e1-bde4-45a6-8777-ee4c7aa3d8f2

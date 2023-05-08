@@ -138,7 +138,7 @@ end
         end
 
         srcdir = abspath(@__DIR__,"../../src")
-        f(path) = joinpath(srcdir,path)
+        f(path) = abspath(srcdir,path)
         mainfile = f("PlutoDevMacros.jl")
 
         p = "frompackage/helpers.jl"

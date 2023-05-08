@@ -62,11 +62,11 @@ end
 function parse_skipline(str, mainfile)
 	srcpath = dirname(mainfile)
 	@assert str isa String "The @skipline call only accept a single String or a begin end block of strings as only argument"
-	out = split(str, ":")
+	out = split(str, ":::")
 	errmsg = """Unuspported format in string `$str`
 	The following formats are supported when specifying lines to skip:
-	- `filepath:firstline-lastline` # Skip a range of lines in given file
-	- `filepath:line` # Skip a single line in given file
+	- `filepath:::firstline-lastline` # Skip a range of lines in given file
+	- `filepath:::line` # Skip a single line in given file
 	- `filepath` # skip the full given file
 	- `line` # Skip a single line in the package main file
 	- `firstline-lastline` # Skip a range of lines in the package main file
@@ -94,7 +94,7 @@ function parse_skipline(str, mainfile)
 	elseif length(range) == 2
 		parse(Int, range[1]), parse(Int, range[2])
 	else
-		error("The lines to skip have to be provided as a string that is of the form `filepath:firstline-lastline`")
+		error(errmsg)
 	end
 	return LineNumberRange(full_path, firstline, lastline)
 end

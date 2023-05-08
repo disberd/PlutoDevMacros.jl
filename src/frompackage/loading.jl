@@ -102,6 +102,18 @@ function maybe_create_module(m::Module)
 	return fromparent_module[]
 end
 
+function deps_submodule_expr(dict)
+	(;direct) = dict["PkgInfo"]
+	ex = :(module _DirectDeps_ end)
+	toplevel = ex.args[end]
+	args = toplevel.args
+	for pkg in values(direct)
+		n = Symbol(pkg.name)
+		push!(args, :(import $n))
+	end
+	return ex
+end
+
 ## load module
 function load_module(target_file::String, _module)
 	package_dict = get_package_data(target_file)
@@ -132,6 +144,8 @@ function load_module(mod_exp::Expr, package_dict::Dict, _module)
 	end
 	# Get the moduleof the parent package
 	__module = getfield(_MODULE_, mod_name)
+	# We now create a submodule of the loaded one to import all the direct dependencies
+	Core.eval(__module, deps_submodule_expr(package_dict))
 	Core.eval(__module, :(_fromparent_dict_ = $package_dict))
 	# @info block, __module
 	return package_dict

@@ -237,7 +237,11 @@ function process_imported_nameargs!(args, dict, t::Union{FromParentImport, Relat
 	# We prepend the target_path to the args
 	prepend!(args, name_init, target_path)
 end
-process_imported_nameargs!(args, dict, ::FromDepsImport) = args
+function process_imported_nameargs!(args, dict, ::FromDepsImport)
+	mod_name = Symbol(dict["name"])
+	name_init = modname_path(fromparent_module[])
+	prepend!(args, name_init, [mod_name, :_DirectDeps_])
+end
 
 ## parseinput
 function parseinput(ex, dict)

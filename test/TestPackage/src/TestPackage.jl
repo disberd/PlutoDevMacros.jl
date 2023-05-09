@@ -14,12 +14,12 @@ module Inner
 end
 
 module Issue2
-    include("test_macro1.jl")
-    include("test_macro2.jl")
+    include("test_macro1.jl") # Defines NotThatCoolStruct at line 28
+    include("test_macro2.jl") # Defines GreatStructure
 end
 
 module SpecificImport
-    include("specific_imports1.jl")
+    include("specific_imports1.jl") # Defines inner_variable1
     include("specific_imports2.jl")
 end
 

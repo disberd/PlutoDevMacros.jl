@@ -18,15 +18,25 @@ While the points mentioned above are achievable within a single pluto notebook w
 
 To simply import other notebooks, `@ingredients` from [PlutoHooks](https://github.com/JuliaPluto/PlutoLinks.jl) or `@plutoinclude` (which is inspired from `@ingredients`) from this PlutoDevMacros already exist, but I found that they do have some limitations for what concerns directly using notebooks as building blocks for a package.
 
+### IMPORTANT NOTE
+As explained below, in the current implementation `@frompackage` only supports
+`target` files which are contained inside a Package Folder. Moreover, the
+package containing the `target` file must have a correctly resolved Manifest
+file. Make sure that the target Package is correctly resolved (i.e. by calling
+`Pkg.resolve` from the Package environment) in order to have `@frompackage` work
+properly
+
+### Arguments
+
 Here are more details on the two arguments expected by the macro
 
-### `target`
+#### target
 
-`target` has to be a String containing the path (either absolute or relative to the file calling the macro) that points to a local Package (the path can be to any file or subfolder within the Package folder) or to a specific file that is *included* in the Package (so the `target` file appears within the Package module definition inside an `include` call).
+The first argument `target` has to be a String containing the path (either absolute or relative to the file calling the macro) that points to a local Package (the path can be to any file or subfolder within the Package folder) or to a specific file that is *included* in the Package (so the `target` file appears within the Package module definition inside an `include` call).
 - When `target` is not pointing directly to a file included in the Package, the full code of the module defining the Package will be parsed and loaded in the Pluto workspace of the notebook calling the macro.
 - When `target` is actually a file included inside the Package. The macro will just parse the Package module code up to and excluding the inclusion of `target` and discard the rest of the code, thus loading inside Pluto just a reduced part of the package. This is mimicking the behavior of `include` within a package, such that each `included` file only has visibility on the code that was loaded _before_ its inclusion. This behavior is also essential when using this macro from a notebook that is also included in the target Package, to avoid problems with variable redefinitions within the Pluto notebook (this is also the original usecase of the macro).
 
-### `import_block` 
+#### `import_block` 
 
 The second argument to the macro is supposed to be either a single using/import statement, or multiple using/import statements wrapped inside a `begin...end` block.
 
@@ -34,6 +44,8 @@ These statements are used to conveniently select which of the loaded Package nam
 Most of these import statements are only relevant when called within Pluto, so `@frompackage` simply avoid loading the target Package and deletes these import statements **in most cases** when called oustide of Pluto. There is a specific type of import statement (relative import) that is relevant and applicable also outside of Pluto, so this kind of statement is maintained in the macro output even outside of Pluto.
 
 The macro respects the differentiation between `using` and `import` as in normal Julia, so statements containing `using Module` without any variable name specifier will import all the exported names of `Module`.
+
+### Supported using/import statements
 
 All supported statements also allow the following (catch-all) notation `import Module: *`, which imports within the notebook all the variables that are created or imported within `Module`. This is useful when one wants to avoid having either export everything from the module file directly, or specify all the names of the module when importing it into the notebook.
 

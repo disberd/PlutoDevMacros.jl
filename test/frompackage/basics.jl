@@ -1,4 +1,5 @@
-import PlutoDevMacros.FromPackage: process_outside_pluto!, load_module, modname_path, fromparent_module, parseinput, get_package_data, @fromparent, _combined, process_skiplines!, get_temp_module, LineNumberRange, parse_skipline
+import PlutoDevMacros.FromPackage: process_outside_pluto!, load_module, modname_path, fromparent_module, parseinput, get_package_data, @fromparent, _combined, process_skiplines!, get_temp_module, LineNumberRange, parse_skipline, package_dependencies
+import Pkg
 
 using Test
 
@@ -15,6 +16,30 @@ inpackage_target = joinpath(outpackage_target, "src/frompackage/helpers.jl")
 # We simulate a caller from a notebook by appending a fake cell-id
 outpluto_caller = abspath(@__DIR__,"../..")
 inpluto_caller = join([outpluto_caller, "#==#", "00000000-0000-0000-0000-000000000000"])
+
+@testset "Errors" begin
+    # Test that we give a meaningful error when Manifest is not found
+    @test_throws "Manifest" mktempdir() do tmpdir
+        cd(tmpdir) do 
+            Pkg.generate("Manifest")
+            package_dependencies("Manifest")
+        end
+    end
+
+    @test_throws "No parent project" mktempdir() do tmpdir
+            package_dependencies(tmpdir)
+    end
+    @test_throws "No project" mktempdir() do tmpdir
+            get_package_data(tmpdir)
+    end 
+    @test_throws "is not a package" mktempdir() do tmpdir
+        cd(tmpdir) do 
+            Pkg.activate(".")
+            Pkg.add("TOML")
+            get_package_data(".")
+        end
+    end
+end
 
 @testset "Outside Pluto" begin
     dict = get_package_data(inpackage_target)

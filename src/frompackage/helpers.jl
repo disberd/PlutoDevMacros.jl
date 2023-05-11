@@ -4,6 +4,7 @@ const _stdlibs = first.(values(Pkg.Types.stdlibs()))
 
 const fromparent_module = Ref{Module}()
 const macro_cell = Ref("undefined")
+const manifest_names = ("JuliaManifest.toml", "Manifest.toml")
 
 get_temp_module() = fromparent_module[]
 
@@ -20,14 +21,49 @@ function __DIR__(__source__)
     return isempty(_dirname) ? pwd() : abspath(_dirname)
 end
 
+function get_manifest_file(project_file::String)
+	dict = try
+		TOML.parsefile(project_file)
+	catch e
+		@error "The given project_file $project_file is not a valid TOML file"
+		rethrow()
+	end
+	get_manifest_file(project_file, dict)
+end
+# This function is extracted from `Base.project_file_manifest_path` without the caching part
+function get_manifest_file(project_file::String, d)
+    dir = abspath(dirname(project_file))
+    explicit_manifest = get(d, "manifest", nothing)::Union{String, Nothing}
+    manifest_path = nothing
+    if explicit_manifest !== nothing
+        manifest_file = normpath(joinpath(dir, explicit_manifest))
+        if Base.isfile_casesensitive(manifest_file)
+            manifest_path = manifest_file
+        end
+    end
+    if manifest_path === nothing
+        for mfst in manifest_names
+            manifest_file = joinpath(dir, mfst)
+            if Base.isfile_casesensitive(manifest_file)
+                manifest_path = manifest_file
+                break
+            end
+        end
+    end
+	return manifest_path
+end
+
 # Function to get the package dependencies from the manifest
 function package_dependencies(project_location::String)
 	project_file = Base.current_project(project_location)
 	project_file isa Nothing && error("No parent project was found starting from the path $project_location")
 	proj_dict = TOML.parsefile(project_file)
 	# We identify the names of the direct project dependencies
-	proj_deps = keys(proj_dict["deps"])
-	manifest_file = Base.project_file_manifest_path(project_file)
+	proj_deps = keys(get(proj_dict,"deps",Dict{String,Any}()))
+	manifest_file = get_manifest_file(project_file, proj_dict)
+	manifest_file isa Nothing && error("No Manifest was found.
+	The project located at $project_file does not seem to have a corresponding Manifest file. 
+	Please make sure that the project has a Manifest file by calling `Pkg.resolve` in its environment")
 	manifest_deps = Base.get_deps(TOML.parsefile(manifest_file))
 	direct = Dict{String, PkgInfo}()
 	indirect = Dict{String, PkgInfo}()
@@ -121,8 +157,9 @@ is_notebook_local(calling_file::Symbol) = is_notebook_local(String(calling_file)
 
 ## get parent data
 function get_package_data(packagepath::AbstractString)
-	project_file = Base.current_project(packagepath) |> abspath
+	project_file = Base.current_project(packagepath)
 	project_file isa Nothing && error("No project was found starting from $packagepath")
+	project_file = abspath(project_file)
 
 	package_dir = dirname(project_file) |> abspath
 	package_data = TOML.parsefile(project_file)

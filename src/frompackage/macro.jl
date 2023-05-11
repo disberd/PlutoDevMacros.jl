@@ -149,6 +149,14 @@ To simply import other notebooks, `@ingredients` from
 but I found that they do have some limitations for what concerns directly using
 notebooks as building blocks for a package.
 
+# IMPORTANT NOTE
+As explained below, in the current implementation `@frompackage` only supports
+`target` files which are contained inside a Package Folder. Moreover, the
+package containing the `target` file must have a correctly resolved Manifest
+file. Make sure that the target Package is correctly resolved (i.e. by calling
+`Pkg.resolve` from the Package environment) in order to have `@frompackage` work
+properly
+
 # Arguments
 Here are more details on the two arguments expected by the macro
 
@@ -189,6 +197,8 @@ The macro respects the differentiation between `using` and `import` as in normal
 Julia, so statements containing `using Module` without any variable name
 specifier will import all the exported names of `Module`.
 
+# Supported using/import statements
+
 All supported statements also allow the following (catch-all) notation `import
 Module: *`, which imports within the notebook all the variables that are created
 or imported within `Module`. This is useful when one wants to avoid having
@@ -205,7 +215,7 @@ The type of import statements that are supported by the macro are of 4 Types:
 - Import from the Parent module (or submodule)
 - Direct dependency import.
 
-### Relative Imports
+## Relative Imports
 Relative imports are the ones where the module name starts with a dot (.). These
 are mostly relevant when the loaded module contains multiple submodules and they
 are **the only supported statement that is kept also outside of Pluto**.
@@ -216,7 +226,7 @@ module requires loading and inspecting the full Package module and is thus only
 functional inside of Pluto. **This kind of statement is deleted when
 @frompackage is called outside of Pluto**.
 
-### Imports from Package module
+## Imports from Package module
 These are all the import statements that have the name `PackageModule` as the
 first identifier, e.g.: - `using PackageModule.SubModule` - `import PackageModule:
 varname` - `import PackageModule.SubModule.SubSubModule: *` These statements are
@@ -231,7 +241,7 @@ As alternative, `^` can also be used to represent the `PackageModule`, so one ca
 This is to avoid triggering the Pkg statusmark within Pluto which always appears when a valid name of a package is typed (`^` is not valid so it doesn't create the status mark). See image below:
 ![image](https://user-images.githubusercontent.com/12846528/236888015-454183e6-44c1-4cd0-b9f8-9faf67aa0da6.png)
 
-### Imports from Parent module (or submodule)
+## Imports from Parent module (or submodule)
 These statements are similar to the previous (imports from Package module) ones, with two main difference:
 - They only work if the `target` file is actually a file that is included in the
 loaded Package, giving an error otherwise
@@ -240,7 +250,7 @@ contains the line that calls `include(target)`. If `target`  is loaded from the
 Package main module, and not from one of its submodules, then `ParentModule` will
 point to the same module as `PackageModule`.
 
-#### Catch-All
+### Catch-All
 A special kind parent module import is the form:
 ```julia
 import *
@@ -251,7 +261,7 @@ This tries to reproduce within the namespace of the calling notebook, the
 namespace that would be visible by the notebook file when it is loaded as part
 of the Package module outside of Pluto.
 
-### Imports from Direct dependencies
+## Imports from Direct dependencies
 
 It is possible to to import direct dependencie of the target Package from within the `@frompackage` macro. To do so, one must prepend the package name with `>.`, so for example if one wants to load the `BenchmarkTools` package from the macro, assuming that it is indeed a direct dependency of the target package, one can do:
 ```julia
@@ -283,7 +293,7 @@ PkgManager is a very experimental feature that comes with significant caveats.
 Please read the [related section](#use-of-fromparentfrompackage-with-pluto-pkgmanager) at the end of this README
 
 
-## Skipping Package Parts
+# Skipping Package Parts
 The macro also allows to specify parts of the source code of the target Package that have to be skipped when loading it within Pluto. This is achieved by adding a statement inside the `import_block` like the following:
 ```julia
 @skiplines lines
@@ -303,7 +313,7 @@ In all of the examples above `filepath` can be provided as either an absolute pa
 The functionality of skipping lines is only used when `@frompackage` is called inside Pluto. 
 When calling the macro from outside of Pluto, the eventual statement with `@skiplines` is discarded.
 
-### Example
+## Example
 
 For an example consider the source file of the `TestPackage.jl` defined within the test subfolder with the contents shown below:
 ![image](https://user-images.githubusercontent.com/12846528/236829189-dc30414a-d936-4a63-831b-963664249558.png)
@@ -325,7 +335,7 @@ The output of the notebook is also pasted here for reference:
 ![image](https://user-images.githubusercontent.com/12846528/236832303-eb2fdc0f-08fd-47e7-9c1d-35f1f1b637fd.png)
 
 
-## Reload Button
+# Reload Button
 The macro, when called within Pluto, also creates a convenient button that can
 be used to re-execute the cell calling the macro to reloade the Package code due
 to a change. It can also be used to quickly navigate to the position of the cell

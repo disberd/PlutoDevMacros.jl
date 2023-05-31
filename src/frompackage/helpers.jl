@@ -59,18 +59,25 @@ function package_dependencies(project_location::String)
 	project_file isa Nothing && error("No parent project was found starting from the path $project_location")
 	proj_dict = TOML.parsefile(project_file)
 	# We identify the names of the direct project dependencies
-	proj_deps = keys(get(proj_dict,"deps",Dict{String,Any}()))
+	proj_deps = get(proj_dict,"deps",Dict{String,Any}())
 	manifest_file = get_manifest_file(project_file, proj_dict)
-	manifest_file isa Nothing && error("No Manifest was found.
-	The project located at $project_file does not seem to have a corresponding Manifest file. 
-	Please make sure that the project has a Manifest file by calling `Pkg.resolve` in its environment")
-	manifest_deps = Base.get_deps(TOML.parsefile(manifest_file))
 	direct = Dict{String, PkgInfo}()
 	indirect = Dict{String, PkgInfo}()
+	# manifest_file isa Nothing && error("No Manifest was found.
+	# The project located at $project_file does not seem to have a corresponding Manifest file. 
+	# Please make sure that the project has a Manifest file by calling `Pkg.resolve` in its environment")
+	if manifest_file isa Nothing
+		# In case there is not Manifest, we just populate the direct entry
+		for (name, uuid) in proj_deps
+			direct[name] = PkgInfo(name, uuid, "N/A")
+		end
+	else
+		manifest_deps = Base.get_deps(TOML.parsefile(manifest_file))
 	for (k,vv) in manifest_deps
 		v = vv[1]
-		d = k ∈ proj_deps ? direct : indirect
+			d = haskey(proj_deps, k) ? direct : indirect
 		d[k] = PkgInfo(k, v["uuid"], get(v,"version", "stdlib"))
+	end
 	end
 	direct, indirect
 end

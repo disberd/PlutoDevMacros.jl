@@ -96,6 +96,8 @@ function _combined(ex, target, calling_file, __module__; macroname)
 	out = try
 		frompackage(ex, target, calling_file, __module__; macroname)
 	catch e
+		# If we are outside of pluto we simply rethrow
+		is_notebook_local(calling_file) || rethrow()
 		bt = stacktrace(catch_backtrace())
 		out = Expr(:block)
 		if !(e isa ErrorException && startswith(e.msg, "Multiple Calls: The"))

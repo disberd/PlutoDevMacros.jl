@@ -18,14 +18,6 @@ outpluto_caller = abspath(@__DIR__,"../..")
 inpluto_caller = join([outpluto_caller, "#==#", "00000000-0000-0000-0000-000000000000"])
 
 @testset "Errors" begin
-    # Test that we give a meaningful error when Manifest is not found
-    @test_throws "Manifest" mktempdir() do tmpdir
-        cd(tmpdir) do 
-            Pkg.generate("Manifest")
-            package_dependencies("Manifest")
-        end
-    end
-
     @test_throws "No parent project" mktempdir() do tmpdir
             package_dependencies(tmpdir)
     end

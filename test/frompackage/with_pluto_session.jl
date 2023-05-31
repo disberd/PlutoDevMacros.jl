@@ -17,8 +17,6 @@ options = Configuration.from_flat_kwargs(; disable_writing_notebook_files=true)
 srcdir = joinpath(@__DIR__, "../TestPackage/src/")
 eval_in_nb(sn, expr) = WorkspaceManager.eval_fetch_in_workspace(sn, expr)
 
-@info "Check Load" TestPackage, typeof(TestPackage)
-
 @testset "notebook1.jl" begin
     ss = ServerSession(; options)
     path = joinpath(srcdir, "notebook1.jl")

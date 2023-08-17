@@ -135,6 +135,10 @@ function load_module(mod_exp::Expr, package_dict::Dict, _module)
 	proj_file = Base.current_project(target_file)
 	# We inject the project in the LOAD_PATH if it is not present already
 	add_loadpath(proj_file)
+	# We retry loading extensions as extensions of packages loaded within
+	# frompackage may not be loaded correctly the first time, reloading the
+	# @fromopackage cell will now fix this
+	Base.retry_load_extensions()
 	# We try evaluating the expression within the custom module
 	stop_reason = try
 		reason = eval_in_module(_MODULE_,Expr(:toplevel, LineNumberNode(1, Symbol(target_file)), mod_exp), package_dict)

@@ -1,0 +1,9 @@
+name = "TestIndirectExtension"
+uuid = "050189e8-2bdb-4808-95aa-1c8d71fbd880"
+authors = ["Alberto Mengali <disberd@gmail.com>"]
+version = "0.1.0"
+
+[deps]
+PlutoDevMacros = "a0499f29-c39b-4c5c-807c-88074221b949"
+PlutoPlotly = "8e989ff0-3d88-8e9f-f020-2b208a939ff0"
+Revise = "295af30f-e4ad-537b-8983-00126c2a3abe"

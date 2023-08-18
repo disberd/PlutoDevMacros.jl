@@ -20,7 +20,6 @@ end
 
 # ╔═╡ abccfc80-afaf-4c54-b300-c0c893de3848
 begin
-	using PlutoVSCodeDebugger
 	using PlotlyKaleido
 end
 
@@ -36,11 +35,9 @@ method_present = !isempty(methods(savefig, (IO, PlutoPlot)))
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
 PlotlyKaleido = "f2990250-8cf9-495f-b13a-cce12b45703c"
-PlutoVSCodeDebugger = "560812a8-17ff-4261-aab5-f8f600b273e2"
 
 [compat]
 PlotlyKaleido = "~2.1.0"
-PlutoVSCodeDebugger = "~0.1.0"
 """
 
 # ╔═╡ 00000000-0000-0000-0000-000000000002
@@ -49,13 +46,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.9.2"
 manifest_format = "2.0"
-project_hash = "a6cec8a219dc747a6bbce178360b47d01aada695"
-
-[[deps.AbstractPlutoDingetjes]]
-deps = ["Pkg"]
-git-tree-sha1 = "91bd53c39b9cbfb5ef4b015e8b582d344532bd0a"
-uuid = "6e696c72-6542-2067-7265-42206c756150"
-version = "1.2.0"
+project_hash = "a306e345b2ba616e53c5188b7eca690040bebb51"
 
 [[deps.ArgTools]]
 uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
@@ -162,12 +153,6 @@ deps = ["Base64", "JSON", "Kaleido_jll"]
 git-tree-sha1 = "f96e4582db7a9533487b94f6258b8a01c69f18b0"
 uuid = "f2990250-8cf9-495f-b13a-cce12b45703c"
 version = "2.1.0"
-
-[[deps.PlutoVSCodeDebugger]]
-deps = ["AbstractPlutoDingetjes"]
-git-tree-sha1 = "9129fe6b6d9b8bdb6724cd2b4824ebbc195299ae"
-uuid = "560812a8-17ff-4261-aab5-f8f600b273e2"
-version = "0.1.0"
 
 [[deps.PrecompileTools]]
 deps = ["Preferences"]

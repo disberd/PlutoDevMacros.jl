@@ -1,5 +1,8 @@
 # PlutoDevMacros
 
+[![Build Status](https://github.com/disberd/PlutoDevMacros.jl/actions/workflows/CI.yml/badge.svg?branch=master)](https://github.com/disberd/PlutoDevMacros.jl/actions/workflows/CI.yml?query=branch%3Amaster)
+[![Coverage](https://codecov.io/gh/disberd/PlutoDevMacros.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/disberd/PlutoDevMacros.jl)
+
 This is a package containing macros/functions to help develop Packages using [Pluto](https://github.com/fonsp/Pluto.jl) notebooks as building blocks
 
 ## @frompackage macro

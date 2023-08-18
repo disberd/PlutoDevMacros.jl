@@ -17,7 +17,7 @@ function eval_in_module(_mod, line_and_ex, dict)
 	Meta.isexpr(ex, :module) && return eval_module_expr(_mod, ex,dict)
 	Meta.isexpr(ex, :call) && ex.args[1] === :include && return eval_include_expr(_mod, loc, ex, dict)
 	# If the processing return true, we can evaluate the processed expression
-	if process_expr!(ex, loc, dict)
+	if process_expr!(ex, loc, dict, _mod)
 		Core.eval(_mod, line_and_ex) 
 	end
 	return nothing
@@ -116,20 +116,19 @@ end
 
 
 ## load module
-function load_module(target_file::String, _module)
+function load_module_in_caller(target_file::String, caller_module)
 	package_dict = get_package_data(target_file)
-	mod_exp, _ = extract_module_expression(package_dict, _module)
-	load_module(mod_exp, package_dict, _module)
+	load_module_in_caller(package_dict, caller_module)
 end
-function load_module(package_dict::Dict, _module)
-	target_file = package_dict["target"]
-	mod_exp, _ = extract_module_expression(target_file, _module)
-	load_module(mod_exp, package_dict, _module)
+function load_module_in_caller(package_dict::Dict, caller_module)
+	package_file = package_dict["file"]
+	mod_exp = extract_module_expression(package_file)
+	load_module_in_caller(mod_exp, package_dict, caller_module)
 end
-function load_module(mod_exp::Expr, package_dict::Dict, _module)
+function load_module_in_caller(mod_exp::Expr, package_dict::Dict, caller_module)
 	target_file = package_dict["target"]
 	# If the module Reference inside fromparent_module is not assigned, we create the module in the calling workspace and assign it
-	_MODULE_ = maybe_create_module(_module)
+	_MODULE_ = maybe_create_module(caller_module)
 	# We reset the module path in case it was not cleaned
 	mod_name = mod_exp.args[2]
 	proj_file = Base.current_project(target_file)
@@ -151,4 +150,28 @@ function load_module(mod_exp::Expr, package_dict::Dict, _module)
 	Core.eval(__module, :(_fromparent_dict_ = $package_dict))
 	# @info block, __module
 	return package_dict
+end
+
+# This function tries to load package extensions for the module `package_module` loaded with `@frompackage`
+function load_package_extensions(package_module::Module, caller_module)
+	isdefined(package_module, :_fromparent_dict_) || error("The provided package module has not been generated with @frompackage/@fromparent")
+	package_dict = package_module._fromparent_dict_
+	load_package_extensions(package_module, package_dict, caller_module)
+end
+function load_package_extensions(package_dict::Dict, caller_module::Module)
+	mod_name = package_dict["name"] |> Symbol
+	package_module = getfield(maybe_create_module(caller_module), mod_name)
+	load_package_extensions(package_module, package_dict, caller_module)
+end
+function load_package_extensions(package_module::Module, package_dict::Dict, caller_module::Module)
+	add_loadpath(package_dict)
+	# We try to reload 
+	try
+		maybe_add_extensions!(package_module, package_dict, caller_module)
+	catch
+		rethrow()
+	finally
+		clean_loadpath(package_dict)
+	end
+	nothing
 end

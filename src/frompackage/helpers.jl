@@ -139,9 +139,11 @@ end
 function add_loadpath(entry::String)
 	length(LOAD_PATH) > 1 && LOAD_PATH[2] != entry && insert!(LOAD_PATH, 2, entry)
 end
+add_loadpath(package_dict::Dict) = add_loadpath(package_dict["project"])
 function clean_loadpath(entry::String)
 	LOAD_PATH[2] == entry && deleteat!(LOAD_PATH, 2)
 end
+clean_loadpath(package_dict::Dict) = clean_loadpath(package_dict["project"])
 
 ## execute only in notebook
 # We have to create our own simple check to only execute some stuff inside the notebook where they are defined. We have stuff in basics.jl but we don't want to include that in this notebook
@@ -162,6 +164,50 @@ function is_notebook_local(calling_file::String)
 end
 is_notebook_local(calling_file::Symbol) = is_notebook_local(String(calling_file))
 
+## package extensions helpers
+has_extensions(package_data) = haskey(package_data, "extensions") && haskey(package_data, "weakdeps")
+
+# This will extract all the useful extension data for each weakdep
+function data_from_weakdeps(package_dict)
+	ext_dir = joinpath(package_dict["dir"], "ext")
+	weakdeps = package_dict["weakdeps"]
+	exts = Dict((v,k) for (k,v) in package_dict["extensions"])
+	out = Dict{String, Any}()
+	for (k,v) in package_dict["weakdeps"]
+		module_name = exts[k]
+		uuid = Base.UUID(v)
+		filename = module_name * ".jl"
+		file_found = false
+		module_location = ""
+		for mid in ("", module_name)
+			file_found && break
+			module_location = joinpath(ext_dir, mid, filename)
+			isfile(module_location) && (file_found = true)
+		end
+		file_found || error("The module location for extension $module_name could not be found.")
+		out[k] = (;module_name, uuid, module_location)
+	end
+	out
+end
+
+function maybe_add_extensions!(package_module::Module, package_dict, caller_module::Module)
+	# This is to trigger reloading potential indirect extensions that failed loading
+	Base.retry_load_extensions()
+	has_extensions(package_dict) || return nothing # We skip this if no extensions are in the package
+	ext_data = package_dict["extension data"]
+	loaded_ext_names = get!(package_dict, "loaded extensions", Set{Symbol}())
+	for (k,v) in ext_data
+		isdefined(caller_module, Symbol(k)) || continue # We don't have this package loaded in the caller module
+		pkgid = Base.identify_package(k)
+		pkgid !== nothing && pkgid.uuid === v.uuid || continue # The UUID does not match
+		push!(loaded_ext_names, Symbol(v.module_name))
+		# Now we evaluate the extension code in the package module
+		mod_exp = extract_module_expression(v.module_location)
+		eval_in_module(package_module,Expr(:toplevel, LineNumberNode(1, Symbol(v.module_location)), mod_exp), package_dict)
+	end
+	return nothing
+end
+
 ## get parent data
 function get_package_data(packagepath::AbstractString)
 	project_file = Base.current_project(packagepath)
@@ -172,6 +218,7 @@ function get_package_data(packagepath::AbstractString)
 	package_data = TOML.parsefile(project_file)
 	haskey(package_data, "name") || error("The project found at $project_file is not a package, simple environments are currently not supported")
 
+
 	# Check that the package file actually exists
 	package_file = joinpath(package_dir,"src", package_data["name"] * ".jl")
 	isfile(package_file) || error("The package package main file was not found at path $package_file")
@@ -179,6 +226,11 @@ function get_package_data(packagepath::AbstractString)
 	package_data["project"] = project_file
 	package_data["file"] = package_file
 	package_data["target"] = packagepath
+
+	# Check for extensions
+	if has_extensions(package_data)
+		package_data["extension data"] = data_from_weakdeps(package_data)
+	end
 
 	# We extract the PkgInfo for all packages in this environment
 	d,i = package_dependencies(project_file)

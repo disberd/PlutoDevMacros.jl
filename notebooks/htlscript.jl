@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.22
+# v0.19.26
 
 using Markdown
 using InteractiveUtils
@@ -119,11 +119,6 @@ function HTLScriptPart(s::AbstractString)
 	write(buf, s)
 	HTLScriptPart(buf)
 end
-end
-
-# ╔═╡ b9291d89-8b30-40f6-b13f-4259f774adaa
-let
-	findfirst("addScriptEventListeners(", "dio gesu addScriptEventListenersa(a,1)")
 end
 
 # ╔═╡ 7dcfe459-c23b-4c4f-aa6b-5654f17934a0
@@ -666,7 +661,7 @@ struct HTLBypass
 end
 
 # ╔═╡ a80dd217-bd5f-463c-adcd-56722f4f3027
-export HTLScriptPart, HTLBypass, HTLScript, combine_scripts
+export HTLScriptPart, HTLBypass, HTLScript, combine_scripts, make_script
 
 # ╔═╡ 0cf60bda-56b7-484d-9ae4-2a2c0cbad722
 function Base.show(io::IO, ::MIME"text/javascript", s::HTLBypass)
@@ -906,7 +901,7 @@ PlutoUI = "~0.7.48"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.9.0-beta4"
+julia_version = "1.9.2"
 manifest_format = "2.0"
 project_hash = "8592c55db71e5eed2d6d4ec606cb287eeea7f6c7"
 
@@ -941,7 +936,7 @@ version = "0.11.4"
 [[deps.CompilerSupportLibraries_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "e66e0078-7015-5450-92f7-15fbd957f2ae"
-version = "1.0.2+0"
+version = "1.0.5+0"
 
 [[deps.Dates]]
 deps = ["Printf"]
@@ -1036,7 +1031,7 @@ uuid = "d6f4376e-aef5-505a-96c1-9c027394607a"
 [[deps.MbedTLS_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "c8ffd9c3-330d-5841-b78e-0817d7145fa1"
-version = "2.28.0+0"
+version = "2.28.2+0"
 
 [[deps.Mmap]]
 uuid = "a63ad114-7e13-5084-954f-fe012c677804"
@@ -1052,7 +1047,7 @@ version = "1.2.0"
 [[deps.OpenBLAS_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Libdl"]
 uuid = "4536629a-c528-5b80-bd46-f80d51c5b363"
-version = "0.3.21+0"
+version = "0.3.21+4"
 
 [[deps.OrderedCollections]]
 git-tree-sha1 = "85f8e6578bf1f9ee0d11e7bb1b1456435479d47c"
@@ -1068,7 +1063,7 @@ version = "2.5.0"
 [[deps.Pkg]]
 deps = ["Artifacts", "Dates", "Downloads", "FileWatching", "LibGit2", "Libdl", "Logging", "Markdown", "Printf", "REPL", "Random", "SHA", "Serialization", "TOML", "Tar", "UUIDs", "p7zip_jll"]
 uuid = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
-version = "1.9.0"
+version = "1.9.2"
 
 [[deps.PlutoDevMacros]]
 deps = ["HypertextLiteral", "InteractiveUtils", "MacroTools", "Markdown", "Random", "Requires"]
@@ -1183,7 +1178,7 @@ version = "1.2.13+0"
 [[deps.libblastrampoline_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "8e850b90-86db-534c-a0d3-1478176c7d93"
-version = "5.4.0+0"
+version = "5.8.0+0"
 
 [[deps.nghttp2_jll]]
 deps = ["Artifacts", "Libdl"]
@@ -1205,7 +1200,6 @@ version = "17.4.0+0"
 # ╟─af424bad-c980-4969-91b7-299d9f029691
 # ╟─c5b66120-bb79-4603-ab2b-767bb684a4ae
 # ╠═1aa9e236-eb68-43f5-afcd-1af51b71b34e
-# ╠═b9291d89-8b30-40f6-b13f-4259f774adaa
 # ╟─7dcfe459-c23b-4c4f-aa6b-5654f17934a0
 # ╠═ac2b8e3e-1704-48c3-bc1f-9f12010b7e3c
 # ╠═9efdecea-27b1-4e9e-892f-c5475ebcf9d5

@@ -7,6 +7,13 @@ using InteractiveUtils
 # ╔═╡ f6bb9eb6-1f66-424a-9043-607aeee0cd76
 begin
 	parent_project = Base.current_project(@__FILE__)
+	notebook_project = Base.active_project()
+	Base.eval(Main, quote
+		import Pkg
+		Pkg.activate($parent_project)
+		Pkg.instantiate()
+		Pkg.activate($notebook_project)
+	end)
 	pushfirst!(LOAD_PATH, parent_project)
 	try
 		Base.eval(Main, :(import Revise))

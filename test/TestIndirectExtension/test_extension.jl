@@ -8,18 +8,21 @@ using InteractiveUtils
 begin
 	parent_project = Base.current_project(@__FILE__)
 	notebook_project = Base.active_project()
-	Base.eval(Main, quote
+	plutodevmacros_project= Base.current_project(normpath(@__DIR__, "../..")) 
+	Base.eval(Main, quote # instantiate the parent env, mostly for CI
 		import Pkg
 		Pkg.activate($parent_project)
 		Pkg.instantiate()
 		Pkg.activate($notebook_project)
 	end)
-	pushfirst!(LOAD_PATH, parent_project)
+	pushfirst!(LOAD_PATH, parent_project) # This contains Revise
+	pushfirst!(LOAD_PATH, plutodevmacros_project) # This loads the PlutoDevMacros environment, so we can do import with the latest version
 	try
 		Base.eval(Main, :(import Revise))
 		Base.eval(Main, :(import PlutoDevMacros))
 	finally
-		popfirst!(LOAD_PATH)
+		popfirst!(LOAD_PATH) # Remove plutodevmacros env
+		popfirst!(LOAD_PATH) # Remove parent_env
 	end
 	using Main.Revise
 	using Main.PlutoDevMacros

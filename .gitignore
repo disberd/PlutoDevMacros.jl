@@ -1,2 +1,2 @@
 Manifest.toml
-!test/Test*/Manifest.toml
+!test/TestPackage/Manifest.toml

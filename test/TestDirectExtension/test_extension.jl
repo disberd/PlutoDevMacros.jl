@@ -34,11 +34,10 @@ begin
 	using Example
 end
 
-# ╔═╡ f5fef1d2-eaab-4f43-91f2-a58d2d881733
-# Eval is needed here as otherwise the macro is expanded too early at notebook startup and it would need to be re-executed to find the packages triggering extensions
-Base.eval(@__MODULE__, :(@fromparent begin
+# ╔═╡ b93cdd74-1c65-4d15-a6e3-6c1855e37cce
+@fromparent begin
 	using PackageModule
-end))
+end
 
 # ╔═╡ 675230da-e628-4059-b44d-6137a4dd4987
 standard_extension_output = to_extend(plot(rand(4)))
@@ -420,7 +419,7 @@ version = "17.4.0+0"
 # ╔═╡ Cell order:
 # ╠═f6bb9eb6-1f66-424a-9043-607aeee0cd76
 # ╠═abccfc80-afaf-4c54-b300-c0c893de3848
-# ╠═f5fef1d2-eaab-4f43-91f2-a58d2d881733
+# ╠═b93cdd74-1c65-4d15-a6e3-6c1855e37cce
 # ╠═675230da-e628-4059-b44d-6137a4dd4987
 # ╠═8e7563ce-d2ba-4356-93e4-70ebe0f2be87
 # ╟─00000000-0000-0000-0000-000000000001

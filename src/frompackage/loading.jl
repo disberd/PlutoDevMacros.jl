@@ -134,10 +134,6 @@ function load_module_in_caller(mod_exp::Expr, package_dict::Dict, caller_module)
 	proj_file = Base.current_project(target_file)
 	# We inject the project in the LOAD_PATH if it is not present already
 	add_loadpath(proj_file)
-	# We retry loading extensions as extensions of packages loaded within
-	# frompackage may not be loaded correctly the first time, reloading the
-	# @fromopackage cell will now fix this
-	maybe_add_extensions!(mod_exp, package_dict, caller_module)
 	# We try evaluating the expression within the custom module
 	stop_reason = try
 		reason = eval_in_module(_MODULE_,Expr(:toplevel, LineNumberNode(1, Symbol(target_file)), mod_exp), package_dict)
@@ -154,4 +150,28 @@ function load_module_in_caller(mod_exp::Expr, package_dict::Dict, caller_module)
 	Core.eval(__module, :(_fromparent_dict_ = $package_dict))
 	# @info block, __module
 	return package_dict
+end
+
+# This function tries to load package extensions for the module `package_module` loaded with `@frompackage`
+function load_package_extensions(package_module::Module, caller_module)
+	isdefined(package_module, :_fromparent_dict_) || error("The provided package module has not been generated with @frompackage/@fromparent")
+	package_dict = package_module._fromparent_dict_
+	load_package_extensions(package_module, package_dict, caller_module)
+end
+function load_package_extensions(package_dict::Dict, caller_module::Module)
+	mod_name = package_dict["name"] |> Symbol
+	package_module = getfield(maybe_create_module(caller_module), mod_name)
+	load_package_extensions(package_module, package_dict, caller_module)
+end
+function load_package_extensions(package_module::Module, package_dict::Dict, caller_module::Module)
+	add_loadpath(package_dict)
+	# We try to reload 
+	try
+		maybe_add_extensions!(package_module, package_dict, caller_module)
+	catch
+		rethrow()
+	finally
+		clean_loadpath(package_dict)
+	end
+	nothing
 end

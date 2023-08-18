@@ -139,9 +139,11 @@ end
 function add_loadpath(entry::String)
 	length(LOAD_PATH) > 1 && LOAD_PATH[2] != entry && insert!(LOAD_PATH, 2, entry)
 end
+add_loadpath(package_dict::Dict) = add_loadpath(package_dict["project"])
 function clean_loadpath(entry::String)
 	LOAD_PATH[2] == entry && deleteat!(LOAD_PATH, 2)
 end
+clean_loadpath(package_dict::Dict) = clean_loadpath(package_dict["project"])
 
 ## execute only in notebook
 # We have to create our own simple check to only execute some stuff inside the notebook where they are defined. We have stuff in basics.jl but we don't want to include that in this notebook
@@ -188,25 +190,21 @@ function data_from_weakdeps(package_dict)
 	out
 end
 
-# This function will add an `include` statement pointing at the package
-# extension module entry point if the caller module has the triggering package
-# loaded
-function maybe_add_extensions!(mod_exp::Expr, package_dict, caller_module::Module)
-	has_extensions(package_dict) || return nothing # We skip this if no extensions are in the package
+function maybe_add_extensions!(package_module::Module, package_dict, caller_module::Module)
 	# This is to trigger reloading potential indirect extensions that failed loading
 	Base.retry_load_extensions()
-	mod_exp.head === :module || error("The provided expression is not a module expression")
+	has_extensions(package_dict) || return nothing # We skip this if no extensions are in the package
 	ext_data = package_dict["extension data"]
-	loaded_ext_names = Set{Symbol}()
-	toplevel = mod_exp.args[end]
+	loaded_ext_names = get!(package_dict, "loaded extensions", Set{Symbol}())
 	for (k,v) in ext_data
 		isdefined(caller_module, Symbol(k)) || continue # We don't have this package loaded in the caller module
 		pkgid = Base.identify_package(k)
 		pkgid !== nothing && pkgid.uuid === v.uuid || continue # The UUID does not match
-		push!(toplevel.args, :(include($(v.module_location))))
 		push!(loaded_ext_names, Symbol(v.module_name))
+		# Now we evaluate the extension code in the package module
+		mod_exp = extract_module_expression(v.module_location)
+		eval_in_module(package_module,Expr(:toplevel, LineNumberNode(1, Symbol(v.module_location)), mod_exp), package_dict)
 	end
-	package_dict["loaded extensions"] = Tuple(loaded_ext_names)
 	return nothing
 end
 

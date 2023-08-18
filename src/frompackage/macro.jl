@@ -2,12 +2,12 @@ import Base: stacktrace, catch_backtrace
 
 _id_name(cell_id) = Symbol(:_fromparent_cell_id_, cell_id)
 
-function is_call_unique(cell_id, _module)
+function is_call_unique(cell_id, caller_module)
 	current_id = macro_cell[]
 	current_id == cell_id && return true
 	# If we get here we have a potential multiple call
 	id_name = _id_name(current_id)
-	return if isdefined(_module, id_name) 
+	return if isdefined(caller_module, id_name) 
 		false
 	else
 		# We have the update the cell reference
@@ -34,18 +34,18 @@ end
 
 ## @frompackage
 
-function frompackage(ex, target_file, caller, _module; macroname)
+function frompackage(ex, target_file, caller, caller_module; macroname)
 	is_notebook_local(caller) || return process_outside_pluto!(ex, get_package_data(target_file))
 	_, cell_id = _cell_data(caller)
 	proj_file = Base.current_project(target_file)
 	id_name = _id_name(cell_id)
 	ex isa Expr || error("You have to call this macro with an import statement or a begin-end block of import statements")
 	# Try to load the module of the target package in the calling workspace and return the dict with extracted paramteres
-	dict = if is_call_unique(cell_id, _module)
-		mod_exp, dict = extract_module_expression(target_file, _module)
+	dict = if is_call_unique(cell_id, caller_module)
+		dict = get_package_data(target_file)
 		# We try to extract eventual lines to skip
 		process_skiplines!(ex, dict)
-		load_module(mod_exp, dict, _module)
+		load_module_in_caller(dict, caller_module)
 	else
 		error("Multiple Calls: The $macroname is already present in cell with id $(macro_cell[]), you can only have one call-site per notebook")
 	end
@@ -87,14 +87,14 @@ function frompackage(ex, target_file, caller, _module; macroname)
 	return out
 end
 
-function _combined(ex, target, calling_file, __module__; macroname)
+function _combined(ex, target, calling_file, caller_module; macroname)
 	# Enforce absolute path to handle different OSs
 	target = abspath(target)
 	calling_file = abspath(calling_file)
 	_, cell_id = _cell_data(calling_file)
 	proj_file = Base.current_project(target)
 	out = try
-		frompackage(ex, target, calling_file, __module__; macroname)
+		frompackage(ex, target, calling_file, caller_module; macroname)
 	catch e
 		# If we are outside of pluto we simply rethrow
 		is_notebook_local(calling_file) || rethrow()

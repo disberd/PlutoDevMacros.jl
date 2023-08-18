@@ -1,4 +1,4 @@
-import PlutoDevMacros.FromPackage: process_outside_pluto!, load_module, modname_path, fromparent_module, parseinput, get_package_data, @fromparent, _combined, process_skiplines!, get_temp_module, LineNumberRange, parse_skipline, package_dependencies
+import PlutoDevMacros.FromPackage: process_outside_pluto!, load_module_in_caller, modname_path, fromparent_module, parseinput, get_package_data, @fromparent, _combined, process_skiplines!, get_temp_module, LineNumberRange, parse_skipline, package_dependencies
 import Pkg
 
 using Test
@@ -65,7 +65,7 @@ end
 @testset "Inside Pluto" begin
     @testset "Input Parsing" begin
         @testset "target included in Package" begin
-            dict = load_module(inpackage_target, Main)
+            dict = load_module_in_caller(inpackage_target, Main)
             f(ex) = parseinput(deepcopy(ex), dict)
 
 
@@ -124,7 +124,7 @@ end
             @test expected == f(ex)
         end
         @testset "target not included in Package" begin
-            dict = load_module(inpluto_caller, Main)
+            dict = load_module_in_caller(inpluto_caller, Main)
             f(ex) = parseinput(deepcopy(ex), dict)
             parent_path = modname_path(fromparent_module[])
 
@@ -196,7 +196,7 @@ end
             end
         end
         process_skiplines!(ex, dict)
-        load_module(dict, Main)
+        load_module_in_caller(dict, Main)
         _m = get_temp_module().PlutoDevMacros.FromPackage
 
         @test isdefined(_m, :_cell_data) # This is directly at the top of the module
@@ -213,12 +213,12 @@ end
             end
         end
         process_skiplines!(ex, dict)
-        load_module(dict, Main)
+        load_module_in_caller(dict, Main)
         _m = get_temp_module().PlutoDevMacros.FromPackage
 
         @test isdefined(_m, :_cell_data) # This is directly at the top of the module
         @test isdefined(_m, :macro_cell) # this variable is defined inside helpers.jl
         @test isdefined(_m, :extract_file_ast) # This is defined inside code_parsing.jl
-        @test !isdefined(_m, :load_module) # This is defined inside loading.jl, which should be skipped as it's line FromPackage.jl:9
+        @test !isdefined(_m, :load_module_in_caller) # This is defined inside loading.jl, which should be skipped as it's line FromPackage.jl:9
     end
 end

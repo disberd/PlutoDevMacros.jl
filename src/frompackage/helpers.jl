@@ -162,6 +162,9 @@ function is_notebook_local(calling_file::String)
 end
 is_notebook_local(calling_file::Symbol) = is_notebook_local(String(calling_file))
 
+## package extensions helpers
+has_extensions(package_data) = haskey(package_data, "extensions") && haskey(package_data, "weakdeps")
+
 ## get parent data
 function get_package_data(packagepath::AbstractString)
 	project_file = Base.current_project(packagepath)
@@ -171,6 +174,11 @@ function get_package_data(packagepath::AbstractString)
 	package_dir = dirname(project_file) |> abspath
 	package_data = TOML.parsefile(project_file)
 	haskey(package_data, "name") || error("The project found at $project_file is not a package, simple environments are currently not supported")
+
+	# Check for extensions
+	if has_extensions(package_data)
+		@info package_data
+	end
 
 	# Check that the package file actually exists
 	package_file = joinpath(package_dir,"src", package_data["name"] * ".jl")

@@ -7,11 +7,9 @@ end
 
 ## Extract Module Expression
 
-extract_module_expression(packagepath::AbstractString, _module) = extract_module_expression(get_package_data(packagepath), _module)
-function extract_module_expression(package_dict, _module)
-	ast = extract_file_ast(package_dict["file"])
+function extract_module_expression(module_filepath::AbstractString)
+	ast = extract_file_ast(module_filepath)
 	mod_exp = getfirst(x -> Meta.isexpr(x, :module), ast.args)
-	mod_exp, package_dict
 end
 
 ## Remove Pluto Exprs

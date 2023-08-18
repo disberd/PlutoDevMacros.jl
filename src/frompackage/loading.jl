@@ -116,20 +116,19 @@ end
 
 
 ## load module
-function load_module(target_file::String, _module)
+function load_module_in_caller(target_file::String, caller_module)
 	package_dict = get_package_data(target_file)
-	mod_exp, _ = extract_module_expression(package_dict, _module)
-	load_module(mod_exp, package_dict, _module)
+	load_module_in_caller(package_dict, caller_module)
 end
-function load_module(package_dict::Dict, _module)
-	target_file = package_dict["target"]
-	mod_exp, _ = extract_module_expression(target_file, _module)
-	load_module(mod_exp, package_dict, _module)
+function load_module_in_caller(package_dict::Dict, caller_module)
+	package_file = package_dict["file"]
+	mod_exp = extract_module_expression(package_file)
+	load_module_in_caller(mod_exp, package_dict, caller_module)
 end
-function load_module(mod_exp::Expr, package_dict::Dict, _module)
+function load_module_in_caller(mod_exp::Expr, package_dict::Dict, caller_module)
 	target_file = package_dict["target"]
 	# If the module Reference inside fromparent_module is not assigned, we create the module in the calling workspace and assign it
-	_MODULE_ = maybe_create_module(_module)
+	_MODULE_ = maybe_create_module(caller_module)
 	# We reset the module path in case it was not cleaned
 	mod_name = mod_exp.args[2]
 	proj_file = Base.current_project(target_file)

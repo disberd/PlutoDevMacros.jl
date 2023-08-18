@@ -1,0 +1,1 @@
+TestDirectExtension.to_extend(m::Module) = "Weird Extension name works!"

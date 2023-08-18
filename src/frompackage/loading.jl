@@ -17,7 +17,7 @@ function eval_in_module(_mod, line_and_ex, dict)
 	Meta.isexpr(ex, :module) && return eval_module_expr(_mod, ex,dict)
 	Meta.isexpr(ex, :call) && ex.args[1] === :include && return eval_include_expr(_mod, loc, ex, dict)
 	# If the processing return true, we can evaluate the processed expression
-	if process_expr!(ex, loc, dict)
+	if process_expr!(ex, loc, dict, _mod)
 		Core.eval(_mod, line_and_ex) 
 	end
 	return nothing
@@ -137,7 +137,7 @@ function load_module_in_caller(mod_exp::Expr, package_dict::Dict, caller_module)
 	# We retry loading extensions as extensions of packages loaded within
 	# frompackage may not be loaded correctly the first time, reloading the
 	# @fromopackage cell will now fix this
-	Base.retry_load_extensions()
+	maybe_add_extensions!(mod_exp, package_dict, caller_module)
 	# We try evaluating the expression within the custom module
 	stop_reason = try
 		reason = eval_in_module(_MODULE_,Expr(:toplevel, LineNumberNode(1, Symbol(target_file)), mod_exp), package_dict)

@@ -1,5 +1,5 @@
 module Magic
     using TestDirectExtension
 
-    include("magic.jl")
+    include("includemagic.jl")
 end

@@ -15,6 +15,7 @@ makedocs(;
     ),
     pages=[
         "Home" => "index.md",
+        "@frompackage/@fromparent Guide" => "frompackage.md",
     ],
 )
 

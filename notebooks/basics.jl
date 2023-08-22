@@ -57,7 +57,8 @@ end
 # ╔═╡ 17f796de-e2db-41a8-9120-509ca54be657
 """
 	@current_pluto_cell_id()
-Returns the cell_id (as a string) of the cell where the macro is called. If not ran from within the pluto notebook containing the call, returns an empty string
+Returns the cell_id (as a string) of the cell where the macro is called. If not
+ran from within the pluto notebook containing the call, returns an empty string
 """
 macro current_pluto_cell_id()
 	_, cell_id = _cell_data(__source__.file::Symbol |> String)
@@ -67,7 +68,9 @@ end
 # ╔═╡ 4786625f-39d9-47f7-9f19-2410a91d52db
 """
 	@current_pluto_notebook_file()
-Returns the path of the notebook file of the cell where the macro is called. If not ran from within the pluto notebook containing the call, returns an empty string
+Returns the path of the notebook file of the cell where the macro is called. If
+not ran from within the pluto notebook containing the call, returns an empty
+string
 """
 macro current_pluto_notebook_file()
 	nbfile, cell_id = _cell_data(__source__.file::Symbol |> String)
@@ -149,7 +152,7 @@ sufficient to remove the hanging method.
 
 See this video for an example:
 
-[Link to Vide](https://user-images.githubusercontent.com/12846528/236472989-da86a311-4501-4966-9f0b-1298bbd9d53b.mp4)
+![Link to Video](https://user-images.githubusercontent.com/12846528/236472989-da86a311-4501-4966-9f0b-1298bbd9d53b.mp4)
 
 See also: [`@frompackage`](@ref), [`@fromparent`](@ref)
 """

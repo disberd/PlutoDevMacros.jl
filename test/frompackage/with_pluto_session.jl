@@ -1,14 +1,9 @@
 using Test
 import Pluto: update_save_run!, update_run!, WorkspaceManager, ClientSession, ServerSession, Notebook, Cell, project_relative_path, SessionActions, load_notebook, Configuration
-import Pkg
 
-curr_proj = Base.active_project()
-Pkg.activate("../TestPackage")
-Pkg.instantiate()
-Pkg.activate(curr_proj)
-push!(LOAD_PATH, normpath(@__DIR__, "../TestPackage"))
-import TestPackage
-pop!(LOAD_PATH)
+include("helpers.jl")
+
+instantiate_and_import(:(import TestPackage), normpath(@__DIR__, "../TestPackage"))
 
 function noerror(cell; verbose=true)
     if cell.errored && verbose

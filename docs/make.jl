@@ -4,7 +4,7 @@ using Documenter
 DocMeta.setdocmeta!(PlutoDevMacros, :DocTestSetup, :(using PlutoDevMacros); recursive=true)
 
 makedocs(;
-    modules=[PlutoDevMacros],
+    modules= Module[],
     authors="Alberto Mengali <disberd@gmail.com>",
     repo="https://github.com/disberd/PlutoDevMacros.jl/blob/{commit}{path}#{line}",
     sitename="PlutoDevMacros.jl",
@@ -15,7 +15,15 @@ makedocs(;
     ),
     pages=[
         "Home" => "index.md",
-        "@frompackage/@fromparent Guide" => "frompackage.md",
+        "@frompackage/@fromparent" => Any[
+            "Introduction" => "frompackage/introduction.md",
+            "Basic Use" => "frompackage/basic_use.md",
+            "Supported import statements" => "frompackage/import_statements.md",
+            "Skipping Package Parts" => "frompackage/skipping_parts.md",
+            "Use with PlutoPkg" => "frompackage/use_with_plutopkg.md",
+            "Package Extensions" => "frompackage/package_extensions.md",
+        ],
+        "Other Exports" => "other_functions.md"
     ],
 )
 

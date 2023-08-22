@@ -10,7 +10,7 @@ makedocs(;
     sitename="PlutoDevMacros.jl",
     format=Documenter.HTML(;
         prettyurls=get(ENV, "CI", "false") == "true",
-        edit_link="main",
+        edit_link="master",
         assets=String[],
     ),
     pages=[

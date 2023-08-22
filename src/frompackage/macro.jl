@@ -145,7 +145,7 @@ Additionally, it loads the package called `LocalDependency` (must be a
 dependency of the local package) as if the `using LocalDependency` code was used
 within the notebook, but without adding `LocalDependency` to the notebook environment.
 
-See the package documentation for more details.
+See the package [documentation](https://disberd.github.io/PlutoDevMacros.jl/dev/frompackage/introduction/#Introduction) for more details.
 
 See also: [`@fromparent`](@ref)
 """
@@ -165,7 +165,9 @@ is equivalent to
 @frompackage @__FILE__ import_block
 ```
 
-Refer to the [`@frompackage`](@ref) docstring and the package documentation for understanding its use.
+Refer to the [`@frompackage`](@ref) docstring and the package
+[documentation](https://disberd.github.io/PlutoDevMacros.jl/dev/frompackage/introduction/#Introduction)
+for understanding its use.
 See also: [`@addmethod`](@ref)
 """
 macro fromparent(ex)

@@ -24,7 +24,7 @@ modify_extension_using!(x, args...) = true
 function modify_extension_using!(ex::Expr, loc, package_dict::Dict, eval_module::Module)
 	Meta.isexpr(ex, (:using, :import)) || return true
 	has_extensions(package_dict) || return true
-	loaded_exts = package_dict["loaded extensions"]
+	loaded_exts = get!(package_dict, "loaded extensions", Set{Symbol}())
 	package_name = Symbol(package_dict["name"])
 	nameof(eval_module) in loaded_exts || return true
 	package, _ = extract_import_args(ex)

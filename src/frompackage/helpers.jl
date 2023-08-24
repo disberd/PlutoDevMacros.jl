@@ -230,6 +230,7 @@ function get_package_data(packagepath::AbstractString)
 	# Check for extensions
 	if has_extensions(package_data)
 		package_data["extension data"] = data_from_weakdeps(package_data)
+		package_data["loaded extensions"] = Set{Symbol}()
 	end
 
 	# We extract the PkgInfo for all packages in this environment

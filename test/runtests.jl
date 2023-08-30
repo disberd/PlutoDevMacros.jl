@@ -1,5 +1,6 @@
 using SafeTestsets
 
+@safetestset "Basics" begin include("basics.jl") end
 @safetestset "Script Module" begin include("script_module.jl") end
 @safetestset "@frompackage: basics" begin include("frompackage/basics.jl") end
 @safetestset "@frompackage: with Pluto Session" begin include("frompackage/with_pluto_session.jl") end

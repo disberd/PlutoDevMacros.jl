@@ -510,5 +510,14 @@ function formatted_code(s::HTLScript)
 	Markdown.MD(Markdown.Code("html", codestring))
 end
 
+#= Fix for Julia 1.10 
+The `@generated` `print_script` from HypertextLiteral is broken in 1.10
+See [issue 33](https://github.com/JuliaPluto/HypertextLiteral.jl/issues/33)
+We have to also define a method for `print_script` to avoid precompilation errors
+=#
+
+HypertextLiteral.print_script(io::IO, val::Union{HTLScript, HTLBypass, HTLScriptPart}) = show(io, MIME"text/javascript"(), val)
+
+
 
 end

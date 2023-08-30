@@ -52,6 +52,9 @@ end
 # ╔═╡ 2647436d-5170-41f8-86de-9bce9acf2f70
 @only_out_nb(3) === nothing
 
+# ╔═╡ 5ec03ab5-a3e3-4855-af59-6e589f5b104f
+PlutoDevMacros.is_notebook_local() || error("Something went wrong")
+
 # ╔═╡ Cell order:
 # ╠═f32cb55a-cf6d-40cd-8d5a-81445a685b53
 # ╠═e3296a1c-9d38-4363-b275-42738d1ebae7
@@ -65,3 +68,4 @@ end
 # ╠═bda0d273-68f2-4954-bad1-b6c7aef9c1bd
 # ╠═9985d53f-bc97-41b3-ab08-435b75db58d1
 # ╠═2647436d-5170-41f8-86de-9bce9acf2f70
+# ╠═5ec03ab5-a3e3-4855-af59-6e589f5b104f

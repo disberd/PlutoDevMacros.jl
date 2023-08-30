@@ -126,6 +126,9 @@ md"""
 # ╔═╡ 14d239b3-1402-4ae4-a620-8de9c191a20e
 s = HTLScript("console.log('asd')")
 
+# ╔═╡ 4774accb-a3f7-4cee-9e9e-da1a413eb5a0
+HTLScript(s)
+
 # ╔═╡ b5464d21-dc4d-4be1-83fa-a4c351015944
 combine_scripts([(s for _ in 1:4)..., "console.log('lol')"];id=missing)
 
@@ -437,6 +440,7 @@ version = "17.4.0+2"
 # ╠═d49ca300-2dd2-48b3-a27e-fab90b61de7e
 # ╠═453ee62b-d1b4-4bad-aafa-cba13559b698
 # ╠═14d239b3-1402-4ae4-a620-8de9c191a20e
+# ╠═4774accb-a3f7-4cee-9e9e-da1a413eb5a0
 # ╠═b5464d21-dc4d-4be1-83fa-a4c351015944
 # ╠═cc41848a-3fcb-4c65-9a5d-452b3fecdf63
 # ╠═f631b4ea-3ce9-43ac-8a87-dba733deec18

@@ -22,6 +22,7 @@ end
     @addmethod asd(x::String) = "LOL" * string(asd(1))
     @test asd(3.0) === 4.0
     @test asd("ASD") === "LOL3"
+    @test PlutoDevMacros.is_notebook_local() === false
 end
 
 options = Configuration.from_flat_kwargs(; disable_writing_notebook_files=true)

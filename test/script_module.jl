@@ -14,12 +14,12 @@ end
 
 
 options = Configuration.from_flat_kwargs(; disable_writing_notebook_files=true)
-srcdir = normpath(pkgdir(PlutoDevMacros), "./src/script")
+srcdir = normpath(@__DIR__, "./notebooks")
 eval_in_nb(sn, expr) = WorkspaceManager.eval_fetch_in_workspace(sn, expr)
 
-@testset "test_Script.jl" begin
+@testset "Script test notebook" begin
     ss = ServerSession(; options)
-    path = joinpath(srcdir, "test_Script.jl")
+    path = joinpath(srcdir, "Script.jl")
     nb = SessionActions.open(ss, path; run_async=false)
     for cell in nb.cells
         @test noerror(cell)

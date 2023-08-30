@@ -20,16 +20,12 @@ begin
 	end
 	# using Main.Revise
 	using Main.PlutoDevMacros
+	using Main.PlutoDevMacros.Script
+	using Main.PlutoDevMacros.HypertextLiteral
 end
 
 # ╔═╡ 8325847e-fd7e-42ef-84c7-a30c6467183e
 using PlutoUI
-
-# ╔═╡ 7416f12a-11a3-4fee-9bb2-8c19bd4254ee
-@fromparent begin
-	using ^.Script
-	using >.HypertextLiteral
-end
 
 # ╔═╡ c924a590-a189-4ca2-abef-2b7dca80fe11
 md"""
@@ -426,7 +422,6 @@ version = "17.4.0+2"
 # ╠═8325847e-fd7e-42ef-84c7-a30c6467183e
 # ╠═13d2cf9a-2fce-47f9-a851-6dd80d130b63
 # ╟─9daf72fd-dff2-4096-bf23-5b7fa8afe008
-# ╠═7416f12a-11a3-4fee-9bb2-8c19bd4254ee
 # ╟─d013da3e-8a23-4594-9d15-4eadca921a7a
 # ╟─201323b9-8caf-4acb-904e-b76d16e5ffb1
 # ╠═adf46403-ec6b-4278-ae65-5747f319dc96

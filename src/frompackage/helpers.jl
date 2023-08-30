@@ -1,4 +1,5 @@
 import ..Script: HTLScript, HTLScriptPart, make_script, combine_scripts
+import ..PlutoDevMacros: hide_this_log
 import Pkg, TOML
 const _stdlibs = first.(values(Pkg.Types.stdlibs()))
 
@@ -73,11 +74,11 @@ function package_dependencies(project_location::String)
 		end
 	else
 		manifest_deps = Base.get_deps(TOML.parsefile(manifest_file))
-	for (k,vv) in manifest_deps
-		v = vv[1]
+		for (k,vv) in manifest_deps
+			v = vv[1]
 			d = haskey(proj_deps, k) ? direct : indirect
-		d[k] = PkgInfo(k, v["uuid"], get(v,"version", "stdlib"))
-	end
+			d[k] = PkgInfo(k, v["uuid"], get(v,"version", "stdlib"))
+		end
 	end
 	direct, indirect
 end
@@ -293,40 +294,6 @@ _popup_style(id) = """
 		display: none;
 	}
 """
-
-# This function, if appearing inside a capture log message in Pluto (not with
-# println, just the @info, @warn, etc ones), will hide itself. It is mostly used
-# in combination with other scripts to inject some javascript in the notebook
-# without having an ugly empty log below the cell 
-function hide_this_log()
-	body = HTLScriptPart("""
-	const logs_positioner = currentScript.closest('pluto-log-dot-positioner')
-	if (logs_positioner == undefined) {return}
-	const logs = logs_positioner.parentElement
-	const logs_container = logs.parentElement
-
-	const observer = new MutationObserver((mutationList, observer) => {
-		for (const child of logs.children) {
-			if (!child.hasAttribute('hidden')) {
-				logs.style.display = "block"
-				logs_container.style.display = "block"
-				return
-			}
-		}
-		// If we reach here all the children are hidden, so we hide the container as well		
-		logs.style.display = "none"
-		logs_container.style.display = "none"
-	})
-
-	observer.observe(logs, {subtree: true, attributes: true, childList: true})
-	logs_positioner.toggleAttribute('hidden',true)
-	""")
-	invalidation = HTLScriptPart("""
-		console.log('invalidation')
-		observer.disconnect()
-	""")
-	return HTLScript(body, invalidation)
-end
 
 function html_reload_button(cell_id; text = "Reload @frompackage", err = false)
 	id = string(cell_id)

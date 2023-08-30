@@ -7,7 +7,8 @@ using HypertextLiteral
 # export notebook_to_source
 
 include("../notebooks/basics.jl") # @only_in_nb, @only_out_nb, is_notebook_local, plutodump, @current_pluto_cell_id, @current_pluto_notebook_file, @addmethod
-module Script include("../notebooks/htlscript.jl") end # HTLScript, HTLBypass, HTLScriptPart, combine_scripts
+include("script/Script.jl")
+include("html_helpers.jl")
 
 include("frompackage/FromPackage.jl")
 using .FromPackage

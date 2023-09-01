@@ -12,11 +12,18 @@ export HTLScriptPart, HTLBypass, HTLScript, combine_scripts, make_script
 
 	"""
 	struct HTLScriptPart
-This struct is a simple wrapper around an `IOBuffer` and is intended to provide pretty printing of script contents and custom interpolation inside the `<script>` tags of the `@htl` macro.
+This struct is a simple wrapper around an `IOBuffer` and is intended to provide
+pretty printing of script contents and custom interpolation inside the
+`<script>` tags of the `@htl` macro.
 
-It is intended for use within Pluto notebooks to simply decouple parts of a javascript script into separate variables and still be able to interpolate them within <script> tags to compose a bigger script.
+It is intended for use within Pluto notebooks to simply decouple parts of a
+javascript script into separate variables and still be able to interpolate them
+within <script> tags to compose a bigger script.
 
-Compared to simply using strings wrapped in `HypertextLiteral.JavaScript`, this gives the opportunity to exploit the experimental htmlmixed synthax highlighting of code inside cells by also accepting `HypertextLiteral.Result` objects during construction.
+Compared to simply using strings wrapped in `HypertextLiteral.JavaScript`, this
+gives the opportunity to exploit the experimental htmlmixed synthax highlighting
+of code inside cells by also accepting `HypertextLiteral.Result` objects during
+construction.
 
 The struct can be initialized as follows:
 ```julia
@@ -26,11 +33,17 @@ code...
 </script>
 \"\"\"))
 ```
-When interpolating `wrapper` above inside another `@htl` macro as `@htl "<script>\$wrapper</script>"` it would be as equivalent to directly writing `@htl "<script>code...</script>` inside the script. This is clearly only beneficial if multiple `HTLScriptPart` variables are interpolated inside a single <script> block.
+When interpolating `wrapper` above inside another `@htl` macro as `@htl
+"<script>\$wrapper</script>"` it would be as equivalent to directly writing
+`@htl "<script>code...</script>` inside the script. This is clearly only
+beneficial if multiple `HTLScriptPart` variables are interpolated inside a
+single <script> block.
 
-On top of the interpolation, an object of type `HTLScriptPart` will show its contents as a formatted javascript code markdown element when shown in Pluto. 
+On top of the interpolation, an object of type `HTLScriptPart` will show its
+contents as a formatted javascript code markdown element when shown in Pluto. 
 
-The constructor also accepts either a `String` or `IOBuffer` object for its initialization instead of a `HypertextLiteral.Result` one.
+The constructor also accepts either a `String` or `IOBuffer` object for its
+initialization instead of a `HypertextLiteral.Result` one.
 
 See also: [`HTLScript`](@ref), [`HTLBypass`](@ref)
 
@@ -66,7 +79,8 @@ end
 struct HTLScriptPart
 	buffer::IOBuffer
 	addedEventListeners::Bool
-	function HTLScriptPart(buf::IOBuffer)
+	show_outside_pluto::Bool
+	function HTLScriptPart(buf::IOBuffer, show_outside_pluto::Bool)
 		# We check if the code contains calls to the addScriptEventListeners
 		checkbuf = IOBuffer()
 		seekstart(buf)
@@ -76,7 +90,8 @@ struct HTLScriptPart
 		new(buf, addedEventListeners)
 	end		
 end
-function HTLScriptPart(r::HypertextLiteral.Result)
+HTLScriptPart(buf::IOBuffer; show_outside_pluto::Bool = true) = HTLScriptPart(buf, show_outside_pluto)
+function HTLScriptPart(r::HypertextLiteral.Result; kwargs...)
 	buf = IOBuffer()
 	temp = IOBuffer()
 	trash = IOBuffer()
@@ -86,13 +101,17 @@ function HTLScriptPart(r::HypertextLiteral.Result)
 	# https://github.com/JuliaLang/julia/blob/f70b5e4767809c7dbc4c6c082aed67a2af4447c2/base/io.jl#L923-L943
 	Base.readuntil_vector!(temp, codeunits("<script>"), false, trash)
 	Base.readuntil_vector!(temp, codeunits("</script>"), false, buf)
-	HTLScriptPart(buf)
+	HTLScriptPart(buf; kwargs...)
 end
-function HTLScriptPart(s::AbstractString)
+function HTLScriptPart(s::AbstractString; kwargs...)
 	buf = IOBuffer()
 	write(buf, s)
-	HTLScriptPart(buf)
+	HTLScriptPart(buf; kwargs...)
 end
+
+shouldskip(p::HTLScriptPart) = p.buffer.size === 0
+shouldskip(::Missing) = true
+shouldskip(x::Any) = false
 
 ## Show methods - HTLScriptPart ##
 
@@ -105,6 +124,7 @@ end
 
 function HypertextLiteral.print_script(io::IO, v::Union{AbstractVector{HTLScriptPart}, NTuple{N,HTLScriptPart} where N})
 	foreach(v) do s
+		shouldskip(s) && return
 		show(io, MIME"text/javascript"(), s)
 	end
 end
@@ -132,15 +152,21 @@ end
 ## Definition - HTLBypass ##
 """
 	struct HTLBypass
-This struct is a simple wrapper around HypertextLiteral.Result intended to provide interpolation inside <script> tags as if writing the code that generated the result directly. 
+This struct is a simple wrapper around HypertextLiteral.Result intended to
+provide interpolation inside <script> tags as if writing the code that generated
+the result directly. 
 
-This is intended for use inside Pluto notebooks to ease variable interpolation inside html element generated within <script> tags using the `html\`\`` command that is imported from Observable.
+This is intended for use inside Pluto notebooks to ease variable interpolation
+inside html element generated within <script> tags using the `html\`\`` command
+that is imported from Observable.
 
-This way, one can generate the intended HTML inside other cells to more easily see the results and with support of nested @htl interpolation.
+This way, one can generate the intended HTML inside other cells to more easily
+see the results and with support of nested @htl interpolation.
 
 The struct only accepts the output of the @htl macro as an input.
 
-On top of the interpolation, an object of type `HTLBypass` will simply show the wrapped `HypertextLiteral.Result` when shown with `MIME"text/html"`.
+On top of the interpolation, an object of type `HTLBypass` will simply show the
+wrapped `HypertextLiteral.Result` when shown with `MIME"text/html"`.
 
 See also: [`HTLScriptPart`](@ref), [`HTLScript`](@ref)
 
@@ -210,16 +236,21 @@ end
 	HTLScript(body; kwargs...)
 	HTLScript(body, invalidation; kwargs...)
 
-For the body and invalidation fields, the constructor also accepts inputs of type `String`, `HypertextLiteral.Result` and `IOBuffer`, translating them into `HTLScriptPart` internally.
+For the body and invalidation fields, the constructor also accepts inputs of
+type `String`, `HypertextLiteral.Result` and `IOBuffer`, translating them into
+`HTLScriptPart` internally.
 
 	HTLScript(s::HTLScript; kwargs...)
-This constructor is used to copy the elements from another HTLScript with the option of overwriting the fields provided as `kwargs`
+This constructor is used to copy the elements from another HTLScript with the
+option of overwriting the fields provided as `kwargs`
 
 # Description
 
-This struct is used to create and compose scripts together with the `@htl` macro from HypertextLiteral. 
+This struct is used to create and compose scripts together with the `@htl` macro
+from HypertextLiteral. 
 
-It is intended for use inside Pluto notebooks to ease composition of bigger scripts via smaller parts.
+It is intended for use inside Pluto notebooks to ease composition of bigger
+scripts via smaller parts.
 
 When an HTLScript is interpolated inside the `@htl` macro, the following code is generated:
 ```html
@@ -230,21 +261,29 @@ invalidation.then(() => {
 	\$invalidation
 })
 ```
-If the `id = missing` (default), a random string id is associated to the script. If `id = nothing`, a script without id is created.
+If the `id = missing` (default), a random string id is associated to the script.
+If `id = nothing`, a script without id is created.
 
-If the `invalidation` field is `missing`, the whole invalidation block is skipped.
+If the `invalidation` field is `missing`, the whole invalidation block is
+skipped.
 
-Multiple `HTLScript` elements can be combined together using the [`combine_script`](@ref) function also exported by this package, allowing to generate bigger scripts by composing multiple building blocks.
+Multiple `HTLScript` elements can be combined together using the
+[`combine_script`](@ref) function also exported by this package, allowing to
+generate bigger scripts by composing multiple building blocks.
 
-When shown inside the output of Pluto cells, the HTLScript object prints its containing formatted code as a `Markdown.Code` element.
+When shown inside the output of Pluto cells, the HTLScript object prints its
+containing formatted code as a `Markdown.Code` element.
 
 # Javascript Events Listeners
 
-`HTLScript` provides some simplified way of adding event listeners in javascript that are automatically removed upon cell invalidation. Scripts created using `HTLScript` expose an internal javascript function 
+`HTLScript` provides some simplified way of adding event listeners in javascript
+that are automatically removed upon cell invalidation. Scripts created using
+`HTLScript` expose an internal javascript function 
 ```js
 addScriptEventListener(element, listeners)
 ```
-which accepts any givent JS `element` to which listeners have to be attached, and an object of with the following key-values:
+which accepts any givent JS `element` to which listeners have to be attached,
+and an object of with the following key-values:
 ```js
 { 
   eventName1: listenerFunction1, 
@@ -252,7 +291,9 @@ which accepts any givent JS `element` to which listeners have to be attached, an
   ... 
 }
 ```
-When generating the script to execute, `HTLScript` automatically adds all the provided listeners to the provided element, and also takes care of removing all the listeners upon cell invalidation.
+When generating the script to execute, `HTLScript` automatically adds all the
+provided listeners to the provided element, and also takes care of removing all
+the listeners upon cell invalidation.
 
 For example, the following julia code:
 ```julia
@@ -272,7 +313,8 @@ let
 	@htl"\$script"
 end
 ```
-is functionally equivalent of writing the following javascript code within the script tag of the cell output
+is functionally equivalent of writing the following javascript code within the
+script tag of the cell output
 ```js
 function onClick(event) {
 	console.log('click: ',event)
@@ -334,6 +376,7 @@ HTLScript(body,invalidation,id; kwargs...) = HTLScript(;body, invalidation, id, 
 # Identity/Copy with modification
 HTLScript(s::HTLScript; kwargs...) = HTLScript(s.body, s.invalidation, s.id;kwargs...)
 
+shouldskip(x::HTLScript) = shouldskip(x.body) && shouldskip(x.invalidation)
 ## Show Methods - HTLScript ##
 
 # This custom content method is used when interpolating inside the @htl macro (but outside of the script tag)
@@ -346,7 +389,7 @@ end
 
 ## Automatic Event Listeners - HTLScript ##
 
-_events_listeners_preamble = HTLScriptPart(@htl("""
+_events_listeners_preamble = HTLScript(@htl("""
 <script>
 	/* #### BEGINNING OF PART AUTOMATICALLY ADDED BY HTLSCRIPT #### */
 	// Array where all the event listeners are stored
@@ -361,7 +404,8 @@ _events_listeners_preamble = HTLScriptPart(@htl("""
 </script>
 """));
 
-_events_listeners_postamble = HTLScriptPart(@htl("""
+_events_listeners_postamble = HTLScript(;
+body = @htl("""
 <script>
 	/* #### BEGINNING OF PART AUTOMATICALLY ADDED BY HTLSCRIPT #### */
 	// Assign the various events listeners defined within the script
@@ -373,9 +417,8 @@ _events_listeners_postamble = HTLScriptPart(@htl("""
 	}
 	/* #### END OF PART AUTOMATICALLY ADDED BY HTLSCRIPT #### */
 </script>
-"""))
-
-_events_listeners_invalidation = HTLScriptPart(@htl("""
+"""),
+invalidation = @htl("""
 <script>	
 		/* #### BEGINNING OF PART AUTOMATICALLY ADDED BY HTLSCRIPT #### */
 		// Remove the events listeners during invalidation
@@ -441,11 +484,13 @@ function _combine(h;id)
 	body = IOBuffer()
 	invalidation = IOBuffer()
 	_id = missing
-	f(x, y) = if !ismissing(y)
+	f(x, y) = if !shouldskip(y)
+		if x.size !== 0 
+			write(x, '\n')
+		end
 		buf = y.buffer
 		seekstart(buf)
 		write(x, buf)
-		write(x, '\n')
 	end
 	for el in h
 		@assert el isa HTLScript "Only element of type HTLScript can be combined together"
@@ -457,18 +502,18 @@ function _combine(h;id)
 		end
 	end
 	HTLScript(;
-		body = body.size == 0 ? missing : HTLScriptPart(body),
-		invalidation = invalidation.size == 0 ? missing : HTLScriptPart(invalidation),
+		body = shouldskip(body) ? missing : HTLScriptPart(body),
+		invalidation = shouldskip(invalidation) ? missing : HTLScriptPart(invalidation),
 		id = ismissing(id) ? _id : id
 	)	
 end
 
 function print_invalidation(s::HTLScriptPart, addListeners::Bool = false)
-	out = if (s.buffer.size == 0 && !addListeners) 
+	out = if (isempty(s.buffer) && !addListeners) 
         ""
     else
         contents = [
-                addListeners ? _events_listeners_invalidation : HTLScriptPart("")
+                addListeners ? _events_listeners_postamble.invalidation : HTLScriptPart("")
                 s
         ]
         @htl("""
@@ -482,23 +527,30 @@ function print_invalidation(s::HTLScriptPart, addListeners::Bool = false)
 	return HTLScriptPart(out)
 end
 
-print_invalidation(s::Missing, addListeners::Bool = false) = print_invalidation(HTLScriptPart(""), addListeners)
-print_invalidation(s::HTLScript, addListeners::Bool = false) = print_invalidation(s.invalidation, addListeners)
-
 # Make Script
-function make_script(h::HTLScript, addListeners::Bool = h.body.addedEventListeners)  
+function make_script(h::HTLScript, addListeners::Bool = h.body.addedEventListeners; is_pluto = true)
 	id = coalesce(h.id, h._id)
-    contents = [
-        addListeners ? _events_listeners_preamble : HTLScriptPart("")
-        h.body
-        addListeners ? _events_listeners_postamble : HTLScriptPart("")
-        print_invalidation(h, addListeners)
-    ]
-	@htl """
-<script id='$id'>
-    $(contents)
-</script>
-"""
+    s = combine_scripts([
+        addListeners ? _events_listeners_preamble : HTLScript("")
+        h
+        addListeners ? _events_listeners_postamble : HTLScript("")
+    ])
+	contents = [
+		s.body
+		is_pluto && !shouldskip(s.invalidation) ?
+		HTLScriptPart(@htl("""
+		<script>
+			invalidation.then(() => {	
+				$(s.invalidation)
+			})
+		</script>
+		""")) : HTLScriptPart("")
+	]
+	@htl("""
+		<script id='$id'>
+			$(contents)
+		</script>
+	""")
 end
 
 # Show the formatted code in markdown as output

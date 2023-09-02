@@ -68,19 +68,16 @@ end
 struct HTLScriptPart
 	buffer::IOBuffer
 	addedEventListeners::Bool
-	show_outside_pluto::Bool
-	function HTLScriptPart(buf::IOBuffer, show_outside_pluto::Bool)
+	function HTLScriptPart(buf::IOBuffer)
 		# We check if the code contains calls to the addScriptEventListeners
 		checkbuf = IOBuffer()
 		seekstart(buf)
 		Base.readuntil_vector!(buf, codeunits("addScriptEventListeners("), false, checkbuf)
 		# If the previous line didn't find any call to addScriptEventListeners, the size of trash and buf will be the same
 		addedEventListeners = !(buf.size === checkbuf.size)
-		new(buf, addedEventListeners, show_outside_pluto)
+		new(buf, addedEventListeners)
 	end		
 end
-# Support show_outside_pluto as kwarg
-HTLScriptPart(buf::IOBuffer; show_outside_pluto::Bool = true) = HTLScriptPart(buf, show_outside_pluto)
 
 function HTLScriptPart(r::HypertextLiteral.Result; kwargs...)
 	buf = IOBuffer()
@@ -291,19 +288,18 @@ is equivalent to writing directly
 Base.@kwdef struct HTLScript
     body::HTLScriptPart
     invalidation::Union{Missing,HTLScriptPart} = missing
-    id::Union{Missing, Nothing, String} = missing
-    _id::String = randstring(6)
+    id::Union{Missing, String} = missing
 	show_outside_pluto::Bool = true
-    function HTLScript(b,i,id::Union{Missing, Nothing, String},_id::String,show_outside_pluto::Bool) 
+    function HTLScript(b,i,id::Union{Missing, Nothing, String},show_outside_pluto::Bool) 
         body = b isa Union{Missing, HTLScriptPart} ? b : HTLScriptPart(b; show_outside_pluto)
         invalidation = i isa Union{Missing,HTLScriptPart} ? i : HTLScriptPart(i)
-        new(body,invalidation,id,_id, show_outside_pluto)
+        new(body,invalidation, something(id, missing), show_outside_pluto)
     end
 end
 # Custom Constructors
 HTLScript(body; kwargs...) = HTLScript(;body, kwargs...)
-HTLScript(body, invalidation; kwargs...) = HTLScript(body, invalidation, missing;kwargs...)
-HTLScript(body,invalidation,id; kwargs...) = HTLScript(;body, invalidation, id, kwargs...)
+HTLScript(body, invalidation; kwargs...) = HTLScript(body; invalidation, kwargs...)
+HTLScript(body, invalidation, id; kwargs...) = HTLScript(body, invalidation; id, kwargs...)
 
 # Identity/Copy with modification
 HTLScript(s::HTLScript; kwargs...) = HTLScript(s.body, s.invalidation, s.id;kwargs...)
@@ -314,3 +310,14 @@ struct HTLMultiScript
 	scripts::Vector{HTLScript}
 	HTLMultiScript(v::Vector{HTLScript}) = new(filter(!shouldskip, v))
 end
+HTLMultiScript(s::ValidInputs) = HTLMultiScript([HTLScript(s)])
+
+# This struct will simply create a running script when rendered inside HTML
+struct MakeScript
+	script::HTLMultiScript
+	id::String
+end
+MakeScript(ms::HTLMultiScript; id = script_id(ms)) = MakeScript(ms, id)
+MakeScript(s::ValidInputs; kwargs...) = MakeScript(HTLMultiScript(s); kwargs...)
+
+make_script(x) = MakeScript(x)

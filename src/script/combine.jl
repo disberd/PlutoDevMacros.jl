@@ -1,11 +1,3 @@
-shouldskip(p::HTLScriptPart) = p.buffer.size === 0
-shouldskip(::Missing) = true
-shouldskip(x::Any) = false
-shouldskip(x::HTLScript) = shouldskip(x.body) && shouldskip(x.invalidation)
-
-haslisteners(s::HTLScriptPart) = s.addedEventListeners
-haslisteners(s::HTLScript) = haslisteners(s.body)
-haslisteners(ms::HTLMultiScript) = any(haslisteners, ms.scripts)
 
 """
 	combine_scripts(v; id = missing)
@@ -54,55 +46,14 @@ _convert_combine(h::Vararg{ValidInputs};id) = _convert_combine(h;id)
 _combine(h::Vararg{HTLScript};id) = _combine(h;id)
 
 function _combine(h;id)
-	body = IOBuffer()
-	invalidation = IOBuffer()
-	_id = missing
-	f(x, y) = if !shouldskip(y)
-		if x.size !== 0 
-			write(x, '\n')
-		end
-		buf = y.buffer
-		seekstart(buf)
-		write(x, buf)
+	scripts = if ismissing(id) || isnothing(id)
+		collect(h)
+	else
+		s1, rest = Iterators.peel(h)
+		[
+			HTLScript(s1; id),
+			rest...
+		]
 	end
-	for el in h
-		@assert el isa HTLScript "Only element of type HTLScript can be combined together"
-		f(body, el.body)
-		f(invalidation, el.invalidation)
-		if ismissing(id)
-			!ismissing(_id) && !ismissing(el.id) && _id != el.id && error("You cannot combine HTLScript elements with different assigned ids")
-			_id = coalesce(_id, el.id)
-		end
-	end
-	HTLScript(;
-		body = shouldskip(body) ? missing : HTLScriptPart(body),
-		invalidation = shouldskip(invalidation) ? missing : HTLScriptPart(invalidation),
-		id = ismissing(id) ? _id : id
-	)	
-end
-
-## Make Script ##
-function make_script(h::HTLScript, addListeners::Bool = h.body.addedEventListeners; pluto = true)
-	id = coalesce(h.id, h._id)
-    s = combine_scripts([
-        addListeners ? _events_listeners_preamble : HTLScript("")
-        h
-        addListeners ? _events_listeners_postamble : HTLScript("")
-    ])
-	contents = [
-		s.body
-		pluto && !shouldskip(s.invalidation) ?
-		HTLScriptPart(@htl("""
-		<script>
-			invalidation.then(() => {	
-				$(s.invalidation)
-			})
-		</script>
-		""")) : HTLScriptPart("")
-	]
-	@htl("""
-		<script id='$id'>
-			$(contents)
-		</script>
-	""")
+	return HTLMultiScript(scripts)
 end

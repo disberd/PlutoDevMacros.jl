@@ -4,14 +4,7 @@
 function Base.show(io::IO, ::MIME"text/javascript", s::HTLScriptPart)
 	buf = s.buffer
 	seekstart(buf)
-	write(io, buf)
-end
-
-function HypertextLiteral.print_script(io::IO, v::Union{AbstractVector{HTLScriptPart}, NTuple{N,HTLScriptPart} where N})
-	foreach(v) do s
-		shouldskip(s) && return
-		show(io, MIME"text/javascript"(), s)
-	end
+	println(io, buf)
 end
 
 # Show the formatted code in markdown as output
@@ -22,12 +15,13 @@ function Base.show(io::IO, mime::MIME"text/html", s::HTLScriptPart)
 	show(io, mime, Markdown.MD(Markdown.Code("js", codestring)))
 end
 function Base.show(io::IO, mime::MIME"text/html", v::Union{AbstractVector{HTLScriptPart}, NTuple{N,HTLScriptPart} where N})
-	codestring = ""
+	outbuf = IOBuffer()
 	foreach(v) do s
 		buf = s.buffer
 		seekstart(buf)
-		codestring *= read(buf, String)
+		println(outbuf, buf)
 	end
+	codestring = String(take!(outbuf))
 	show(io, mime, Markdown.MD(Markdown.Code("js", strip(codestring, '\n'))))
 end
 
@@ -43,8 +37,9 @@ function Base.show(io::IO, mime::MIME"text/html", s::HTLBypass)
 end
 
 ## HTLScript ##
-# This custom content method is used when interpolating inside the @htl macro (but outside of the script tag)
-HypertextLiteral.content(s::HTLScript) = make_script(s)
+function Base.show(io::IO, mime::MIME"text/javascript", s::HTLScript; pluto = is_inside_pluto(io))
+	show(io, mime, HTLMultiScript(s); pluto)
+end
 
 # The show method is instead used for showing in the Pluto output.
 function Base.show(io::IO, mime::MIME"text/html", s::HTLScript)
@@ -52,8 +47,7 @@ function Base.show(io::IO, mime::MIME"text/html", s::HTLScript)
 end
 
 ## HTLMultiScript ##
-function Base.show(io::IO, mime::MIME"text/javascript", ms::HTLMultiScript)
-	pluto = is_inside_pluto(io)
+function Base.show(io::IO, mime::MIME"text/javascript", ms::HTLMultiScript; pluto = is_inside_pluto(io))
 	has_listeners = haslisteners(ms)
 	scripts = if has_listeners
 		vcat(
@@ -83,6 +77,18 @@ function Base.show(io::IO, mime::MIME"text/javascript", ms::HTLMultiScript)
 		show(io, mime, s.invalidation)
 	end
 	println(io, "})")
+end
+
+
+## MakeScript ##
+function Base.show(io::IO, ::MIME"text/html", mks::MakeScript; pluto = is_inside_pluto(io))
+	script = mks.script
+	shouldskip(script) && return
+	id = script_id(script)
+	println(io, "<script id=$id>")
+	show(io, MIME"text/javascript"(), script; pluto)
+	println(io, "</script>")
+	return
 end
 
 ## Generic ##

@@ -5,7 +5,7 @@ using .Script
 # in combination with other scripts to inject some javascript in the notebook
 # without having an ugly empty log below the cell 
 function hide_this_log()
-	body = HTLScriptPart("""
+	body = ScriptContent("""
 	const logs_positioner = currentScript.closest('pluto-log-dot-positioner')
 	if (logs_positioner == undefined) {return}
 	const logs = logs_positioner.parentElement
@@ -27,9 +27,9 @@ function hide_this_log()
 	observer.observe(logs, {subtree: true, attributes: true, childList: true})
 	logs_positioner.toggleAttribute('hidden',true)
 	""")
-	invalidation = HTLScriptPart("""
+	invalidation = ScriptContent("""
 		console.log('invalidation')
 		observer.disconnect()
 	""")
-	return HTLScript(body, invalidation)
+	return PlutoScript(body, invalidation)
 end

@@ -1,4 +1,4 @@
-import ..Script: HTLScript, HTLScriptPart, make_script, combine_scripts
+import ..Script: PlutoScript, ScriptContent, make_script, combine_scripts
 import ..PlutoDevMacros: hide_this_log
 import Pkg, TOML
 const _stdlibs = first.(values(Pkg.Types.stdlibs()))
@@ -297,7 +297,7 @@ _popup_style(id) = """
 
 function html_reload_button(cell_id; text = "Reload @frompackage", err = false)
 	id = string(cell_id)
-	container = HTLScript(@htl """
+	container = PlutoScript(@htl """
 	<script>
 			const container = document.querySelector('fromparent-container') ?? document.body.appendChild(html`<fromparent-container>`)
 			container.innerHTML = $text

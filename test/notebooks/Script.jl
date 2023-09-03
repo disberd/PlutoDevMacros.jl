@@ -47,7 +47,7 @@ md"""
 
 # ╔═╡ 201323b9-8caf-4acb-904e-b76d16e5ffb1
 md"""
-## HTLScriptPart
+## ScriptContent
 """
 
 # ╔═╡ adf46403-ec6b-4278-ae65-5747f319dc96
@@ -56,7 +56,7 @@ asd = (@htl """
 	let out = html`<div></div>`
 	console.log('first script')
 </script>
-""") |> HTLScriptPart
+""") |> ScriptContent
 
 # ╔═╡ 73932307-b68c-453a-a7e6-8ba5d8bd8334
 lol = (@htl """
@@ -66,7 +66,7 @@ lol = (@htl """
 	console.log('second script')
 	return out
 </script>
-""") |> HTLScriptPart
+""") |> ScriptContent
 
 # ╔═╡ 5895351c-9edd-4790-a262-b28731a3ab97
 @htl """
@@ -120,22 +120,22 @@ Script.formatted_js(bpasd)
 
 # ╔═╡ 453ee62b-d1b4-4bad-aafa-cba13559b698
 md"""
-## HTLScript
+## PlutoScript
 """
 
 # ╔═╡ 14d239b3-1402-4ae4-a620-8de9c191a20e
-s = HTLScript("console.log('asd')")
+s = PlutoScript("console.log('asd')")
 
 # ╔═╡ 4774accb-a3f7-4cee-9e9e-da1a413eb5a0
-HTLScript(s)
+PlutoScript(s)
 
 # ╔═╡ b5464d21-dc4d-4be1-83fa-a4c351015944
 combine_scripts([(s for _ in 1:4)..., "console.log('lol')"];id=missing)
 
 # ╔═╡ cc41848a-3fcb-4c65-9a5d-452b3fecdf63
 dio = let
-	a = HTLScript("console.log('asd1')", "console.log('lol1')", "lol")
-	b = HTLScript("console.log('asd2');", "console.log('lol2')", "gesu")
+	a = PlutoScript("console.log('asd1')", "console.log('lol1')", "lol")
+	b = PlutoScript("console.log('asd2');", "console.log('lol2')", "gesu")
 	combine_scripts([a,b]; id = "lol")
 end
 

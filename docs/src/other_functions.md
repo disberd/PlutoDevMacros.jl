@@ -16,8 +16,8 @@ The `Script` submodule implements and exports some functionality (built on top o
 None of the functions/types below are exported by `PlutoDevMacros` itself, but only by its `Script` submodule
 
 ```@docs
-PlutoDevMacros.Script.HTLScript
-PlutoDevMacros.Script.HTLScriptPart
+PlutoDevMacros.Script.PlutoScript
+PlutoDevMacros.Script.ScriptContent
 PlutoDevMacros.Script.HTLBypass
 PlutoDevMacros.Script.combine_scripts
 ```

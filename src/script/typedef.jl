@@ -1,6 +1,6 @@
-## HTLScriptPart ##
+## ScriptContent ##
 	"""
-	struct HTLScriptPart
+	struct ScriptContent
 This struct is a simple wrapper around an `IOBuffer` and is intended to provide
 pretty printing of script contents and custom interpolation inside the
 `<script>` tags of the `@htl` macro.
@@ -16,7 +16,7 @@ construction.
 
 The struct can be initialized as follows:
 ```julia
-wrapper = HTLScriptPart(@htl(\"\"\"
+wrapper = ScriptContent(@htl(\"\"\"
 <script>
 code...
 </script>
@@ -25,28 +25,28 @@ code...
 When interpolating `wrapper` above inside another `@htl` macro as `@htl
 "<script>\$wrapper</script>"` it would be as equivalent to directly writing
 `@htl "<script>code...</script>` inside the script. This is clearly only
-beneficial if multiple `HTLScriptPart` variables are interpolated inside a
+beneficial if multiple `ScriptContent` variables are interpolated inside a
 single <script> block.
 
-On top of the interpolation, an object of type `HTLScriptPart` will show its
+On top of the interpolation, an object of type `ScriptContent` will show its
 contents as a formatted javascript code markdown element when shown in Pluto. 
 
 The constructor also accepts either a `String` or `IOBuffer` object for its
 initialization instead of a `HypertextLiteral.Result` one.
 
-See also: [`HTLScript`](@ref), [`HTLBypass`](@ref)
+See also: [`PlutoScript`](@ref), [`HTLBypass`](@ref)
 
 Examples:
 
 ```julia
 let
-	asd = HTLScriptPart(@htl \"\"\"
+	asd = ScriptContent(@htl \"\"\"
 	<script>
 		let out = html`<div></div>`
 		console.log('first script')
 	</script>
 	\"\"\")
-	lol = HTLScriptPart(@htl \"\"\"
+	lol = ScriptContent(@htl \"\"\"
 	<script>
 		let a = Math.random()
 		out.innerText = a
@@ -65,21 +65,25 @@ let
 end
 ```
 """
-struct HTLScriptPart
+struct ScriptContent
 	buffer::IOBuffer
 	addedEventListeners::Bool
-	function HTLScriptPart(buf::IOBuffer)
-		# We check if the code contains calls to the addScriptEventListeners
+end
+function ScriptContent(buf::IOBuffer; addedEventListeners = missing)
+	# We check if the code contains calls to the addScriptEventListeners
+	ael = if addedEventListeners === missing
 		checkbuf = IOBuffer()
 		seekstart(buf)
 		Base.readuntil_vector!(buf, codeunits("addScriptEventListeners("), false, checkbuf)
 		# If the previous line didn't find any call to addScriptEventListeners, the size of trash and buf will be the same
-		addedEventListeners = !(buf.size === checkbuf.size)
-		new(buf, addedEventListeners)
-	end		
-end
+		!(buf.size === checkbuf.size)
+	else
+		addedEventListeners
+	end
+	ScriptContent(buf, ael)
+end		
 
-function HTLScriptPart(r::HypertextLiteral.Result; kwargs...)
+function ScriptContent(r::HypertextLiteral.Result; kwargs...)
 	buf = IOBuffer()
 	temp = IOBuffer()
 	trash = IOBuffer()
@@ -89,14 +93,19 @@ function HTLScriptPart(r::HypertextLiteral.Result; kwargs...)
 	# https://github.com/JuliaLang/julia/blob/f70b5e4767809c7dbc4c6c082aed67a2af4447c2/base/io.jl#L923-L943
 	Base.readuntil_vector!(temp, codeunits("<script>"), false, trash)
 	Base.readuntil_vector!(temp, codeunits("</script>"), false, buf)
-	HTLScriptPart(buf; kwargs...)
+	str = String(take!(buf)) # We do this (instead of using directly the buffer) to strip newlines
+	ScriptContent(str; kwargs...)
 end
-function HTLScriptPart(s::AbstractString; kwargs...)
+function ScriptContent(s::AbstractString; kwargs...)
+	isnewline(x) = x in ('\n', '\r') # This won't remove tabs and whitespace
+	str = lstrip(isnewline, rstrip(s))
 	buf = IOBuffer()
-	write(buf, s)
-	HTLScriptPart(buf; kwargs...)
+	write(buf, str)
+	ScriptContent(buf; kwargs...)
 end
-HTLScriptPart(p::HTLScriptPart; kwargs...) = HTLScriptPart(p.buffer; kwargs...)
+ScriptContent(p::ScriptContent) = p
+ScriptContent() = ScriptContent(IOBuffer(), false)
+ScriptContent(m::Union{Missing, Nothing}) = missing
 
 ## HTLBypass ##
 """
@@ -117,7 +126,7 @@ The struct only accepts the output of the @htl macro as an input.
 On top of the interpolation, an object of type `HTLBypass` will simply show the
 wrapped `HypertextLiteral.Result` when shown with `MIME"text/html"`.
 
-See also: [`HTLScriptPart`](@ref), [`HTLScript`](@ref)
+See also: [`ScriptContent`](@ref), [`PlutoScript`](@ref)
 
 Examples:
 
@@ -146,30 +155,32 @@ struct HTLBypass
 	end
 end
 
-## HTLScript ##
+abstract type ValidScript end
+abstract type SingleScript <: ValidScript end
+## PlutoScript ##
 """
 ```julia
-Base.@kwdef struct HTLScript
-	body::HTLScriptPart
-	invalidation::Union{HTLScriptPart, Missing}
+Base.@kwdef struct PlutoScript
+	body::ScriptContent
+	invalidation::Union{ScriptContent, Missing}
 	id::Union{Missing, Nothing, String}
 end
 ```
 # Fields
-- `body::HTLScriptPart` -> The main body of the script
-- `invalidation::Union{HTLScriptPart, Missing}` -> The code to be executed inside the invalidation promise. Defaults to `missing`
+- `body::ScriptContent` -> The main body of the script
+- `invalidation::Union{ScriptContent, Missing}` -> The code to be executed inside the invalidation promise. Defaults to `missing`
 - `id::Union{Missing, Nothing, String}` -> The id to assign to the script. Defaults to `missing`
 
 # Additional Constructors
-	HTLScript(body; kwargs...)
-	HTLScript(body, invalidation; kwargs...)
+	PlutoScript(body; kwargs...)
+	PlutoScript(body, invalidation; kwargs...)
 
 For the body and invalidation fields, the constructor also accepts inputs of
 type `String`, `HypertextLiteral.Result` and `IOBuffer`, translating them into
-`HTLScriptPart` internally.
+`ScriptContent` internally.
 
-	HTLScript(s::HTLScript; kwargs...)
-This constructor is used to copy the elements from another HTLScript with the
+	PlutoScript(s::PlutoScript; kwargs...)
+This constructor is used to copy the elements from another PlutoScript with the
 option of overwriting the fields provided as `kwargs`
 
 # Description
@@ -180,7 +191,7 @@ from HypertextLiteral.
 It is intended for use inside Pluto notebooks to ease composition of bigger
 scripts via smaller parts.
 
-When an HTLScript is interpolated inside the `@htl` macro, the following code is generated:
+When an PlutoScript is interpolated inside the `@htl` macro, the following code is generated:
 ```html
 <script id=\$id>
 \$body
@@ -195,18 +206,18 @@ If `id = nothing`, a script without id is created.
 If the `invalidation` field is `missing`, the whole invalidation block is
 skipped.
 
-Multiple `HTLScript` elements can be combined together using the
+Multiple `PlutoScript` elements can be combined together using the
 [`combine_script`](@ref) function also exported by this package, allowing to
 generate bigger scripts by composing multiple building blocks.
 
-When shown inside the output of Pluto cells, the HTLScript object prints its
+When shown inside the output of Pluto cells, the PlutoScript object prints its
 containing formatted code as a `Markdown.Code` element.
 
 # Javascript Events Listeners
 
-`HTLScript` provides some simplified way of adding event listeners in javascript
+`PlutoScript` provides some simplified way of adding event listeners in javascript
 that are automatically removed upon cell invalidation. Scripts created using
-`HTLScript` expose an internal javascript function 
+`PlutoScript` expose an internal javascript function 
 ```js
 addScriptEventListener(element, listeners)
 ```
@@ -219,14 +230,14 @@ and an object of with the following key-values:
   ... 
 }
 ```
-When generating the script to execute, `HTLScript` automatically adds all the
+When generating the script to execute, `PlutoScript` automatically adds all the
 provided listeners to the provided element, and also takes care of removing all
 the listeners upon cell invalidation.
 
 For example, the following julia code:
 ```julia
 let
-	script = HTLScript(@htl(\"\"\"
+	script = PlutoScript(@htl(\"\"\"
 <script>
 	addScriptEventListeners(window, { 
 		click: function (event) {
@@ -259,14 +270,14 @@ invalidation.then(() => {
 })
 ```
 
-See also: [`HTLScriptPart`](@ref), [`combine_scripts`](@ref)
+See also: [`ScriptContent`](@ref), [`combine_scripts`](@ref)
 
 # Examples:
 The following code:
 ```julia
 let
-a = HTLScript("console.log('asd')")
-b = HTLScript(@htl("<script>console.log('boh')</script>"), "console.log('lol')")
+a = PlutoScript("console.log('asd')")
+b = PlutoScript(@htl("<script>console.log('boh')</script>"), "console.log('lol')")
 script = combine_scripts([a,b];id="test")
 out = @htl("\$script")
 end
@@ -285,39 +296,70 @@ is equivalent to writing directly
 </script>
 ```
 """
-Base.@kwdef struct HTLScript
-    body::HTLScriptPart
-    invalidation::Union{Missing,HTLScriptPart} = missing
+@kwdef struct PlutoScript <: SingleScript
+    body::Union{Missing,ScriptContent} = missing
+    invalidation::Union{Missing,ScriptContent} = missing
     id::Union{Missing, String} = missing
-	show_outside_pluto::Bool = true
-    function HTLScript(b,i,id::Union{Missing, Nothing, String},show_outside_pluto::Bool) 
-        body = b isa Union{Missing, HTLScriptPart} ? b : HTLScriptPart(b; show_outside_pluto)
-        invalidation = i isa Union{Missing,HTLScriptPart} ? i : HTLScriptPart(i)
-        new(body,invalidation, something(id, missing), show_outside_pluto)
+    function PlutoScript(b,i,id::Union{Missing, Nothing, String}) 
+        body = ScriptContent(b)
+        invalidation = ScriptContent(i)
+        new(body,invalidation, something(id, missing))
     end
 end
 # Custom Constructors
-HTLScript(body; kwargs...) = HTLScript(;body, kwargs...)
-HTLScript(body, invalidation; kwargs...) = HTLScript(body; invalidation, kwargs...)
-HTLScript(body, invalidation, id; kwargs...) = HTLScript(body, invalidation; id, kwargs...)
+PlutoScript(body; kwargs...) = PlutoScript(;body, kwargs...)
+PlutoScript(body, invalidation; kwargs...) = PlutoScript(body; invalidation, kwargs...)
 
 # Identity/Copy with modification
-HTLScript(s::HTLScript; kwargs...) = HTLScript(s.body, s.invalidation, s.id;kwargs...)
+PlutoScript(s::PlutoScript; kwargs...) = PlutoScript(;body = s.body, invalidation = s.invalidation, id = s.id, kwargs...)
 
-
-## HTLMultiScript ##
-struct HTLMultiScript
-	scripts::Vector{HTLScript}
-	HTLMultiScript(v::Vector{HTLScript}) = new(filter(!shouldskip, v))
+## NormalScript
+@kwdef struct NormalScript <: SingleScript
+	body::Union{Missing, ScriptContent} = missing
+	show_as_module::Bool = true
+	id::Union{Missing, String} = missing
+    function NormalScript(b,show_as_module::Bool,id::Union{Missing, Nothing, String}) 
+        body = ScriptContent(b)
+        new(body, show_as_module, something(id, missing))
+    end
 end
-HTLMultiScript(s::ValidInputs) = HTLMultiScript([HTLScript(s)])
+NormalScript(body; kwargs...) = NormalScript(;body, kwargs...)
+NormalScript(ps::PlutoScript; kwargs...) = NormalScript(ps.body; id = ps.id, kwargs...)
+NormalScript(ns::NormalScript; kwargs...) = NormalScript(ns.body; show_as_module = ns.show_as_module, id = ps.id, kwargs...)
 
-# This struct will simply create a running script when rendered inside HTML
-struct MakeScript
-	script::HTLMultiScript
-	id::String
+## DualScript ##
+@kwdef struct DualScript <: ValidScript
+	inside_pluto::PlutoScript = PlutoScript()
+	outside_pluto::NormalScript = NormalScript()
+	function DualScript(i::PlutoScript, o::NormalScript; kwargs...)
+		id = get(kwargs, :id, missing)
+		if id === missing
+			new(i,o)
+		else
+			ip = PlutoScript(i; id)
+			op = NormalScript(o; id)
+			new(ip, op)
+		end
+	end
 end
-MakeScript(ms::HTLMultiScript; id = script_id(ms)) = MakeScript(ms, id)
-MakeScript(s::ValidInputs; kwargs...) = MakeScript(HTLMultiScript(s); kwargs...)
+# Custom Constructors
+DualScript(i::PlutoScript; kwargs...) = DualScript(i, NormalScript(); kwargs...)
+DualScript(o::NormalScript; kwargs...) = DualScript(PlutoScript(), o; kwargs...)
+DualScript(ds::DualScript; kwargs...) = DualScript(ds.inside_pluto, ds.outside_pluto; kwargs...)
+DualScript(body; kwargs...) = DualScript(PlutoScript(body; kwargs...))
 
-make_script(x) = MakeScript(x)
+
+## CombinedScripts ##
+struct CombinedScripts <: ValidScript
+	scripts::Vector{DualScript}
+	CombinedScripts(v::Vector) = new(filter(!shouldskip, map(DualScript, v)))
+end
+const ValidInputs = Union{DualScript, AbstractString, IOBuffer, ScriptContent, SingleScript}
+
+CombinedScripts(s::ValidInputs) = CombinedScripts([DualScript(s)])
+
+## ShowAsHTML ##
+struct ShowAsHTML{T}
+	el::T
+end
+

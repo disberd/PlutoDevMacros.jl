@@ -96,7 +96,7 @@ end
             @test expected == f(ex)
 
             ex = :(using PackageModule.Script)
-            expected = :(import $(parent_path...).PlutoDevMacros.Script: HTLBypass, HTLScript, HTLScriptPart, Script, combine_scripts, make_script)
+            expected = :(import $(parent_path...).PlutoDevMacros.Script: HTLBypass, PlutoScript, ScriptContent, Script, combine_scripts, make_script)
             @test expected == f(ex)
 
             # Relative imports

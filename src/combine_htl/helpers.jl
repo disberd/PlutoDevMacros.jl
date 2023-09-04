@@ -62,6 +62,11 @@ make_script(x::Union{SingleScript, DualScript}) = DualScript(x)
 make_script(x::CombinedScripts) = x
 make_script(body; kwargs...) = make_script(;body, kwargs...)
 make_script(v::Vector) = CombinedScripts(v)
+make_script(s::ShowWithPrintHTML) = if s.el isa Script
+    return s.el
+else
+    error("Invalid input type")
+end
 
 ## Make Node ##
 make_node(;inside = "", outside = "") = DualNode(inside, outside)
@@ -71,3 +76,4 @@ make_node(i, o = "") = DualNode(i, o)
 make_node(v::Vector) = CombinedNodes(v)
 
 make_html(x) = ShowWithPrintHTML(make_node(x))
+make_html(x::ShowWithPrintHTML) = x

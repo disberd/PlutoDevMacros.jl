@@ -4,6 +4,12 @@ julia_version = "1.10.0-beta2"
 manifest_format = "2.0"
 project_hash = "312792d949ca909f2f223c32651672a933fb0970"
 
+[[deps.AbstractPlutoDingetjes]]
+deps = ["Pkg"]
+git-tree-sha1 = "91bd53c39b9cbfb5ef4b015e8b582d344532bd0a"
+uuid = "6e696c72-6542-2067-7265-42206c756150"
+version = "1.2.0"
+
 [[deps.ArgTools]]
 uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
 version = "1.1.1"
@@ -152,10 +158,10 @@ uuid = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
 version = "1.10.0"
 
 [[deps.PlutoDevMacros]]
-deps = ["HypertextLiteral", "InteractiveUtils", "MacroTools", "Markdown", "Pkg", "Random", "TOML"]
+deps = ["AbstractPlutoDingetjes", "HypertextLiteral", "InteractiveUtils", "MacroTools", "Markdown", "Pkg", "Random", "TOML"]
 path = "../.."
 uuid = "a0499f29-c39b-4c5c-807c-88074221b949"
-version = "0.5.7"
+version = "0.5.8"
 
 [[deps.PrecompileTools]]
 deps = ["Preferences"]

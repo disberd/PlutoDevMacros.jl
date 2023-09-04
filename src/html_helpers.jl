@@ -5,7 +5,7 @@ using .PlutoCombineHTL
 # in combination with other scripts to inject some javascript in the notebook
 # without having an ugly empty log below the cell 
 function hide_this_log()
-	body = ScriptContent("""
+	body = """
 	const logs_positioner = currentScript.closest('pluto-log-dot-positioner')
 	if (logs_positioner == undefined) {return}
 	const logs = logs_positioner.parentElement
@@ -26,10 +26,10 @@ function hide_this_log()
 
 	observer.observe(logs, {subtree: true, attributes: true, childList: true})
 	logs_positioner.toggleAttribute('hidden',true)
-	""")
-	invalidation = ScriptContent("""
-		console.log('invalidation')
-		observer.disconnect()
-	""")
-	return PlutoScript(body, invalidation)
+	"""
+	invalidation = """
+	console.log('invalidation')
+	observer.disconnect()
+	"""
+	return make_script(;body, invalidation) |> make_html
 end

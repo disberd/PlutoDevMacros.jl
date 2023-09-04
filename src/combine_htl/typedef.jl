@@ -282,7 +282,7 @@ PlutoScript(s::PlutoScript; kwargs...) = PlutoScript(;body = s.body, invalidatio
 end
 NormalScript(body; kwargs...) = NormalScript(;body, kwargs...)
 NormalScript(ps::PlutoScript; kwargs...) = NormalScript(ps.body; id = ps.id, kwargs...)
-NormalScript(ns::NormalScript; kwargs...) = NormalScript(ns.body; show_as_module = ns.show_as_module, id = ps.id, kwargs...)
+NormalScript(ns::NormalScript; kwargs...) = NormalScript(ns.body; show_as_module = ns.show_as_module, id = ns.id, kwargs...)
 
 ## DualScript ##
 @kwdef struct DualScript <: Script{InsideAndOutsidePluto}
@@ -310,7 +310,7 @@ DualScript(body; kwargs...) = DualScript(PlutoScript(body; kwargs...))
 ## CombinedScripts ##
 struct CombinedScripts <: Script{InsideAndOutsidePluto}
 	scripts::Vector{DualScript}
-	CombinedScripts(v::Vector) = new(filter(!shouldskip, map(DualScript, v)))
+	CombinedScripts(v::Vector) = new(filter(!shouldskip, map(make_script, v)))
 end
 
 CombinedScripts(cs::CombinedScripts) = cs
@@ -358,8 +358,8 @@ end
 struct DualNode <: NonScript{InsideAndOutsidePluto}
 	inside_pluto::PlutoNode
 	outside_pluto::NormalNode
+	DualNode(i, o) = DualNode(PlutoNode(i), NormalNode(o))
 end
-DualNode(i, o) = DualNode(PlutoNode(i), NormalNode(o))
 DualNode(i::PlutoNode) = DualNode(i, "")
 DualNode(o::NormalNode) = DualNode("", o)
 DualNode(x) = DualNode(PlutoNode(x))

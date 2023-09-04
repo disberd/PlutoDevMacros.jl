@@ -20,12 +20,17 @@ begin
 	end
 	# using Main.Revise
 	using Main.PlutoDevMacros
-	using Main.PlutoDevMacros.Script
+	using Main.PlutoDevMacros.PlutoCombineHTL.WithTypes
 	using Main.PlutoDevMacros.HypertextLiteral
 end
 
 # ╔═╡ 8325847e-fd7e-42ef-84c7-a30c6467183e
 using PlutoUI
+
+# ╔═╡ a7c15aea-67e5-4245-84d3-0a7663b63b77
+@frompackage "../.." begin
+	using >.MacroTools
+end
 
 # ╔═╡ c924a590-a189-4ca2-abef-2b7dca80fe11
 md"""
@@ -34,6 +39,9 @@ md"""
 
 # ╔═╡ 13d2cf9a-2fce-47f9-a851-6dd80d130b63
 TableOfContents()
+
+# ╔═╡ 7a8c6eb4-cc33-41c3-9e1a-d8e07954fef9
+PlutoDevMacros.FromPackage.html_reload_button("asd")
 
 # ╔═╡ 9daf72fd-dff2-4096-bf23-5b7fa8afe008
 md"""
@@ -424,7 +432,9 @@ version = "17.4.0+2"
 # ╠═d0e6a2b2-1e5d-11ee-177a-5f0a92dd83f5
 # ╠═8325847e-fd7e-42ef-84c7-a30c6467183e
 # ╠═13d2cf9a-2fce-47f9-a851-6dd80d130b63
+# ╠═7a8c6eb4-cc33-41c3-9e1a-d8e07954fef9
 # ╟─9daf72fd-dff2-4096-bf23-5b7fa8afe008
+# ╠═a7c15aea-67e5-4245-84d3-0a7663b63b77
 # ╟─d013da3e-8a23-4594-9d15-4eadca921a7a
 # ╟─201323b9-8caf-4acb-904e-b76d16e5ffb1
 # ╠═adf46403-ec6b-4278-ae65-5747f319dc96

@@ -1,4 +1,4 @@
-using .Script
+using .PlutoCombineHTL
 
 # This function, if appearing inside a capture log message in Pluto (not with
 # println, just the @info, @warn, etc ones), will hide itself. It is mostly used

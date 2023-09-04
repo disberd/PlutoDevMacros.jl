@@ -1,4 +1,4 @@
-import ..Script: PlutoScript, ScriptContent, make_script, combine_scripts
+import ..PlutoCombineHTL: PlutoScript, ScriptContent, make_script, combine_scripts
 import ..PlutoDevMacros: hide_this_log
 import Pkg, TOML
 const _stdlibs = first.(values(Pkg.Types.stdlibs()))

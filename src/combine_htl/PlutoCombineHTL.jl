@@ -1,4 +1,4 @@
-module Script
+module PlutoCombineHTL
 
 using Random
 using HypertextLiteral
@@ -10,7 +10,7 @@ export ScriptContent, HTLBypass, DualScript, combine_scripts, make_script
 include("typedef.jl")
 include("js_events.jl")
 include("helpers.jl")
-include("combine.jl")
+# include("combine.jl")
 include("show.jl")
 
 end

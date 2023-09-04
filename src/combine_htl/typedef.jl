@@ -1,3 +1,16 @@
+abstract type DisplayLocation end
+abstract type SingleDisplayLocation <: DisplayLocation end
+struct InsidePluto <: SingleDisplayLocation end
+struct OutsidePluto <: SingleDisplayLocation end
+struct InsideAndOutsidePluto <: DisplayLocation end
+
+abstract type Node{T<:DisplayLocation} end
+abstract type NonScript{T} <: Node{T} end
+abstract type Script{T} <: Node{T} end
+
+const SingleNode = Node{<:SingleDisplayLocation}
+const SingleScript = Script{<:SingleDisplayLocation}
+
 ## ScriptContent ##
 	"""
 	struct ScriptContent
@@ -34,7 +47,7 @@ contents as a formatted javascript code markdown element when shown in Pluto.
 The constructor also accepts either a `String` or `IOBuffer` object for its
 initialization instead of a `HypertextLiteral.Result` one.
 
-See also: [`PlutoScript`](@ref), [`HTLBypass`](@ref)
+See also: [`PlutoScript`](@ref)
 
 Examples:
 
@@ -66,22 +79,23 @@ end
 ```
 """
 struct ScriptContent
-	buffer::IOBuffer
+	content::String
 	addedEventListeners::Bool
 end
-function ScriptContent(buf::IOBuffer; addedEventListeners = missing)
-	# We check if the code contains calls to the addScriptEventListeners
+function strip_nl(s::AbstractString)
+	isnewline(x) = x in ('\n', '\r') # This won't remove tabs and whitespace
+	str = lstrip(isnewline, rstrip(s))
+end
+function ScriptContent(s::AbstractString; addedEventListeners = missing)
+	# We strip eventual leading newline or trailing `isspace`
+	str = strip_nl(s)
 	ael = if addedEventListeners === missing
-		checkbuf = IOBuffer()
-		seekstart(buf)
-		Base.readuntil_vector!(buf, codeunits("addScriptEventListeners("), false, checkbuf)
-		# If the previous line didn't find any call to addScriptEventListeners, the size of trash and buf will be the same
-		!(buf.size === checkbuf.size)
+		contains(str, "addScriptEventListeners(")
 	else
 		addedEventListeners
 	end
-	ScriptContent(buf, ael)
-end		
+	ScriptContent(str, ael)
+end
 
 function ScriptContent(r::HypertextLiteral.Result; kwargs...)
 	buf = IOBuffer()
@@ -93,70 +107,13 @@ function ScriptContent(r::HypertextLiteral.Result; kwargs...)
 	# https://github.com/JuliaLang/julia/blob/f70b5e4767809c7dbc4c6c082aed67a2af4447c2/base/io.jl#L923-L943
 	Base.readuntil_vector!(temp, codeunits("<script>"), false, trash)
 	Base.readuntil_vector!(temp, codeunits("</script>"), false, buf)
-	str = String(take!(buf)) # We do this (instead of using directly the buffer) to strip newlines
+	str = String(take!(buf)) 
 	ScriptContent(str; kwargs...)
 end
-function ScriptContent(s::AbstractString; kwargs...)
-	isnewline(x) = x in ('\n', '\r') # This won't remove tabs and whitespace
-	str = lstrip(isnewline, rstrip(s))
-	buf = IOBuffer()
-	write(buf, str)
-	ScriptContent(buf; kwargs...)
-end
 ScriptContent(p::ScriptContent) = p
-ScriptContent() = ScriptContent(IOBuffer(), false)
-ScriptContent(m::Union{Missing, Nothing}) = missing
+ScriptContent() = ScriptContent("", false)
+ScriptContent(::Union{Missing, Nothing}) = missing
 
-## HTLBypass ##
-"""
-	struct HTLBypass
-This struct is a simple wrapper around HypertextLiteral.Result intended to
-provide interpolation inside <script> tags as if writing the code that generated
-the result directly. 
-
-This is intended for use inside Pluto notebooks to ease variable interpolation
-inside html element generated within <script> tags using the `html\`\`` command
-that is imported from Observable.
-
-This way, one can generate the intended HTML inside other cells to more easily
-see the results and with support of nested @htl interpolation.
-
-The struct only accepts the output of the @htl macro as an input.
-
-On top of the interpolation, an object of type `HTLBypass` will simply show the
-wrapped `HypertextLiteral.Result` when shown with `MIME"text/html"`.
-
-See also: [`ScriptContent`](@ref), [`PlutoScript`](@ref)
-
-Examples:
-
-```julia
-let
-	bpclass = "magic";
-	bplol = @htl \"\"\"
-	<div class=\$bpclass>
-		MAGIC
-	</div>
-	\"\"\"
-	bpasd = HTLBypass(@htl "
-	<div>This is \$bplol</div>
-	")
-	@htl "<script>let out = html`\$bpasd`;return out</script>"
-end
-```
-"""
-struct HTLBypass
-	result::HypertextLiteral.Result
-	buffer::IOBuffer
-	function HTLBypass(r::HypertextLiteral.Result)
-		buf = IOBuffer()
-		show(buf, r)
-		new(r, buf)
-	end
-end
-
-abstract type ValidScript end
-abstract type SingleScript <: ValidScript end
 ## PlutoScript ##
 """
 ```julia
@@ -296,7 +253,7 @@ is equivalent to writing directly
 </script>
 ```
 """
-@kwdef struct PlutoScript <: SingleScript
+@kwdef struct PlutoScript <: Script{InsidePluto}
     body::Union{Missing,ScriptContent} = missing
     invalidation::Union{Missing,ScriptContent} = missing
     id::Union{Missing, String} = missing
@@ -314,7 +271,7 @@ PlutoScript(body, invalidation; kwargs...) = PlutoScript(body; invalidation, kwa
 PlutoScript(s::PlutoScript; kwargs...) = PlutoScript(;body = s.body, invalidation = s.invalidation, id = s.id, kwargs...)
 
 ## NormalScript
-@kwdef struct NormalScript <: SingleScript
+@kwdef struct NormalScript <: Script{OutsidePluto}
 	body::Union{Missing, ScriptContent} = missing
 	show_as_module::Bool = true
 	id::Union{Missing, String} = missing
@@ -328,7 +285,7 @@ NormalScript(ps::PlutoScript; kwargs...) = NormalScript(ps.body; id = ps.id, kwa
 NormalScript(ns::NormalScript; kwargs...) = NormalScript(ns.body; show_as_module = ns.show_as_module, id = ps.id, kwargs...)
 
 ## DualScript ##
-@kwdef struct DualScript <: ValidScript
+@kwdef struct DualScript <: Script{InsideAndOutsidePluto}
 	inside_pluto::PlutoScript = PlutoScript()
 	outside_pluto::NormalScript = NormalScript()
 	function DualScript(i::PlutoScript, o::NormalScript; kwargs...)
@@ -343,6 +300,7 @@ NormalScript(ns::NormalScript; kwargs...) = NormalScript(ns.body; show_as_module
 	end
 end
 # Custom Constructors
+DualScript(i, o; kwargs...) = DualScript(PlutoScript(i), NormalScript(o); kwargs...)
 DualScript(i::PlutoScript; kwargs...) = DualScript(i, NormalScript(); kwargs...)
 DualScript(o::NormalScript; kwargs...) = DualScript(PlutoScript(), o; kwargs...)
 DualScript(ds::DualScript; kwargs...) = DualScript(ds.inside_pluto, ds.outside_pluto; kwargs...)
@@ -350,16 +308,67 @@ DualScript(body; kwargs...) = DualScript(PlutoScript(body; kwargs...))
 
 
 ## CombinedScripts ##
-struct CombinedScripts <: ValidScript
+struct CombinedScripts <: Script{InsideAndOutsidePluto}
 	scripts::Vector{DualScript}
 	CombinedScripts(v::Vector) = new(filter(!shouldskip, map(DualScript, v)))
 end
-const ValidInputs = Union{DualScript, AbstractString, IOBuffer, ScriptContent, SingleScript}
 
-CombinedScripts(s::ValidInputs) = CombinedScripts([DualScript(s)])
+CombinedScripts(cs::CombinedScripts) = cs
+CombinedScripts(s) = CombinedScripts([DualScript(s)])
 
-## ShowAsHTML ##
-struct ShowAsHTML{T}
-	el::T
+struct ShowWithPrintHTML
+	el
 end
+
+# HTML Nodes #
+# We define PlutoNode and NormalNode
+for (T, P) in ((:PlutoNode, :InsidePluto), (:NormalNode, :OutsidePluto))
+	block = quote
+		struct $T <: NonScript{$P}
+			content::HypertextLiteral.Result
+			empty::Bool
+		end
+		# Constructor from Result
+		function $T(r::HypertextLiteral.Result)
+			io = IOBuffer()
+			show(io, r)
+			empty = isempty(String(take!(io)))
+			$T(r, empty)
+		end
+		# Constructor from AbstractString
+		function $T(s::AbstractString)
+			str = strip_nl(s)
+			out = if isempty(str)
+				$T(@htl(""), true)
+			else
+				r = @htl("$(ShowWithPrintHTML(str))")
+				$T(r, false)
+			end 
+		end
+		# No-op constructor
+		$T(t::$T) = t
+		# Generic constructor
+		$T(content) = $T(@htl("$content"))
+	end
+	# Create the function constructing from HypertextLiteral or HTML
+	eval(block)
+end
+
+## DualNode
+struct DualNode <: NonScript{InsideAndOutsidePluto}
+	inside_pluto::PlutoNode
+	outside_pluto::NormalNode
+end
+DualNode(i, o) = DualNode(PlutoNode(i), NormalNode(o))
+DualNode(i::PlutoNode) = DualNode(i, "")
+DualNode(o::NormalNode) = DualNode("", o)
+DualNode(x) = DualNode(PlutoNode(x))
+
+## CombinedNodes
+struct CombinedNodes <: NonScript{InsideAndOutsidePluto}
+	nodes::Vector{<:Node{InsideAndOutsidePluto}}
+	CombinedNodes(v::Vector) = new(filter(!shouldskip, map(make_node, v)))
+end
+
+
 

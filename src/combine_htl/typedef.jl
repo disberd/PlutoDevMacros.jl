@@ -118,16 +118,15 @@ function ScriptContent(r::Result; kwargs...)
 		last_idx = m_end.offset - 1
 	end
 	if n_matches === 0
-		@warn "No <script> tag was found. Remember that the `ScriptContent`
-		constructor only extract the content between the first <script> tag it
-		finds when using an input of type `HypertextLiteral.result`"
+		@warn "No <script> tag was found. 
+Remember that the `ScriptContent` constructor only extract the content between the first <script> tag it finds when using an input of type `HypertextLiteral.Result`"
 		return ScriptContent("", false)
 	elseif n_matches > 1
-		@warn "More than one <script> tag was found. Only the contents of the
-		first one have been extracted"
+		@warn "More than one <script> tag was found. 
+Only the contents of the first one have been extracted"
 	elseif first_offset > 1 || last_idx < length(str_content) - length("</script>")
-		@warn "The provided input also contained contents outside of the
-		<script> tag. This content has been discarded"
+		@warn "The provided input also contained contents outside of the <script> tag. 
+This content has been discarded"
 	end
 	ScriptContent(str_content[first_idx:last_idx]; kwargs...)
 end

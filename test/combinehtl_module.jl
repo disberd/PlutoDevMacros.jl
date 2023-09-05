@@ -1,7 +1,8 @@
 using Test
-using PlutoDevMacros.HypertextLiteral
 using PlutoDevMacros.PlutoCombineHTL.WithTypes
-using PlutoDevMacros.PlutoCombineHTL: shouldskip, children, print_html, script_id, inner_node, ShowWithPrintHTML, plutodefault
+using PlutoDevMacros.HypertextLiteral
+using PlutoDevMacros.PlutoCombineHTL: shouldskip, children, print_html,
+script_id, inner_node, ShowWithPrintHTML, plutodefault, haslisteners, is_inside_pluto
 import PlutoDevMacros
 
 import Pluto: update_save_run!, update_run!, WorkspaceManager, ClientSession,
@@ -94,6 +95,7 @@ end
     @test length(children(cn)) === 2 # We skipped the second empty element
 
     @test PlutoNode(dn.inside_pluto) === dn.inside_pluto
+    @test PlutoNode(@htl("")).empty === true
 
     nn = NormalNode("lol")
     dn = DualNode(nn)
@@ -118,6 +120,7 @@ end
         String(take!(io1)) == String(take!(io2))
     end
     
+    @test compare_content(make_node(HTML("asd")), make_node("asd"))
     @test compare_content(NormalNode("asd"), NormalNode(ShowWithPrintHTML("asd")))
     @test compare_content(PlutoNode("asd"), NormalNode("asd"))
     @test compare_content(PlutoNode("asd"), NormalNode("asd"); pluto = true) === false
@@ -139,6 +142,90 @@ end
     lol
     
     "), "    lol\n") # lol is right offset by 4 spaces
+end
+
+@testset "Other Helpers" begin
+    @test shouldskip(3) === false
+    s = make_html(PlutoScript())
+    @test s isa ShowWithPrintHTML
+    @test make_html(s) === s
+    for T in (HypertextLiteral.Render, HypertextLiteral.Bypass)
+        @test shouldskip(T("lol")) === false
+        @test shouldskip(T("")) === true
+    end
+
+    @test haslisteners(make_script("asd"); both = true) === false
+    s = "addScriptEventListeners('lol')"
+    @test haslisteners(make_script(s, s); both = true) === true
+end
+
+@testset "Show methods" begin
+    function to_string(n, mime; pluto = missing, useshow = false)
+        io = IOBuffer()
+        f = if mime isa MIME"text/javascript"
+            x -> show(io, mime, x; pluto = pluto === missing ? plutodefault(x) : pluto)
+        else
+            if useshow
+                x -> show(io, mime, x; pluto = pluto === missing ? is_inside_pluto(x) : pluto)
+            else
+                x -> print_html(io, x; pluto = pluto === missing ? plutodefault(x) : pluto)
+            end
+        end
+        f(n)
+        String(take!(io))
+    end
+
+    ps = PlutoScript("asd")
+    s = to_string(ps, MIME"text/javascript"())
+    hs = to_string(ps, MIME"text/html"())
+    @test contains(s, "AUTOMATICALLY ADDED") === false
+    @test contains(hs, r"<script id='\w+'") === true
+
+    ds = DualScript("addScriptEventListeners('lol')", "magic"; id = "custom_id")
+    s_in = to_string(ds, MIME"text/javascript"(); pluto = true)
+    s_out = to_string(ds, MIME"text/javascript"(); pluto = false)
+    @test contains(s_in, "AUTOMATICALLY ADDED") === true
+    @test contains(s_out, "AUTOMATICALLY ADDED") === false
+    hs_in = to_string(ds, MIME"text/html"(); pluto = true)
+    hs_out = to_string(ds, MIME"text/html"(); pluto = false)
+    @test contains(hs_in, "<script id='custom_id'>") === true
+    @test contains(hs_out, "<script type='module' id='custom_id'>") === true
+
+    # Test error with print_script
+    @test_throws "Interpolation of `Script` subtypes is not allowed" HypertextLiteral.print_script(IOBuffer(), ds)
+
+    # Show outside Pluto
+    # PlutoScript should be empty when shown out of Pluto
+    n = PlutoScript("asd")
+    s_in = to_string(n, MIME"text/html"(); pluto = true, useshow = true)
+    s_out = to_string(n, MIME"text/html"(); pluto = false, useshow = true)
+    @test contains(s_in, r"markdown.*code class.*language-html.*script id")
+    @test contains(s_in, "script id") === true
+    @test isempty(s_out)
+
+    # ScriptContent should just show as repr outside of Pluto
+    n = ScriptContent("asd")
+    s_in = to_string(n, MIME"text/html"(); pluto = true, useshow = true)
+    s_out = to_string(n, MIME"text/html"(); pluto = false, useshow = true)
+    @test contains(s_in, r"markdown.*code class.*language-js") # This is language-js
+    @test contains(s_in, "script id") === false
+    @test s_out === repr(n)
+
+    # ScriptContent should just show as repr outside of Pluto
+    n = DualScript("asd", "lol"; id = "asd")
+    s_in = to_string(n, MIME"text/html"(); pluto = true, useshow = true)
+    s_out = to_string(n, MIME"text/html"(); pluto = false, useshow = true)
+    @test contains(s_in, r"markdown.*code class.*language-html")
+    @test contains(s_in, "script id") === true
+    @test s_out === "<script type='module' id='asd'>\nlol\n</script>\n"
+
+    # PlutoScript should be empty when shown out of Pluto
+    n = NormalNode("asd")
+    s_in = to_string(n, MIME"text/html"(); pluto = true, useshow = true)
+    s_out = to_string(n, MIME"text/html"(); pluto = false, useshow = true)
+    @test contains(s_in, r"markdown.*code class.*language-html")
+    @test contains(s_in, "script id") === false
+    @test s_out === "asd\n"
 end
 
 function noerror(cell; verbose=true)

@@ -10,7 +10,7 @@ children(cn::CombinedNodes) = cn.nodes
 shouldskip(s::AbstractString) = isempty(s)
 shouldskip(p::ScriptContent) = shouldskip(p.content)
 shouldskip(::Missing) = true
-shouldskip(x::Any) = false
+shouldskip(@nospecialize(x)) = false
 
 shouldskip(x::PlutoScript; kwargs...) = shouldskip(x.body) && shouldskip(x.invalidation)
 shouldskip(x::NormalScript; kwargs...) = shouldskip(x.body)
@@ -29,7 +29,6 @@ shouldskip(c::Union{CombinedNodes, CombinedScripts}; pluto = plutodefault(c)) = 
 shouldskip(s::ShowWithPrintHTML) = shouldskip(s.el)
 # HypertextLiteral methods
 shouldskip(x::Bypass) = shouldskip(x.content)
-shouldskip(x::Reprint) = false
 shouldskip(x::Render) = shouldskip(x.content)
 
 
@@ -37,6 +36,7 @@ show_as_module(ns::NormalScript) =  ns.show_as_module
 show_as_module(ds::DualScript) = show_as_module(ds.outside_pluto)
 show_as_module(cs::CombinedScripts) = any(show_as_module, children(cs))
 
+haslisteners(::Missing) = false
 haslisteners(s::ScriptContent) = s.addedEventListeners
 haslisteners(s::SingleScript) = haslisteners(s.body)
 # Returning a Function
@@ -64,15 +64,13 @@ inner_node(ds::Union{DualNode, DualScript}; pluto) = pluto ? ds.inside_pluto : d
 
 ## Make Script ##
 make_script(;body = missing, invalidation = missing, inside = PlutoScript(body, invalidation), outside = NormalScript(), kwargs...) = DualScript(inside, outside; kwargs...)
+make_script(i, o; kwargs...) = DualScript(i, o; kwargs...)
 make_script(x::Union{SingleScript, DualScript}; kwargs...) = DualScript(x; kwargs...)
 make_script(x::CombinedScripts) = x
 make_script(body; kwargs...) = make_script(;body, kwargs...)
 make_script(v::Vector) = CombinedScripts(v)
-make_script(s::ShowWithPrintHTML) = if s.el isa Script
-    return s.el
-else
-    error("make_script on `ShowWithPrintHTML{T}` types is only valid if `T <: Script`")
-end
+make_script(@nospecialize(s::ShowWithPrintHTML{<:Script})) = s.el
+make_script(@nospecialize(s::ShowWithPrintHTML)) = error("make_script on `ShowWithPrintHTML{T}` types is only valid if `T <: Script`")
 
 ## Make Node ##
 make_node(;inside = "", outside = "") = DualNode(inside, outside)

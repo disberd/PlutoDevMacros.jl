@@ -2,6 +2,7 @@ module PlutoCombineHTL
 
 using Random
 using HypertextLiteral
+using HypertextLiteral: Result, Bypass, Reprint, Render
 using Markdown
 using AbstractPlutoDingetjes: is_inside_pluto
 

@@ -1,7 +1,7 @@
 using Test
 using PlutoDevMacros.HypertextLiteral
 using PlutoDevMacros.PlutoCombineHTL.WithTypes
-using PlutoDevMacros.PlutoCombineHTL: shouldskip, children, print_html
+using PlutoDevMacros.PlutoCombineHTL: shouldskip, children, print_html, script_id, inner_node
 import PlutoDevMacros
 
 import Pluto: update_save_run!, update_run!, WorkspaceManager, ClientSession,
@@ -14,13 +14,36 @@ load_notebook, Configuration
     @test ds isa DualScript
     @test shouldskip(ds;pluto = false)
     @test ds.inside_pluto.body.content === "test"
+    ds = make_script("lol"; id = "asdfasdf")
+    @test script_id(ds; pluto=true) === "asdfasdf"
+    @test script_id(ds; pluto=false) === "asdfasdf"
+    ds2 = DualScript("lol"; id = script_id(ds))
+    @test inner_node(ds; pluto=true) == inner_node(ds2; pluto = true)
+    @test inner_node(ds; pluto=false) != inner_node(ds2; pluto = false) # The normal in ds2 has missing id
 
     @test shouldskip(ScriptContent())
     @test ScriptContent(nothing) === missing
     @test ScriptContent(missing) === missing
+    sc = ScriptContent("addScriptEventListeners('lol')")
+    @test sc.addedEventListeners === true
+    sc = ScriptContent("console.log('lol')")
+    @test sc.addedEventListeners === false
 
+
+    @test_logs (:warn, r"No <script> tag was found") make_script(;invalidation = @htl("lol"))
+    @test_logs (:warn, r"More than one <script> tag was found") make_script(@htl("""
+    <script id='lol'>asd</script>
+    <script class='asd'></script>
+    """))
+    @test_logs (:warn, r"The provided input also contained contents outside") make_script(@htl("""
+    <script id='lol'>asd</script>
+    magic
+    """))
+    @test_throws "No closing </script>" make_script(@htl("<script>asd"))
     ds = make_script(;invalidation = @htl("lol"))
     @test shouldskip(ds;both=true) # The script is empty because with `@htl` we only get the content between the first <script> tag.
+    ds = make_script(;invalidation = "lol")
+    @test shouldskip(ds;both=true) === false
     ds = make_script(;invalidation = @htl("<script>lol</script>"))
     @test !shouldskip(ds;both=true)
     @test shouldskip(ds;pluto = false)

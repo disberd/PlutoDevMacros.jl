@@ -82,9 +82,9 @@ struct ScriptContent
 	content::String
 	addedEventListeners::Bool
 end
+_isnewline(x) = x in ('\n', '\r') # This won't remove tabs and whitespace
 function strip_nl(s::AbstractString)
-	isnewline(x) = x in ('\n', '\r') # This won't remove tabs and whitespace
-	str = lstrip(isnewline, rstrip(s))
+	str = lstrip(_isnewline, rstrip(s))
 end
 function ScriptContent(s::AbstractString; addedEventListeners = missing)
 	# We strip eventual leading newline or trailing `isspace`
@@ -97,18 +97,39 @@ function ScriptContent(s::AbstractString; addedEventListeners = missing)
 	ScriptContent(str, ael)
 end
 
-function ScriptContent(r::HypertextLiteral.Result; kwargs...)
-	buf = IOBuffer()
+function ScriptContent(r::Result; kwargs...)
 	temp = IOBuffer()
-	trash = IOBuffer()
 	show(temp, r)
-	seekstart(temp)
-	# This is adapted from readuntil in
-	# https://github.com/JuliaLang/julia/blob/f70b5e4767809c7dbc4c6c082aed67a2af4447c2/base/io.jl#L923-L943
-	Base.readuntil_vector!(temp, codeunits("<script>"), false, trash)
-	Base.readuntil_vector!(temp, codeunits("</script>"), false, buf)
-	str = String(take!(buf)) 
-	ScriptContent(str; kwargs...)
+	str_content = strip(String(take!(temp)))
+	isempty(str_content) && return ScriptContent("", false)
+	n_matches = 0
+	first_idx = 0
+	first_offset = 0
+	last_idx = 0
+	start_regexp = r"<script[^>]*>"
+	end_regexp = r"</script>"
+	for m in eachmatch(r"<script[^>]*>", str_content)
+		n_matches += 1
+		n_matches > 1 && break
+		first_offset = m.offset
+		first_idx = first_offset + length(m.match)
+		m_end = match(end_regexp, str_content, first_idx)
+		m_end === nothing && error("No closing </script> tag was found in the input")
+		last_idx = m_end.offset - 1
+	end
+	if n_matches === 0
+		@warn "No <script> tag was found. Remember that the `ScriptContent`
+		constructor only extract the content between the first <script> tag it
+		finds when using an input of type `HypertextLiteral.result`"
+		return ScriptContent("", false)
+	elseif n_matches > 1
+		@warn "More than one <script> tag was found. Only the contents of the
+		first one have been extracted"
+	elseif first_offset > 1 || last_idx < length(str_content) - length("</script>")
+		@warn "The provided input also contained contents outside of the
+		<script> tag. This content has been discarded"
+	end
+	ScriptContent(str_content[first_idx:last_idx]; kwargs...)
 end
 ScriptContent(p::ScriptContent) = p
 ScriptContent() = ScriptContent("", false)
@@ -316,24 +337,46 @@ end
 CombinedScripts(cs::CombinedScripts) = cs
 CombinedScripts(s) = CombinedScripts([DualScript(s)])
 
-struct ShowWithPrintHTML
-	el
+struct ShowWithPrintHTML{T}
+	el::T
 end
 
 # HTML Nodes #
+# We use a custom IO to parse the HypertextLiteral.Result for removing newlines and checking if empty
+@kwdef struct ParseResultIO <: IO
+	parts::Vector = []
+end
+# Now we define custom print method to extract the Result parts. See
+# https://github.com/JuliaPluto/HypertextLiteral.jl/blob/2bb465047afdfbb227171222049f315545c307fb/src/primitives.jl
+for T in (Bypass, Render, Reprint)
+	Base.print(io::ParseResultIO, x::T) = shouldskip(x) || push!(io.parts, x)
+end
+_remove_leading(x) = x
+_remove_leading(x::Bypass{<:AbstractString}) = Bypass(lstrip(_isnewline, x.content))
+_remove_trailing(x) = x
+_remove_trailing(x::Bypass{<:AbstractString}) = Bypass(rstrip(isspace, x.content))
 # We define PlutoNode and NormalNode
 for (T, P) in ((:PlutoNode, :InsidePluto), (:NormalNode, :OutsidePluto))
 	block = quote
 		struct $T <: NonScript{$P}
-			content::HypertextLiteral.Result
+			content::Result
 			empty::Bool
 		end
 		# Constructor from Result
-		function $T(r::HypertextLiteral.Result)
-			io = IOBuffer()
-			show(io, r)
-			empty = isempty(String(take!(io)))
-			$T(r, empty)
+		function $T(r::Result)
+			io = ParseResultIO()
+			# We don't use show directly to avoid the EscapeProxy here
+			r.content(io)
+			node = if isempty(io.parts)
+				$T(r, true)
+			else
+				# We try to eventually remove trailing and leading redundant spaces
+				xs = io.parts
+				xs[begin] = _remove_leading(xs[begin])
+				xs[end] = _remove_trailing(xs[end])
+				$T(Result(xs...), false)
+			end
+			return node
 		end
 		# Constructor from AbstractString
 		function $T(s::AbstractString)
@@ -358,8 +401,9 @@ end
 struct DualNode <: NonScript{InsideAndOutsidePluto}
 	inside_pluto::PlutoNode
 	outside_pluto::NormalNode
-	DualNode(i, o) = DualNode(PlutoNode(i), NormalNode(o))
+	DualNode(i::PlutoNode, o::NormalNode) = new(i, o)
 end
+DualNode(i, o) = DualNode(PlutoNode(i), NormalNode(o))
 DualNode(i::PlutoNode) = DualNode(i, "")
 DualNode(o::NormalNode) = DualNode("", o)
 DualNode(x) = DualNode(PlutoNode(x))

@@ -6,8 +6,9 @@ plutodefault(n::Node{<:InsideAndOutsidePluto}) = true
 children(cs::CombinedScripts) = cs.scripts
 children(cn::CombinedNodes) = cn.nodes
 
-
-shouldskip(p::ScriptContent) = isempty(p.content)
+# shouldskip
+shouldskip(s::AbstractString) = isempty(s)
+shouldskip(p::ScriptContent) = shouldskip(p.content)
 shouldskip(::Missing) = true
 shouldskip(x::Any) = false
 
@@ -25,6 +26,11 @@ function shouldskip(ds::Union{DualNode, DualScript}; pluto = plutodefault(ds), b
     end
 end
 shouldskip(c::Union{CombinedNodes, CombinedScripts}; pluto = plutodefault(c)) = all(shouldskip(pluto), children(c))
+shouldskip(s::ShowWithPrintHTML) = shouldskip(s.el)
+# HypertextLiteral methods
+shouldskip(x::Bypass) = shouldskip(x.content)
+shouldskip(x::Reprint) = false
+shouldskip(x::Render) = shouldskip(x.content)
 
 
 show_as_module(ns::NormalScript) =  ns.show_as_module
@@ -57,8 +63,8 @@ end
 inner_node(ds::Union{DualNode, DualScript}; pluto) = pluto ? ds.inside_pluto : ds.outside_pluto
 
 ## Make Script ##
-make_script(;body = "", invalidation = "", inside = PlutoScript(body, invalidation), outside = "") = DualScript(inside, outside)
-make_script(x::Union{SingleScript, DualScript}) = DualScript(x)
+make_script(;body = missing, invalidation = missing, inside = PlutoScript(body, invalidation), outside = NormalScript(), kwargs...) = DualScript(inside, outside; kwargs...)
+make_script(x::Union{SingleScript, DualScript}; kwargs...) = DualScript(x; kwargs...)
 make_script(x::CombinedScripts) = x
 make_script(body; kwargs...) = make_script(;body, kwargs...)
 make_script(v::Vector) = CombinedScripts(v)

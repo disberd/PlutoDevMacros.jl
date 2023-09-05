@@ -71,7 +71,7 @@ make_script(v::Vector) = CombinedScripts(v)
 make_script(s::ShowWithPrintHTML) = if s.el isa Script
     return s.el
 else
-    error("Invalid input type")
+    error("make_script on `ShowWithPrintHTML{T}` types is only valid if `T <: Script`")
 end
 
 ## Make Node ##

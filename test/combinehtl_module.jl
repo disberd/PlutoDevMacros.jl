@@ -1,7 +1,7 @@
 using Test
 using PlutoDevMacros.HypertextLiteral
 using PlutoDevMacros.PlutoCombineHTL.WithTypes
-using PlutoDevMacros.PlutoCombineHTL: shouldskip, children, print_html, script_id, inner_node
+using PlutoDevMacros.PlutoCombineHTL: shouldskip, children, print_html, script_id, inner_node, ShowWithPrintHTML, plutodefault
 import PlutoDevMacros
 
 import Pluto: update_save_run!, update_run!, WorkspaceManager, ClientSession,
@@ -70,6 +70,75 @@ load_notebook, Configuration
     @test CombinedScripts(cs) === cs
     @test make_script(cs) === cs
     @test children(CombinedScripts(ds)) == children(make_script([ds]))
+
+    make_script(ShowWithPrintHTML(cs)) === cs
+    @test_throws "only valid if `T <: Script`" make_script(ShowWithPrintHTML("asd"))
+end
+
+@testset "make_node" begin
+    dn = make_node()
+    @test dn isa DualNode
+    @test shouldskip(dn) === true
+
+    s = make_script("asd")
+    dn = make_node("asd")
+    @test make_node(s) === s
+    @test dn != s
+    @test make_node(dn) === dn
+    cn = make_node([
+        "asd",
+        "",
+        "lol"
+    ])
+    @test cn isa CombinedNodes
+    @test length(children(cn)) === 2 # We skipped the second empty element
+
+    @test PlutoNode(dn.inside_pluto) === dn.inside_pluto
+
+    nn = NormalNode("lol")
+    dn = DualNode(nn)
+    @test inner_node(dn; pluto=false) === nn
+    @test shouldskip(inner_node(dn; pluto = true))
+
+    pn = PlutoNode("asd")
+    dn = DualNode(pn)
+    @test inner_node(dn; pluto=true) === pn
+    @test shouldskip(inner_node(dn; pluto = false))
+
+
+    dn = DualNode("asd", "lol")
+    @test inner_node(dn; pluto=true) == pn
+    @test inner_node(dn; pluto=false) == nn
+
+    function compare_content(n1, n2; pluto = missing)
+        io1 = IOBuffer()
+        io2 = IOBuffer()
+        print_html(io1, n1; pluto = pluto === missing ? plutodefault(n1) : pluto)
+        print_html(io2, n2; pluto = pluto === missing ? plutodefault(n2) : pluto)
+        String(take!(io1)) == String(take!(io2))
+    end
+    
+    @test compare_content(NormalNode("asd"), NormalNode(ShowWithPrintHTML("asd")))
+    @test compare_content(PlutoNode("asd"), NormalNode("asd"))
+    @test compare_content(PlutoNode("asd"), NormalNode("asd"); pluto = true) === false
+    @test compare_content(PlutoNode("asd"), NormalNode("asd"); pluto = false) === false
+
+    function test_stripping(inp, expected)
+        dn = make_node(inp)
+        pn = inner_node(dn; pluto=true)
+        io = IOBuffer()
+        print_html(io, pn)
+        s = String(take!(io))
+        s === expected
+    end
+
+    @test test_stripping("\n\n  a\n\n","  a\n") # Only leading newlines (\r or \n) are removed
+    @test test_stripping("\n\na  \n\n","a\n") # Only leading newlines (\r or \n) are removed
+    @test test_stripping(@htl("lol"), "lol\n")
+    @test test_stripping(@htl("
+    lol
+    
+    "), "    lol\n") # lol is right offset by 4 spaces
 end
 
 function noerror(cell; verbose=true)

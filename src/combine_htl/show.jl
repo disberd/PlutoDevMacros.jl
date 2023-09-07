@@ -48,7 +48,7 @@ function write_script(io::IO, contents::Vector{DualScript}, location::OutsidePlu
 	if add_pluto_compat(contents)
 		println(io, """
 	// Load the Pluto compat packages from the custom module
-	const {DOM, Files, Generators, Promises, now, svg, html, require, _} = await import('$(js_module_url())')
+	const {DOM, Files, Generators, Promises, now, svg, html, require, _} = await import('$(LOCAL_MODULE_URL[])')
 """)
 	end
 	# We cycle through the contents to write the body part
@@ -129,11 +129,7 @@ function print_html(io::IO, s::Script{InsideAndOutsidePluto}; pluto = plutodefau
 	shouldskip(s, location) && return
 	# We write the script tag
 	id = script_id(s, location)
-	if pluto
-		println(io, "<script id='$id'>")
-	else
-		println(io, "<script type='module' id='$id'>")
-	end
+	println(io, "<script id='$id'>")
 	# Print the content
 	show(io, MIME"text/javascript"(), s; pluto)
 	# Print the closing tag

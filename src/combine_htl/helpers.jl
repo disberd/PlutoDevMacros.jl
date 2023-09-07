@@ -45,11 +45,12 @@ shouldskip(p::ScriptContent) = shouldskip(p.content)
 shouldskip(::Missing) = true
 shouldskip(@nospecialize(x)) = false
 
-shouldskip(x::PlutoScript) = shouldskip(x.body) && shouldskip(x.invalidation)
-shouldskip(x::NormalScript) = shouldskip(x.body)
+shouldskip(x::PlutoScript) = shouldskip(x.body) && shouldskip(x.invalidation) && !hasreturn(x)
+shouldskip(x::NormalScript) = shouldskip(x.body) && !hasreturn(x)
 shouldskip(s::SingleScript, l::SingleDisplayLocation) = displaylocation(s) !== l
 shouldskip(n::NonScript{<:SingleDisplayLocation}) = n.empty
 # Dual Script/Node
+shouldskip(n::Node) = shouldskip(n, displaylocation(n))
 function shouldskip(ds::Dual, ::InsideAndOutsidePluto) 
     i = inner_node(ds, InsidePluto())
     o = inner_node(ds, OutsidePluto())
@@ -139,6 +140,3 @@ make_node(v::Vector) = CombinedNodes(v)
 ## Make HTML ##
 make_html(x; kwargs...) = ShowWithPrintHTML(make_node(x); kwargs...)
 make_html(@nospecialize(x::ShowWithPrintHTML); kwargs...) = ShowWithPrintHTML(x; kwargs...)
-
-
-js_module_url(;tag = "expanded_Script") = "https://cdn.jsdelivr.net/gh/disberd/PlutoDevMacros@$tag/src/combine_htl/pluto_compat.js"

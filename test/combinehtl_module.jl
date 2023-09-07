@@ -1,8 +1,10 @@
 using Test
 using PlutoDevMacros.PlutoCombineHTL.WithTypes
+using PlutoDevMacros.PlutoCombineHTL: LOCAL_MODULE_URL
 using PlutoDevMacros.HypertextLiteral
 using PlutoDevMacros.PlutoCombineHTL: shouldskip, children, print_html,
-script_id, inner_node, ShowWithPrintHTML, plutodefault, haslisteners, is_inside_pluto, hasreturn
+script_id, inner_node, plutodefault, haslisteners, is_inside_pluto, hasreturn,
+add_pluto_compat
 import PlutoDevMacros
 
 import Pluto: update_save_run!, update_run!, WorkspaceManager, ClientSession,
@@ -13,16 +15,20 @@ load_notebook, Configuration
     ds = make_script("test")
     @test make_script(ds) === ds
     @test ds isa DualScript
-    @test shouldskip(ds;pluto = false)
+    @test inner_node(ds, InsidePluto()).body == inner_node(ds, OutsidePluto()).body
+    @test shouldskip(ds, InsideAndOutsidePluto()) === false
     @test ds.inside_pluto.body.content === "test"
     ds = make_script("lol"; id = "asdfasdf")
-    @test script_id(ds; pluto=true) === "asdfasdf"
-    @test script_id(ds; pluto=false) === "asdfasdf"
-    ds2 = DualScript("lol"; id = script_id(ds))
-    @test inner_node(ds; pluto=true) == inner_node(ds2; pluto = true)
-    @test inner_node(ds; pluto=false) != inner_node(ds2; pluto = false) # The normal in ds2 has missing id
+    @test script_id(ds, InsidePluto()) === "asdfasdf"
+    @test script_id(ds, OutsidePluto()) === "asdfasdf"
+    ds2 = make_script(
+        make_script(:pluto; body = "lol", id = "asdfasdf"),
+        make_script(:normal; body = "lol", id = "different"),
+    )
+    @test ds.inside_pluto == ds2.inside_pluto
+    @test ds.outside_pluto != ds2.outside_pluto
 
-    @test shouldskip(ScriptContent())
+    @test shouldskip(ScriptContent()) === true
     @test ScriptContent(nothing) === missing
     @test ScriptContent(missing) === missing
     sc = ScriptContent("addScriptEventListeners('lol')")
@@ -42,12 +48,12 @@ load_notebook, Configuration
     """))
     @test_throws "No closing </script>" make_script(@htl("<script>asd"))
     ds = make_script(;invalidation = @htl("lol"))
-    @test shouldskip(ds;both=true) # The script is empty because with `@htl` we only get the content between the first <script> tag.
+    @test shouldskip(ds, InsideAndOutsidePluto()) # The script is empty because with `@htl` we only get the content between the first <script> tag.
     ds = make_script(;invalidation = "lol")
-    @test shouldskip(ds;both=true) === false
+    @test shouldskip(ds, InsideAndOutsidePluto()) === false
     ds = make_script(;invalidation = @htl("<script>lol</script>"))
-    @test !shouldskip(ds;both=true)
-    @test shouldskip(ds;pluto = false)
+    @test !shouldskip(ds, InsideAndOutsidePluto())
+    @test shouldskip(ds, OutsidePluto())
     @test shouldskip(ds.inside_pluto.body)
     @test ds.inside_pluto.invalidation.content === "lol"
 
@@ -58,10 +64,16 @@ load_notebook, Configuration
 
     ns = NormalScript("lol")
     @test NormalScript(ns) === ns
-    @test NormalScript(ps).body === ps.body
+    @test_throws "You can't construct" NormalScript(ps).body
 
-    DualScript(ps).inside_pluto === ps
-    DualScript(ns).outside_pluto === ns
+    let ds = DualScript(ps)
+        @test ds.inside_pluto === ps
+        @test shouldskip(ds, OutsidePluto())
+    end
+    let ds = DualScript(ns)
+        @test ds.outside_pluto === ns
+        @test shouldskip(ds, InsidePluto())
+    end
 
     cs = make_script([
         "asd",
@@ -102,18 +114,18 @@ end
 
     nn = NormalNode("lol")
     dn = DualNode(nn)
-    @test inner_node(dn; pluto=false) === nn
-    @test shouldskip(inner_node(dn; pluto = true))
+    @test inner_node(dn, OutsidePluto()) === nn
+    @test shouldskip(inner_node(dn, InsidePluto()))
 
     pn = PlutoNode("asd")
     dn = DualNode(pn)
-    @test inner_node(dn; pluto=true) === pn
-    @test shouldskip(inner_node(dn; pluto = false))
+    @test inner_node(dn, InsidePluto()) === pn
+    @test shouldskip(inner_node(dn, OutsidePluto()))
 
 
     dn = DualNode("asd", "lol")
-    @test inner_node(dn; pluto=true) == pn
-    @test inner_node(dn; pluto=false) == nn
+    @test inner_node(dn, InsidePluto()) == pn
+    @test inner_node(dn, OutsidePluto()) == nn
 
     function compare_content(n1, n2; pluto = missing)
         io1 = IOBuffer()
@@ -131,7 +143,7 @@ end
 
     function test_stripping(inp, expected)
         dn = make_node(inp)
-        pn = inner_node(dn; pluto=true)
+        pn = inner_node(dn, InsidePluto())
         io = IOBuffer()
         print_html(io, pn)
         s = String(take!(io))
@@ -161,30 +173,21 @@ end
         @test shouldskip(T("")) === true
     end
 
-    @test haslisteners(make_script("asd")) === false
+    for l in (InsidePluto(), OutsidePluto())
+        @test haslisteners(make_script("asd"), l) === false
+    end
     s = "addScriptEventListeners('lol')"
-    @test haslisteners(make_script(s, "asd"); pluto = true) === true
-    @test haslisteners(make_script(s, "asd"); pluto = false) === false
+    @test haslisteners(make_script(s, "asd"), InsidePluto()) === true
+    @test haslisteners(make_script(s, "asd"), OutsidePluto()) === false
 
-    @test hasreturn(make_script("asd","lol"); pluto = true) === false
-    @test hasreturn(make_script("asd","lol"); pluto = false) === false
-    @test hasreturn(make_script("return asd","lol"); pluto = true) === true
-    @test hasreturn(make_script("return asd","lol"); pluto = false) === false
-    @test hasreturn(make_script("asd","return lol"); pluto = false) === true
-
-    @test hasreturn(true)(make_script([
-        "lol"
-        "return asd"
-    ]))
-
-    @test_throws "not in the last" hasreturn(true)(make_script([
-        "return asd"
-        "lol"
-    ]))
-    @test_throws "multiple scripts with a return" hasreturn(true)(make_script([
-        "return asd"
-        "return lol"
-    ]))
+    @test hasreturn(make_script("asd","lol"), InsidePluto()) === false
+    @test hasreturn(make_script("asd","lol"), OutsidePluto()) === false
+    ds = make_script(PlutoScript(; returned_element = "asd"),"lol")
+    @test shouldskip(ds.inside_pluto) === false
+    @test hasreturn(ds, InsidePluto()) === true
+    @test hasreturn(ds, OutsidePluto()) === false
+    @test hasreturn(make_script(NormalScript(;returned_element = "lol")), OutsidePluto()) === true
+    @test hasreturn(make_script(NormalScript(;returned_element = "lol")), InsidePluto()) === false
 end
 
 @testset "Show methods" begin
@@ -206,18 +209,18 @@ end
     ps = PlutoScript("asd")
     s = to_string(ps, MIME"text/javascript"())
     hs = to_string(ps, MIME"text/html"())
-    @test contains(s, "AUTOMATICALLY ADDED") === false
+    @test contains(s, r"JS Listeners .* PlutoDevMacros") === false # No listeners helpers should be added
     @test contains(hs, r"<script id='\w+'") === true
 
     ds = DualScript("addScriptEventListeners('lol')", "magic"; id = "custom_id")
     s_in = to_string(ds, MIME"text/javascript"(); pluto = true)
     s_out = to_string(ds, MIME"text/javascript"(); pluto = false)
-    @test contains(s_in, "AUTOMATICALLY ADDED") === true
-    @test contains(s_out, "AUTOMATICALLY ADDED") === false
+    @test contains(s_in, r"JS Listeners .* PlutoDevMacros") === true
+    @test contains(s_out, r"JS Listeners .* PlutoDevMacros") === false
     hs_in = to_string(ds, MIME"text/html"(); pluto = true)
     hs_out = to_string(ds, MIME"text/html"(); pluto = false)
     @test contains(hs_in, "<script id='custom_id'>") === true
-    @test contains(hs_out, "<script type='module' id='custom_id'>") === true
+    @test contains(hs_out, "<script id='custom_id'>") === true
 
     # Test error with print_script
     @test_throws "Interpolation of `Script` subtypes is not allowed" HypertextLiteral.print_script(IOBuffer(), ds)
@@ -239,15 +242,23 @@ end
     @test contains(s_in, "script id") === false
     @test s_out === repr(n)
 
-    # ScriptContent should just show as repr outside of Pluto
+    # DualScript
     n = DualScript("asd", "lol"; id = "asd")
     s_in = to_string(n, MIME"text/html"(); pluto = true, useshow = true)
     s_out = to_string(n, MIME"text/html"(); pluto = false, useshow = true)
     @test contains(s_in, r"markdown.*code class.*language-html")
     @test contains(s_in, "script id") === true
-    @test s_out === "<script type='module' id='asd'>\nlol\n</script>\n"
+    @test contains(s_out, "script id='asd'")
+    @test add_pluto_compat(n) === true
+    @test contains(s_out, LOCAL_MODULE_URL[])
+    @test contains(s_out, "async (currentScript) =>") # Opening async outside Pluto
+    @test contains(s_out, "})(document.currentScript)") # Closing and calling async outside Pluto
+    n = DualScript(n; add_pluto_compat = false)
+    @test add_pluto_compat(n) === false
+    s_out = to_string(n, MIME"text/html"(); pluto = false, useshow = true)
+    @test contains(s_out, LOCAL_MODULE_URL[]) === false
 
-    # PlutoScript should be empty when shown out of Pluto
+    # NormalNode should be empty when shown out of Pluto
     n = NormalNode("asd")
     s_in = to_string(n, MIME"text/html"(); pluto = true, useshow = true)
     s_out = to_string(n, MIME"text/html"(); pluto = false, useshow = true)

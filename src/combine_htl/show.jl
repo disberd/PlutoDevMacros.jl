@@ -26,36 +26,50 @@ function _iterate_scriptcontents(io::IO, iter, selec::Function, location::Single
 	return nothing
 end
 
-function Base.show(io::IO, mime::MIME"text/javascript", ms::CombinedScripts; pluto = is_inside_pluto(io), id = script_id(ms, displaylocation(pluto)))
+function write_script(io::IO, contents::Vector{DualScript}, location::InsidePluto, ret_el = missing)
+	# We cycle through the contents to write the body part
+	_iterate_scriptcontents(io, contents, x -> x.body, location)
+	# If there is no valid invalidation, we simply return
+	if hasinvalidation(contents)
+		# We add a separating newline
+		println(io)
+		# Start processing the invalidation
+		println(io, "invalidation.then(() => {")
+		_iterate_scriptcontents(io, contents, x -> x.invalidation, location)
+		println(io, "})")
+	end
+	maybe_add_return(io, ret_el, location)
+	return
+end
+function write_script(io::IO, contents::Vector{DualScript}, location::OutsidePluto, ret_el = missing)
+	# We wrap everything in an async call as we want to use await
+	println(io, "(async (currentScript) => {")
+	# If the script should have the added Pluto compat packages we load them
+	if add_pluto_compat(contents)
+		println(io, """
+	// Load the Pluto compat packages from the custom module
+	const {DOM, Files, Generators, Promises, now, svg, html, require, _} = await import('$(js_module_url())')
+""")
+	end
+	# We cycle through the contents to write the body part
+	_iterate_scriptcontents(io, contents, x -> x.body, location)
+	# We print the returned element if provided
+	maybe_add_return(io, ret_el, location)
+	# We close the async function definition and call it with the currentScript
+	println(io, "})(document.currentScript)")
+	return
+end
+
+function Base.show(io::IO, mime::MIME"text/javascript", ms::CombinedScripts; pluto = is_inside_pluto(io))
 	location = displaylocation(pluto)
 	shouldskip(ms, location) && return
 	# We add the listeners handlers if any of the script requires it
-	contents = children(ms) |> copy
+	contents = children(ms) |> copy # We copy to avoid mutating in the next line
 	if haslisteners(ms, location)
 		pushfirst!(contents, _events_listeners_preamble)
 		push!(contents, _events_listeners_postamble)
 	end
-	# We maybe have to add the currentScript object
-	maybe_add_pluto_compat(io, ms, location, id)
-	# We cycle through the contents to write the body part
-	_iterate_scriptcontents(io, contents, x -> x.body, location)
-
-	# If we are outside pluto or there is no valid invalidation, we skip the rest
-	if !pluto || !hasinvalidation(contents)
-		# We print the eventual return statement
-		maybe_print_return(io, ms, location)
-		return
-	end
-
-	println(io)
-	# We add a separating newline
-	# Start processing the invalidation
-	println(io, "invalidation.then(() => {")
-	_iterate_scriptcontents(io, ms.scripts, x -> x.invalidation, location)
-	println(io, "})")
-	# We print the eventual return statement
-	maybe_print_return(io, ms, location)
-	return
+	write_script(io, contents, location, returned_element(ms, location))
 end
 
 ## text/javascript - ShowAsHTML ##
@@ -68,8 +82,8 @@ This function will add the currentScript, observable stdlib and lodash to the
 available names in the current cell when displayed outside pluto (and when the
 add_pluto_compat for the script is true)
 =#
-maybe_add_pluto_compat(::IO, ::Script, ::InsidePluto, ::String) = return
-maybe_add_pluto_compat(::IO, ::PlutoScript, ::OutsidePluto, ::String) = return
+maybe_add_pluto_compat(::IO, ::Script, ::InsidePluto, ::String) = nothing
+maybe_add_pluto_compat(::IO, ::PlutoScript, ::OutsidePluto, ::String) = nothing
 function maybe_add_pluto_compat(io::IO, s::Script, ::OutsidePluto, id::String)
 	if add_pluto_compat(s)
 		# We can't use currentScript so we extract it knowing that we have the id
@@ -101,13 +115,9 @@ function maybe_add_pluto_compat(io::IO, s::Script, ::OutsidePluto, id::String)
 	end
 end
 # Maybe print return
-function maybe_print_return(io::IO, ds::Union{DualScript, CombinedScripts}, location::SingleDisplayLocation)
-	code = returned_element(ds, location)
-	code === missing && return
-	print_return(io, code, location)
-end
-print_return(io::IO, code::String, ::InsidePluto) = println(io, "return $code")
-print_return(io::IO, code::String, ::OutsidePluto) = print(io, "
+maybe_add_return(::IO, ::Missing, ::SingleDisplayLocation) = nothing
+maybe_add_return(io::IO, code::String, ::InsidePluto) = println(io, "return $code")
+maybe_add_return(io::IO, code::String, ::OutsidePluto) = print(io, "
 	/* Code added by PlutoDevMacros to simulate script return */
 	let _return_node_ = $code
 	currentScript.insertAdjacentElement('beforebegin', _return_node_)
@@ -125,7 +135,7 @@ function print_html(io::IO, s::Script{InsideAndOutsidePluto}; pluto = plutodefau
 		println(io, "<script type='module' id='$id'>")
 	end
 	# Print the content
-	show(io, MIME"text/javascript"(), s; pluto, id)
+	show(io, MIME"text/javascript"(), s; pluto)
 	# Print the closing tag
 	println(io, "</script>")
 	return

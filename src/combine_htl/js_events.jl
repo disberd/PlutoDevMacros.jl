@@ -1,8 +1,7 @@
 ## Automatic Event Listeners - DualScript ##
 
 _events_listeners_preamble = let
-	body = ScriptContent("""
-	/* #### BEGINNING OF PART AUTOMATICALLY ADDED BY DualScript #### */
+	body = ScriptContent("""	/* # JS Listeners Preamble added by PlutoDevMacros */
 	// Array where all the event listeners are stored
 	const _events_listeners_ = []
 
@@ -13,15 +12,15 @@ _events_listeners_preamble = let
 		}
 		_events_listeners_.push({element, listeners})
 	}
-	/* #### END OF PART AUTOMATICALLY ADDED BY DualScript #### */
-""";
-	addedEventListeners = false) # We for this to avoid detecting the listeners
+	/* # JS Listeners Preamble added by PlutoDevMacros */
+""", false) # We for this to avoid detecting the listeners and avoid stripping newlines
 	ds = DualScript(PlutoScript(body), NormalScript(body))
 end
 
 _events_listeners_postamble = let
 	body = ScriptContent("""
-	/* #### BEGINNING OF PART AUTOMATICALLY ADDED BY DualScript #### */
+
+	/* # JS Listeners Postamble added by PlutoDevMacros */
 	// Assign the various events listeners defined within the script
 	for (const item of _events_listeners_) {
 		const { element, listeners } = item
@@ -29,10 +28,10 @@ _events_listeners_postamble = let
   			element.addEventListener(name, func)
 		}
 	}
-	/* #### END OF PART AUTOMATICALLY ADDED BY DualScript #### */
-"""; addedEventListeners = false)
+	/* # JS Listeners Postamble added by PlutoDevMacros */""",
+	false)
 	invalidation = ScriptContent("""
-	/* #### BEGINNING OF PART AUTOMATICALLY ADDED BY DualScript #### */
+	/* # JS Listeners invalidation added by PlutoDevMacros */
 	// Remove the events listeners during invalidation
 	for (const item of _events_listeners_) {
 		const { element, listeners } = item
@@ -40,7 +39,7 @@ _events_listeners_postamble = let
 			element.removeEventListener(name, func)
 		}
 	}
-	/* #### END OF PART AUTOMATICALLY ADDED BY DualScript #### */
+	/* # JS Listeners invalidation added by PlutoDevMacros */
 """; addedEventListeners = false)
 	ds = DualScript(PlutoScript(body, invalidation), NormalScript(body))
 end

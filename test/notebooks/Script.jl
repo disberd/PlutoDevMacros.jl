@@ -207,7 +207,7 @@ md"""
 md"""
 `Script` objects can also be constructed with a convenience function to attach JS listeners to objects that are automatically removed upon cell invalidation.
 
-To use this functionality, it is sufficient to use add a call to the `addScriptEventListeners` inside the script content.
+To use this functionality, it is sufficient to add a call to the `addScriptEventListeners` inside the script content.
 """
 
 # ╔═╡ d508ea5d-cc5d-44d1-a1b0-8ae6c18bf954
@@ -225,8 +225,7 @@ PlutoScript("""
 			}
 		}
 	})
-	return dv
-""")
+"""; returned_element = "dv")
 
 # ╔═╡ 723490e1-ae51-4e0f-a69f-2572a823973a
 @htl """
@@ -613,7 +612,7 @@ version = "17.4.0+2"
 # ╠═ebd5e071-e151-43d6-806e-ca6582c0046b
 # ╠═22589abd-63f4-46de-9fed-b673a72a449f
 # ╟─0b129e2a-842f-44cd-9d5e-61f7090ab63d
-# ╟─bdac5c70-2114-4f2b-9a0b-14ff172a1559
+# ╠═bdac5c70-2114-4f2b-9a0b-14ff172a1559
 # ╠═d508ea5d-cc5d-44d1-a1b0-8ae6c18bf954
 # ╠═723490e1-ae51-4e0f-a69f-2572a823973a
 # ╠═d7a6a1b2-5bb5-4743-b6d2-9f11208711b4

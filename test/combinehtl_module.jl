@@ -4,7 +4,8 @@ using PlutoDevMacros.PlutoCombineHTL: LOCAL_MODULE_URL
 using PlutoDevMacros.HypertextLiteral
 using PlutoDevMacros.PlutoCombineHTL: shouldskip, children, print_html,
 script_id, inner_node, plutodefault, haslisteners, is_inside_pluto, hasreturn,
-add_pluto_compat, hasinvalidation, displaylocation, returned_element
+add_pluto_compat, hasinvalidation, displaylocation, returned_element, to_string,
+formatted_contents
 import PlutoDevMacros
 
 import Pluto: update_save_run!, update_run!, WorkspaceManager, ClientSession,
@@ -271,21 +272,6 @@ end
 end
 
 @testset "Show methods" begin
-    function to_string(n, mime; pluto = missing, formatted = false)
-        io = IOBuffer()
-        f = if mime isa MIME"text/javascript"
-            x -> show(io, mime, x; pluto = pluto === missing ? plutodefault(x) : pluto)
-        else
-            f_show(io, x; kwargs...) = 
-            formatted ? 
-            formatted_code(io, x; kwargs...) :
-            show(io, mime, x; kwargs...)
-            x -> f_show(io, x; pluto = pluto === missing ? plutodefault(x) : pluto)
-        end
-        f(n)
-        String(take!(io))
-    end
-
     ps = PlutoScript("asd")
     s = to_string(ps, MIME"text/javascript"())
     hs = to_string(ps, MIME"text/html"())
@@ -296,7 +282,7 @@ end
     s_in = to_string(ds, MIME"text/javascript"(); pluto = true)
     s_out = to_string(ds, MIME"text/javascript"(); pluto = false)
     @test contains(s_in, r"JS Listeners .* PlutoDevMacros") === true
-    @test contains(s_out, r"JS Listeners .* PlutoDevMacros") === false
+    @test contains(s_out, r"JS Listeners .* PlutoDevMacros") === false # The listeners where only added in Pluto
     hs_in = to_string(ds, MIME"text/html"(); pluto = true)
     hs_out = to_string(ds, MIME"text/html"(); pluto = false)
     @test contains(hs_in, "<script id='custom_id'>") === true
@@ -315,15 +301,13 @@ end
     s_out = to_string(n, MIME"text/html"(); pluto = false)
     @test contains(s_in, "script id='") === true
     @test isempty(s_out)
-    @test contains(to_string(n, MIME"text/html"(); pluto = true, formatted = true),
-    r"markdown.*code class.*language-html.*script id")
+    @test contains(string(formatted_code(n)), "```html\n<script id='")
 
     # ScriptContent should just show as repr outside of Pluto
-    n = ScriptContent("asd")
-    s_in = to_string(n, MIME"text/html"(); pluto = true)
-    s_out = to_string(n, MIME"text/html"(); pluto = false)
-    @test contains(s_in, r"markdown.*code class.*language-js") # This is language-js
-    @test contains(s_in, "script id") === false
+    sc = ScriptContent("asd")
+    s_in = formatted_code(sc; pluto = true) |> string
+    s_out = formatted_code(sc; pluto = false) |> string
+    @test contains(s_in, "```js\nasd\n") # This is language-js
     @test s_out === s_in # The pluto kwarg is ignored for script content when shown to text/html
 
     # DualScript
@@ -332,10 +316,7 @@ end
     s_out = to_string(n, MIME"text/html"(); pluto = false)
     @test contains(s_in, "script id='asd'") === true
     @test contains(s_out, "script id='asd'") === true
-    @test contains(
-        to_string(n, MIME"text/html"(); pluto = true, formatted = true), 
-        r"markdown.*code class.*language-html"
-    )
+    @test contains(string(formatted_code(n; pluto=true)), "```html\n<script id='asd'")
     @test add_pluto_compat(n) === true
     @test contains(s_out, LOCAL_MODULE_URL[])
     @test contains(s_out, "async (currentScript) =>") # Opening async outside Pluto
@@ -350,16 +331,28 @@ end
     s_in = to_string(n, MIME"text/html"(); pluto = true)
     s_out = to_string(n, MIME"text/html"(); pluto = false)
     @test contains(s_in, "return asd")
-    @test contains(s_out, "_return_node_ = lol")
-    @test contains(s_out, "currentScript.insertAdjacentElement('beforebegin', _return_node_)")
+    @test contains(s_out, "currentScript.insertAdjacentElement('beforebegin', lol)")
 
     # NormalNode should be empty when shown out of Pluto
     n = NormalNode("asd")
-    s_in = to_string(n, MIME"text/html"(); pluto = true, formatted = true)
+    s_in = to_string(n, MIME"text/html"(); pluto = true)
     s_out = to_string(n, MIME"text/html"(); pluto = false)
-    @test contains(s_in, r"markdown.*code class.*language-html")
-    @test contains(s_in, "script") === false
+    @test isempty(s_in) === true
     @test s_out === "asd\n"
+
+    ds = DualScript("addScriptEventListeners(asd)", "lol"; id = "asd") # Forcing same id is necessary for equality
+    for mime in (MIME"text/javascript"(), MIME"text/html"())
+        @test formatted_code(mime)(ds) == formatted_code(ds, mime)
+    end
+    @test formatted_contents()(ds) == formatted_code(ds; only_contents = true)
+    mime = MIME"text/html"()
+    for l in (InsidePluto(), OutsidePluto())
+        @test formatted_contents(l)(ds) != formatted_code(l; only_contents = false)
+    end
+
+    @test formatted_code(ds) == formatted_code(ds, MIME"text/html"())
+    sc = ScriptContent("asd")
+    @test formatted_code(sc) == formatted_code(sc, MIME"text/javascript"())
 end
 
 function noerror(cell; verbose=true)

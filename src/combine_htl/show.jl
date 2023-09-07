@@ -128,20 +128,20 @@ function formatted_code(n::Node; pluto=plutodefault(n))
 	codestring = read(io, String)
 	Markdown.MD(Markdown.Code("html", codestring))
 end
+formatted_code(pluto::Bool) = x -> formatted_code(x; pluto)
+formatted_code() = formatted_code(true)
+formatted_code(l::SingleDisplayLocation) = formatted_code(l isa InsidePluto)
+formatted_code(io::IO, x; kwargs...) = show(io, MIME"text/html"(), formatted_code(x; kwargs...))
 
 # Show - text/html #
-function Base.show(io::IO, mime::MIME"text/html", s::Union{Node, ScriptContent}; pluto = is_inside_pluto(io))
-	if pluto
-		show(io, mime, formatted_code(s))
-	else
-		s isa ScriptContent ? show(io, s) : print_html(io, s; pluto)
-	end
-	return
-end
+Base.show(io::IO, mime::MIME"text/html", sc::ScriptContent; pluto = true) = 
+show(io, mime, formatted_code(sc))
 
-function Base.show(io::IO, ::MIME"text/html", s::ShowWithPrintHTML; pluto = plutodefault(io, s))
-	print_html(io, s.el; pluto)
-end
+Base.show(io::IO, ::MIME"text/html", s::Node; pluto = is_inside_pluto(io)) =
+print_html(io, s; pluto)
+
+Base.show(io::IO, ::MIME"text/html", s::ShowWithPrintHTML; pluto = plutodefault(io, s)) = 
+print_html(io, s.el; pluto)
 
 HypertextLiteral.content(n::Node) = HypertextLiteral.Render(ShowWithPrintHTML(n, InsideAndOutsidePluto()))
 

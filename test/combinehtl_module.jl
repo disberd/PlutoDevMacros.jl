@@ -271,16 +271,16 @@ end
 end
 
 @testset "Show methods" begin
-    function to_string(n, mime; pluto = missing, useshow = false)
+    function to_string(n, mime; pluto = missing, formatted = false)
         io = IOBuffer()
         f = if mime isa MIME"text/javascript"
             x -> show(io, mime, x; pluto = pluto === missing ? plutodefault(x) : pluto)
         else
-            if useshow
-                x -> show(io, mime, x; pluto = pluto === missing ? is_inside_pluto(x) : pluto)
-            else
-                x -> print_html(io, x; pluto = pluto === missing ? plutodefault(x) : pluto)
-            end
+            f_show(io, x; kwargs...) = 
+            formatted ? 
+            formatted_code(io, x; kwargs...) :
+            show(io, mime, x; kwargs...)
+            x -> f_show(io, x; pluto = pluto === missing ? plutodefault(x) : pluto)
         end
         f(n)
         String(take!(io))
@@ -311,27 +311,31 @@ end
     # Show outside Pluto
     # PlutoScript should be empty when shown out of Pluto
     n = PlutoScript("asd")
-    s_in = to_string(n, MIME"text/html"(); pluto = true, useshow = true)
-    s_out = to_string(n, MIME"text/html"(); pluto = false, useshow = true)
-    @test contains(s_in, r"markdown.*code class.*language-html.*script id")
-    @test contains(s_in, "script id") === true
+    s_in = to_string(n, MIME"text/html"(); pluto = true)
+    s_out = to_string(n, MIME"text/html"(); pluto = false)
+    @test contains(s_in, "script id='") === true
     @test isempty(s_out)
+    @test contains(to_string(n, MIME"text/html"(); pluto = true, formatted = true),
+    r"markdown.*code class.*language-html.*script id")
 
     # ScriptContent should just show as repr outside of Pluto
     n = ScriptContent("asd")
-    s_in = to_string(n, MIME"text/html"(); pluto = true, useshow = true)
-    s_out = to_string(n, MIME"text/html"(); pluto = false, useshow = true)
+    s_in = to_string(n, MIME"text/html"(); pluto = true)
+    s_out = to_string(n, MIME"text/html"(); pluto = false)
     @test contains(s_in, r"markdown.*code class.*language-js") # This is language-js
     @test contains(s_in, "script id") === false
-    @test s_out === repr(n)
+    @test s_out === s_in # The pluto kwarg is ignored for script content when shown to text/html
 
     # DualScript
     n = DualScript("asd", "lol"; id = "asd")
-    s_in = to_string(n, MIME"text/html"(); pluto = true, useshow = true)
-    s_out = to_string(n, MIME"text/html"(); pluto = false, useshow = true)
-    @test contains(s_in, r"markdown.*code class.*language-html")
-    @test contains(s_in, "script id") === true
-    @test contains(s_out, "script id='asd'")
+    s_in = to_string(n, MIME"text/html"(); pluto = true)
+    s_out = to_string(n, MIME"text/html"(); pluto = false)
+    @test contains(s_in, "script id='asd'") === true
+    @test contains(s_out, "script id='asd'") === true
+    @test contains(
+        to_string(n, MIME"text/html"(); pluto = true, formatted = true), 
+        r"markdown.*code class.*language-html"
+    )
     @test add_pluto_compat(n) === true
     @test contains(s_out, LOCAL_MODULE_URL[])
     @test contains(s_out, "async (currentScript) =>") # Opening async outside Pluto
@@ -339,22 +343,22 @@ end
     # Test when Pluto compat is false
     n = DualScript(n; add_pluto_compat = false)
     @test add_pluto_compat(n) === false
-    s_out = to_string(n, MIME"text/html"(); pluto = false, useshow = true)
+    s_out = to_string(n, MIME"text/html"(); pluto = false)
     @test contains(s_out, LOCAL_MODULE_URL[]) === false
     # Test the return
     n = DualScript(PlutoScript(;returned_element = "asd"), NormalScript(;returned_element = "lol"))
-    s_in = to_string(n, MIME"text/html"(); pluto = true, useshow = true)
-    s_out = to_string(n, MIME"text/html"(); pluto = false, useshow = true)
+    s_in = to_string(n, MIME"text/html"(); pluto = true)
+    s_out = to_string(n, MIME"text/html"(); pluto = false)
     @test contains(s_in, "return asd")
     @test contains(s_out, "_return_node_ = lol")
     @test contains(s_out, "currentScript.insertAdjacentElement('beforebegin', _return_node_)")
 
     # NormalNode should be empty when shown out of Pluto
     n = NormalNode("asd")
-    s_in = to_string(n, MIME"text/html"(); pluto = true, useshow = true)
-    s_out = to_string(n, MIME"text/html"(); pluto = false, useshow = true)
+    s_in = to_string(n, MIME"text/html"(); pluto = true, formatted = true)
+    s_out = to_string(n, MIME"text/html"(); pluto = false)
     @test contains(s_in, r"markdown.*code class.*language-html")
-    @test contains(s_in, "script id") === false
+    @test contains(s_in, "script") === false
     @test s_out === "asd\n"
 end
 

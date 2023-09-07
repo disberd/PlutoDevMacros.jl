@@ -4,7 +4,7 @@ using PlutoDevMacros.PlutoCombineHTL: LOCAL_MODULE_URL
 using PlutoDevMacros.HypertextLiteral
 using PlutoDevMacros.PlutoCombineHTL: shouldskip, children, print_html,
 script_id, inner_node, plutodefault, haslisteners, is_inside_pluto, hasreturn,
-add_pluto_compat
+add_pluto_compat, hasinvalidation, displaylocation
 import PlutoDevMacros
 
 import Pluto: update_save_run!, update_run!, WorkspaceManager, ClientSession,
@@ -61,6 +61,8 @@ load_notebook, Configuration
     @test PlutoScript(ps) === ps
     @test ps.body.content === "asd"
     @test ps.invalidation.content === "lol"
+    @test shouldskip(ps, InsidePluto()) === false
+    @test shouldskip(ps, OutsidePluto()) === true
 
     ns = NormalScript("lol")
     @test NormalScript(ns) === ns
@@ -79,6 +81,9 @@ load_notebook, Configuration
         "asd",
         "lol",
     ])
+    @test hasreturn(cs, InsideAndOutsidePluto()) === false
+    @test hasinvalidation(cs) === false
+    @test add_pluto_compat(cs) === true
     @test cs isa CombinedScripts
     @test CombinedScripts(cs) === cs
     @test make_script(cs) === cs
@@ -89,6 +94,23 @@ load_notebook, Configuration
 
     make_script(ShowWithPrintHTML(cs)) === cs
     @test_throws "only valid if `T <: Script`" make_script(ShowWithPrintHTML("asd"))
+
+    # Now we test that constructing a CombinedScripts with a return in not the last script or more returns errors.
+    ds1 = make_script(PlutoScript(;returned_element = "asd"))
+    ds2 = make_script("asd")
+    @test_throws "not in the last" make_script([
+        ds1,
+        ds2
+    ])
+
+    @test_throws "More than one return" make_script([
+        ds1,
+        ds2,
+        ds1,
+    ])
+
+    @test make_script(:outside, ds2) === ds2.outside_pluto
+    @test make_script(:Inside, ds2) === ds2.inside_pluto
 end
 
 @testset "make_node" begin
@@ -108,6 +130,7 @@ end
     ])
     @test cn isa CombinedNodes
     @test length(children(cn)) === 2 # We skipped the second empty element
+    @test make_node(cn) === cn
 
     @test PlutoNode(dn.inside_pluto) === dn.inside_pluto
     @test PlutoNode(@htl("")).empty === true
@@ -161,6 +184,11 @@ end
     
     @test isempty(children(make_node([PlutoNode("asd")]))) === false
     @test isempty(children(make_node([NormalNode("asd")]))) === false
+
+    @test make_node(:pluto, "asd") === PlutoNode("asd")
+    @test make_node(:outside; content = "lol") === NormalNode("lol")
+    @test make_node(:both, "asd", "lol") === DualNode("asd", "lol")
+    @test make_node(:both, "asd", "lol") === make_node("asd", "lol")
 end
 
 @testset "Other Helpers" begin
@@ -179,6 +207,9 @@ end
     s = "addScriptEventListeners('lol')"
     @test haslisteners(make_script(s, "asd"), InsidePluto()) === true
     @test haslisteners(make_script(s, "asd"), OutsidePluto()) === false
+    @test haslisteners(missing) === false
+
+    @test_throws "can not identify a display location" displaylocation(:not_exist)
 
     @test hasreturn(make_script("asd","lol"), InsidePluto()) === false
     @test hasreturn(make_script("asd","lol"), OutsidePluto()) === false
@@ -188,6 +219,47 @@ end
     @test hasreturn(ds, OutsidePluto()) === false
     @test hasreturn(make_script(NormalScript(;returned_element = "lol")), OutsidePluto()) === true
     @test hasreturn(make_script(NormalScript(;returned_element = "lol")), InsidePluto()) === false
+
+    cs = make_script([
+        "asd",
+        "lol",
+    ])
+    cn = make_node([
+        "asd",
+        "lol",
+    ])
+    # Test getproperty
+    @test cs.children === children(cs)
+    @test cn.children === children(cn)
+
+    # We test the abstract type constructors
+    @test Script(InsideAndOutsidePluto()) === DualScript
+    @test Script(InsidePluto()) === PlutoScript
+    @test Script(OutsidePluto()) === NormalScript
+
+    @test Node(InsideAndOutsidePluto()) === DualNode
+    @test Node(InsidePluto()) === PlutoNode
+    @test Node(OutsidePluto()) === NormalNode
+
+    ps = PlutoScript("asd")
+    ns = NormalScript("asd")
+    ds = make_script(ps,ns)
+    @test DualScript("asd") == ds
+    @test_throws "can't construct" PlutoScript(ns)
+    @test_throws "can't construct" NormalScript(ps)
+
+    @test PlutoScript(ds) === ps
+    @test NormalScript(ds) === ns
+
+    for D in (InsidePluto, OutsidePluto, InsideAndOutsidePluto)
+        @test plutodefault(D) === plutodefault(D())
+        @test displaylocation(D()) === D()
+    end
+    io = IOBuffer()
+    swp1 = ShowWithPrintHTML(make_node("asd"); display_type = :pluto)
+    swp2 = ShowWithPrintHTML(make_node("asd"); display_type = :both) # :both is the default
+    @test plutodefault(io, swp1) === plutodefault(swp1)
+    @test plutodefault(io, swp2) === is_inside_pluto(io) !== plutodefault(swp1)
 end
 
 @testset "Show methods" begin
@@ -224,6 +296,9 @@ end
 
     # Test error with print_script
     @test_throws "Interpolation of `Script` subtypes is not allowed" HypertextLiteral.print_script(IOBuffer(), ds)
+    # Test error with show javascript ShowWithPrintHTML
+    @test_throws "not supposed to be shown with mime 'text/javascript'" show(IOBuffer(), MIME"text/javascript"(), make_html("asd"))
+
 
     # Show outside Pluto
     # PlutoScript should be empty when shown out of Pluto
@@ -253,10 +328,18 @@ end
     @test contains(s_out, LOCAL_MODULE_URL[])
     @test contains(s_out, "async (currentScript) =>") # Opening async outside Pluto
     @test contains(s_out, "})(document.currentScript)") # Closing and calling async outside Pluto
+    # Test when Pluto compat is false
     n = DualScript(n; add_pluto_compat = false)
     @test add_pluto_compat(n) === false
     s_out = to_string(n, MIME"text/html"(); pluto = false, useshow = true)
     @test contains(s_out, LOCAL_MODULE_URL[]) === false
+    # Test the return
+    n = DualScript(PlutoScript(;returned_element = "asd"), NormalScript(;returned_element = "lol"))
+    s_in = to_string(n, MIME"text/html"(); pluto = true, useshow = true)
+    s_out = to_string(n, MIME"text/html"(); pluto = false, useshow = true)
+    @test contains(s_in, "return asd")
+    @test contains(s_out, "_return_node_ = lol")
+    @test contains(s_out, "currentScript.insertAdjacentElement('beforebegin', _return_node_)")
 
     # NormalNode should be empty when shown out of Pluto
     n = NormalNode("asd")

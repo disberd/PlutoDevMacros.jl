@@ -73,48 +73,11 @@ function Base.show(io::IO, mime::MIME"text/javascript", ms::CombinedScripts; plu
 end
 
 ## text/javascript - ShowAsHTML ##
-Base.show(io::IO, ::MIME"tex/javascript", sah::ShowWithPrintHTML) = error("Objects of
-type `ShowAsHTML` are not supposed to be shown with mime 'text/javascript'")
+Base.show(io::IO, ::MIME"text/javascript", sah::ShowWithPrintHTML) = error("Objects of
+type `ShowWithPrintHTML` are not supposed to be shown with mime 'text/javascript'")
 
 # Helper functions #
-#= 
-This function will add the currentScript, observable stdlib and lodash to the
-available names in the current cell when displayed outside pluto (and when the
-add_pluto_compat for the script is true)
-=#
-maybe_add_pluto_compat(::IO, ::Script, ::InsidePluto, ::String) = nothing
-maybe_add_pluto_compat(::IO, ::PlutoScript, ::OutsidePluto, ::String) = nothing
-function maybe_add_pluto_compat(io::IO, s::Script, ::OutsidePluto, id::String)
-	if add_pluto_compat(s)
-		# We can't use currentScript so we extract it knowing that we have the id
-		println(io, """
-	/* ### Beginning of Pluto Compat code added by PlutoDevMacros ### */
-
-	const currentScript = document.querySelector("script[id='$id']")
-	async function make_library() {
-		// We fix the same versions used by Pluto
-        let { Library } = await import("https://esm.sh/@observablehq/stdlib@3.3.1")
-        let { default: lodash} = await import("https://esm.sh/lodash-es@4.17.20")
-        let library = new Library()
-        return {
-            DOM: library.DOM,
-            Files: library.Files,
-            Generators: library.Generators,
-            Promises: library.Promises,
-            now: library.now,
-            svg: library.svg(),
-            html: library.html(),
-            require: library.require(),
-            _: lodash,
-        }
-	}
-	const { DOM, Files, Generators, Promises, now, svg, html, require, _} = await make_library()
-
-	/* ### End of Pluto Compat code added by PlutoDevMacros ### */
-""")
-	end
-end
-# Maybe print return
+# Maybe add return
 maybe_add_return(::IO, ::Missing, ::SingleDisplayLocation) = nothing
 maybe_add_return(io::IO, code::String, ::InsidePluto) = println(io, "return $code")
 maybe_add_return(io::IO, code::String, ::OutsidePluto) = print(io, "

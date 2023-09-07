@@ -2,7 +2,7 @@ using Test
 using PlutoDevMacros.PlutoCombineHTL.WithTypes
 using PlutoDevMacros.HypertextLiteral
 using PlutoDevMacros.PlutoCombineHTL: shouldskip, children, print_html,
-script_id, inner_node, ShowWithPrintHTML, plutodefault, haslisteners, is_inside_pluto
+script_id, inner_node, ShowWithPrintHTML, plutodefault, haslisteners, is_inside_pluto, hasreturn
 import PlutoDevMacros
 
 import Pluto: update_save_run!, update_run!, WorkspaceManager, ClientSession,
@@ -71,6 +71,9 @@ load_notebook, Configuration
     @test CombinedScripts(cs) === cs
     @test make_script(cs) === cs
     @test children(CombinedScripts(ds)) == children(make_script([ds]))
+
+    @test isempty(children(make_script([PlutoScript("asd")]))) === false
+    @test isempty(children(make_script([NormalScript("asd")]))) === false
 
     make_script(ShowWithPrintHTML(cs)) === cs
     @test_throws "only valid if `T <: Script`" make_script(ShowWithPrintHTML("asd"))
@@ -142,6 +145,10 @@ end
     lol
     
     "), "    lol\n") # lol is right offset by 4 spaces
+
+    
+    @test isempty(children(make_node([PlutoNode("asd")]))) === false
+    @test isempty(children(make_node([NormalNode("asd")]))) === false
 end
 
 @testset "Other Helpers" begin
@@ -154,9 +161,30 @@ end
         @test shouldskip(T("")) === true
     end
 
-    @test haslisteners(make_script("asd"); both = true) === false
+    @test haslisteners(make_script("asd")) === false
     s = "addScriptEventListeners('lol')"
-    @test haslisteners(make_script(s, s); both = true) === true
+    @test haslisteners(make_script(s, "asd"); pluto = true) === true
+    @test haslisteners(make_script(s, "asd"); pluto = false) === false
+
+    @test hasreturn(make_script("asd","lol"); pluto = true) === false
+    @test hasreturn(make_script("asd","lol"); pluto = false) === false
+    @test hasreturn(make_script("return asd","lol"); pluto = true) === true
+    @test hasreturn(make_script("return asd","lol"); pluto = false) === false
+    @test hasreturn(make_script("asd","return lol"); pluto = false) === true
+
+    @test hasreturn(true)(make_script([
+        "lol"
+        "return asd"
+    ]))
+
+    @test_throws "not in the last" hasreturn(true)(make_script([
+        "return asd"
+        "lol"
+    ]))
+    @test_throws "multiple scripts with a return" hasreturn(true)(make_script([
+        "return asd"
+        "return lol"
+    ]))
 end
 
 @testset "Show methods" begin

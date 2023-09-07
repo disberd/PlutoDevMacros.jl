@@ -9,6 +9,7 @@ using AbstractPlutoDingetjes: is_inside_pluto
 export make_node, make_html, make_script, formatted_code
 
 include("typedef.jl")
+include("constructors.jl")
 include("js_events.jl")
 include("helpers.jl")
 # include("combine.jl")

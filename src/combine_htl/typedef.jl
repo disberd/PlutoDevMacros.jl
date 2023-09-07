@@ -4,9 +4,10 @@ struct InsidePluto <: SingleDisplayLocation end
 struct OutsidePluto <: SingleDisplayLocation end
 struct InsideAndOutsidePluto <: DisplayLocation end
 
-abstract type Node{T<:DisplayLocation} end
-abstract type NonScript{T} <: Node{T} end
-abstract type Script{T} <: Node{T} end
+abstract type AbstractHTML{D<:DisplayLocation} end
+abstract type Node{D} <: AbstractHTML{D} end
+abstract type NonScript{D} <: Node{D} end
+abstract type Script{D} <: Node{D} end
 
 const SingleNode = Node{<:SingleDisplayLocation}
 const SingleScript = Script{<:SingleDisplayLocation}
@@ -82,57 +83,6 @@ struct ScriptContent
 	content::String
 	addedEventListeners::Bool
 end
-_isnewline(x) = x in ('\n', '\r') # This won't remove tabs and whitespace
-function strip_nl(s::AbstractString)
-	str = lstrip(_isnewline, rstrip(s))
-end
-function ScriptContent(s::AbstractString; addedEventListeners = missing)
-	# We strip eventual leading newline or trailing `isspace`
-	str = strip_nl(s)
-	ael = if addedEventListeners === missing
-		contains(str, "addScriptEventListeners(")
-	else
-		addedEventListeners
-	end
-	ScriptContent(str, ael)
-end
-
-function ScriptContent(r::Result; kwargs...)
-	temp = IOBuffer()
-	show(temp, r)
-	str_content = strip(String(take!(temp)))
-	isempty(str_content) && return ScriptContent("", false)
-	n_matches = 0
-	first_idx = 0
-	first_offset = 0
-	last_idx = 0
-	start_regexp = r"<script[^>]*>"
-	end_regexp = r"</script>"
-	for m in eachmatch(r"<script[^>]*>", str_content)
-		n_matches += 1
-		n_matches > 1 && break
-		first_offset = m.offset
-		first_idx = first_offset + length(m.match)
-		m_end = match(end_regexp, str_content, first_idx)
-		m_end === nothing && error("No closing </script> tag was found in the input")
-		last_idx = m_end.offset - 1
-	end
-	if n_matches === 0
-		@warn "No <script> tag was found. 
-Remember that the `ScriptContent` constructor only extract the content between the first <script> tag it finds when using an input of type `HypertextLiteral.Result`"
-		return ScriptContent("", false)
-	elseif n_matches > 1
-		@warn "More than one <script> tag was found. 
-Only the contents of the first one have been extracted"
-	elseif first_offset > 1 || last_idx < length(str_content) - length("</script>")
-		@warn "The provided input also contained contents outside of the <script> tag. 
-This content has been discarded"
-	end
-	ScriptContent(str_content[first_idx:last_idx]; kwargs...)
-end
-ScriptContent(p::ScriptContent) = p
-ScriptContent() = ScriptContent("", false)
-ScriptContent(::Union{Missing, Nothing}) = missing
 
 ## PlutoScript ##
 """
@@ -196,7 +146,7 @@ containing formatted code as a `Markdown.Code` element.
 that are automatically removed upon cell invalidation. Scripts created using
 `PlutoScript` expose an internal javascript function 
 ```js
-addScriptEventListener(element, listeners)
+addScriptEventListeners(element, listeners)
 ```
 which accepts any givent JS `element` to which listeners have to be attached,
 and an object of with the following key-values:
@@ -273,71 +223,67 @@ is equivalent to writing directly
 </script>
 ```
 """
-@kwdef struct PlutoScript <: Script{InsidePluto}
-    body::Union{Missing,ScriptContent} = missing
-    invalidation::Union{Missing,ScriptContent} = missing
-    id::Union{Missing, String} = missing
-    function PlutoScript(b,i,id::Union{Missing, Nothing, String}) 
-        body = ScriptContent(b)
+struct PlutoScript <: Script{InsidePluto}
+    body::Union{Missing,ScriptContent}
+    invalidation::Union{Missing,ScriptContent}
+    id::Union{Missing, String}
+	returned_element::Union{Missing, String}
+    function PlutoScript(b,i,id::Union{Missing, Nothing, String}, returned_element; kwargs...) 
+        body = ScriptContent(b; kwargs...)
         invalidation = ScriptContent(i)
-        new(body,invalidation, something(id, missing))
+		@assert invalidation === missing || invalidation.addedEventListeners === false "You can't have added event listeners in the invalidation script"
+        new(body,invalidation, something(id, missing), returned_element)
     end
 end
-# Custom Constructors
-PlutoScript(body; kwargs...) = PlutoScript(;body, kwargs...)
-PlutoScript(body, invalidation; kwargs...) = PlutoScript(body; invalidation, kwargs...)
-
-# Identity/Copy with modification
-PlutoScript(s::PlutoScript; kwargs...) = PlutoScript(;body = s.body, invalidation = s.invalidation, id = s.id, kwargs...)
 
 ## NormalScript
-@kwdef struct NormalScript <: Script{OutsidePluto}
-	body::Union{Missing, ScriptContent} = missing
-	show_as_module::Bool = true
-	id::Union{Missing, String} = missing
-    function NormalScript(b,show_as_module::Bool,id::Union{Missing, Nothing, String}) 
-        body = ScriptContent(b)
-        new(body, show_as_module, something(id, missing))
+struct NormalScript <: Script{OutsidePluto}
+	body::Union{Missing, ScriptContent}
+	add_pluto_compat::Bool
+	id::Union{Missing, String}
+	returned_element::Union{Missing, String}
+    function NormalScript(b, add_pluto_compat, id, returned_element; kwargs...) 
+        body = ScriptContent(b; kwargs...)
+        new(body, add_pluto_compat, something(id, missing), returned_element)
     end
 end
-NormalScript(body; kwargs...) = NormalScript(;body, kwargs...)
-NormalScript(ps::PlutoScript; kwargs...) = NormalScript(ps.body; id = ps.id, kwargs...)
-NormalScript(ns::NormalScript; kwargs...) = NormalScript(ns.body; show_as_module = ns.show_as_module, id = ns.id, kwargs...)
 
 ## DualScript ##
 @kwdef struct DualScript <: Script{InsideAndOutsidePluto}
 	inside_pluto::PlutoScript = PlutoScript()
 	outside_pluto::NormalScript = NormalScript()
-	function DualScript(i::PlutoScript, o::NormalScript; kwargs...)
-		id = get(kwargs, :id, missing)
-		if id === missing
-			new(i,o)
-		else
-			ip = PlutoScript(i; id)
-			op = NormalScript(o; id)
-			new(ip, op)
-		end
+	function DualScript(i, o; kwargs...)
+		ip = PlutoScript(i; kwargs...)
+		op = NormalScript(o; kwargs...)
+		new(ip, op)
 	end
 end
-# Custom Constructors
-DualScript(i, o; kwargs...) = DualScript(PlutoScript(i), NormalScript(o); kwargs...)
-DualScript(i::PlutoScript; kwargs...) = DualScript(i, NormalScript(); kwargs...)
-DualScript(o::NormalScript; kwargs...) = DualScript(PlutoScript(), o; kwargs...)
-DualScript(ds::DualScript; kwargs...) = DualScript(ds.inside_pluto, ds.outside_pluto; kwargs...)
-DualScript(body; kwargs...) = DualScript(PlutoScript(body; kwargs...))
-
 
 ## CombinedScripts ##
 struct CombinedScripts <: Script{InsideAndOutsidePluto}
 	scripts::Vector{DualScript}
-	CombinedScripts(v::Vector) = new(filter(!shouldskip, map(make_script, v)))
+	function CombinedScripts(v::Vector{DualScript}; returned_element = missing) 
+		# We check for only one return expression and it being in the last script
+		return_count = 0
+		for s in v
+			# If not return is present we skip this script
+			hasreturn(s, InsideAndOutsidePluto()) || continue
+			return_count += 1
+		end
+		@assert return_count < 2 "More than one return expression was found while constructing the CombinedScripts. This is not allowed."
+		if return_count > 0
+			@assert hasreturn(v[end], InsideAndOutsidePluto()) "The return expression is not in the last Script in the vector. This is not allowed."
+		end
+		if returned_element !== missing
+			dn = v[end]
+			v[end] = DualScript(dn; returned_element)
+		end
+		new(v)
+	end
 end
-
-CombinedScripts(cs::CombinedScripts) = cs
-CombinedScripts(s) = CombinedScripts([DualScript(s)])
-
-struct ShowWithPrintHTML{T}
+struct ShowWithPrintHTML{D<:DisplayLocation, T} <: AbstractHTML{D}
 	el::T
+	ShowWithPrintHTML(el::T, ::D) where {T, D<:DisplayLocation} = new{D,T}(el)
 end
 
 # HTML Nodes #
@@ -350,6 +296,9 @@ end
 for T in (Bypass, Render, Reprint)
 	Base.print(io::ParseResultIO, x::T) = shouldskip(x) || push!(io.parts, x)
 end
+
+_isnewline(x) = x in ('\n', '\r') # This won't remove tabs and whitespace
+strip_nl(s::AbstractString) = lstrip(_isnewline, rstrip(s))
 _remove_leading(x) = x
 _remove_leading(x::Bypass{<:AbstractString}) = Bypass(lstrip(_isnewline, x.content))
 _remove_trailing(x) = x
@@ -361,6 +310,8 @@ for (T, P) in ((:PlutoNode, :InsidePluto), (:NormalNode, :OutsidePluto))
 			content::Result
 			empty::Bool
 		end
+		# Empty Constructor
+		$T() = $T(@htl(""), true)
 		# Constructor from Result
 		function $T(r::Result)
 			io = ParseResultIO()
@@ -402,16 +353,22 @@ struct DualNode <: NonScript{InsideAndOutsidePluto}
 	outside_pluto::NormalNode
 	DualNode(i::PlutoNode, o::NormalNode) = new(i, o)
 end
-DualNode(i, o) = DualNode(PlutoNode(i), NormalNode(o))
-DualNode(i::PlutoNode) = DualNode(i, "")
-DualNode(o::NormalNode) = DualNode("", o)
-DualNode(x) = DualNode(PlutoNode(x))
 
 ## CombinedNodes
 struct CombinedNodes <: NonScript{InsideAndOutsidePluto}
 	nodes::Vector{<:Node{InsideAndOutsidePluto}}
-	CombinedNodes(v::Vector) = new(filter(!shouldskip, map(make_node, v)))
+	CombinedNodes(v::Vector) = new(filter(x -> !shouldskip(x, InsideAndOutsidePluto()), map(make_node, v)))
 end
 
 
+const Single = Union{SingleNode, SingleScript}
+const Dual = Union{DualScript, DualNode}
+const Combined = Union{CombinedScripts, CombinedNodes}
 
+function Base.getproperty(c::Combined, s::Symbol)
+	if s === :children
+		children(c)
+	else
+		getfield(c,s)
+	end
+end

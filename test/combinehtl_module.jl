@@ -4,7 +4,7 @@ using PlutoDevMacros.PlutoCombineHTL: LOCAL_MODULE_URL
 using PlutoDevMacros.HypertextLiteral
 using PlutoDevMacros.PlutoCombineHTL: shouldskip, children, print_html,
 script_id, inner_node, plutodefault, haslisteners, is_inside_pluto, hasreturn,
-add_pluto_compat, hasinvalidation, displaylocation
+add_pluto_compat, hasinvalidation, displaylocation, returned_element
 import PlutoDevMacros
 
 import Pluto: update_save_run!, update_run!, WorkspaceManager, ClientSession,
@@ -108,6 +108,14 @@ load_notebook, Configuration
         ds2,
         ds1,
     ])
+    ds3 = make_script(PlutoScript(;returned_element = "asd"), NormalScript(;returned_element = "boh"))
+    cs = make_script([
+        ds2,
+        ds3
+        ]; returned_element = "lol"
+    )
+    @test returned_element(cs, InsidePluto()) === "lol"
+    @test returned_element(cs, OutsidePluto()) === "lol"
 
     @test make_script(:outside, ds2) === ds2.outside_pluto
     @test make_script(:Inside, ds2) === ds2.inside_pluto

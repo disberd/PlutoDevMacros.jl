@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.27
+# v0.19.29
 
 #> custom_attrs = ["hide-enabled"]
 
@@ -56,9 +56,14 @@ To actually generate and show in the pluto-output their corresponding HTML code 
 @connect_vscode begin
 end
 
+# ╔═╡ d115c2b6-f92d-4609-94a9-59391c160645
+md"""
+# Scripts 
+"""
+
 # ╔═╡ 201323b9-8caf-4acb-904e-b76d16e5ffb1
 md"""
-# ScriptContent
+## ScriptContent
 """
 
 # ╔═╡ f1bde184-7487-4745-8c47-0df407da6813
@@ -75,7 +80,7 @@ simple_sc = """
 
 # ╔═╡ 0a1e9af6-6b32-49c6-9cf6-8cf7f594f109
 md"""
-## @htl constructor
+### @htl constructor
 """
 
 # ╔═╡ f2fde939-638a-4b69-94ee-d32aff03879e
@@ -124,7 +129,7 @@ end
 
 # ╔═╡ 57929023-813c-42ab-acdd-8a8f9033c11a
 md"""
-## Display/Interpolation
+### Display/Interpolation
 """
 
 # ╔═╡ 8d9dd998-c3d0-435c-a709-ee42c586c230
@@ -151,19 +156,19 @@ A Vector of `ScriptContent` can also be directly interpolated inside the <script
 $([
 	ScriptContent("let dv = html`<div>LOL</div>`") # This creates the div
 	ScriptContent("currentScript.insertAdjacentElement('beforebegin',dv)") # This puts the previous div before the currentScript
-	ScriptContent("return html`<div>ASD`") # This returns a new div, which is put after the previous one
+	ScriptContent("return html`<div>ASD`") # This returns a new div, which is put after the previous one. Return statements should not be contained inside ScriptContents directly but provided with the returned_element keyword when constructing a Script.
 ])
 </script>
 """)
 
 # ╔═╡ cc621eb7-b977-4ee8-9fbf-600a6f2bcfd2
 md"""
-# SingleScript
+## SingleScript
 """
 
 # ╔═╡ 02f7b708-1f21-4533-bc3c-de4573d0a14b
 md"""
-There are two subyptes of `SingleScript <: Script`. They are:
+There are two subyptes of `InOrOutScript <: Script`. They are:
 - `PlutoScript`
 - `NormalScript`
 These are elements representing scripts that are exclusive to either be shown in Pluto or outside of Pluto.
@@ -174,21 +179,39 @@ Check the JavaScript sample Pluto notebook for more details on the `invalidation
 `SinglScript` objects can be constructed either with `ScriptContent` objects directly or with inputs that are supported by the `ScriptContent` constructor (i.e. `String` and `HypertextLiteral.Result` containing a <script> tag)
 """
 
+# ╔═╡ 1e2d7cc9-45d8-4aca-806b-76f1e50986b0
+md"""
+### PlutoScript
+"""
+
 # ╔═╡ 73932307-b68c-453a-a7e6-8ba5d8bd8334
 # When showing a Script object, the <script> tag is included
-PlutoScript(simple_sc)
+PlutoScript(simple_sc) |> formatted_code
 
 # ╔═╡ d866e092-f24b-4553-971f-c1f74f3a1c1a
 # Can also be constructed with Strings
-ps = PlutoScript("   console.log('asd')", "   console.log('lol')"; id = "my_id")
+ps = PlutoScript("   console.log('asd')", "   console.log('lol')"; id = "my_id") |>
+formatted_code
 
 # ╔═╡ 3dfb8184-2fce-4296-9c47-f0a034e99f73
-# To materialize the script, use make_html
-PlutoScript("return html`<div>MAGIC`") |> make_html
+PlutoScript("return html`<div>MAGIC`")
+
+# ╔═╡ 7f70ce43-567b-47aa-856e-bb41ee00fcc4
+md"""
+### NormalScript
+"""
 
 # ╔═╡ 07db9619-2cfe-4796-a083-f571f6c30721
 md"""
-NormalScript will not show the formatted code as normal output in Pluto, but will transform into an empty script when actually shown with make_html inside Pluto
+NormalScript will not show the formatted code as normal output in Pluto, but will transform into an empty script when actually shown with `make_html` inside Pluto.
+
+In order to maximize code reuse between the Pluto and Normal scripts, some JS packages are loaded and made available in NormalScript objects' generated HTML by default.
+These are the packages that are also automatically loaded inside Pluto and are available when executing cell code and include:
+- the [Observable Standard Library](https://github.com/observablehq/stdlib) 
+- the [Lodash](https://lodash.com/) package.
+Similarly to what happens in Pluto, the `currentScript` variable is also associated to the script being executed.
+
+While `currentScript` is always bound, the package loading/inclusion is controlled by a `Bool` field of the `NormalScript` structure and it can be overridden by calling the script constructor with the `add_pluto_compat = false` keyword argument.
 """
 
 # ╔═╡ ebd5e071-e151-43d6-806e-ca6582c0046b
@@ -200,7 +223,7 @@ make_html(ns)
 
 # ╔═╡ 0b129e2a-842f-44cd-9d5e-61f7090ab63d
 md"""
-## JS Listeners
+### JS Listeners
 """
 
 # ╔═╡ bdac5c70-2114-4f2b-9a0b-14ff172a1559
@@ -208,92 +231,53 @@ md"""
 `Script` objects can also be constructed with a convenience function to attach JS listeners to objects that are automatically removed upon cell invalidation.
 
 To use this functionality, it is sufficient to add a call to the `addScriptEventListeners` inside the script content.
+
+See below the actually generated HTML when this keyword is added to the contents of a Script:
 """
 
 # ╔═╡ d508ea5d-cc5d-44d1-a1b0-8ae6c18bf954
-PlutoScript("""
-	let dv = html`<div>ASDLOL`
-	let active = false
-	addScriptEventListeners(dv, {
-		'click': (e) => {
-			console.log(e)
-			active = !active
-			if (active) {
-				dv.style = "border: solid 2px red;"
-			} else {
-				sv.style = ""
+begin
+	ps_js = PlutoScript("""
+		let dv = html`<div>ASDLOL`
+		let active = false
+		addScriptEventListeners(dv, {
+			'click': (e) => {
+				console.log(e)
+				active = !active
+				if (active) {
+					dv.style = "border: solid 2px red;"
+				} else {
+					dv.style = ""
+				}
 			}
-		}
-	})
-"""; returned_element = "dv")
-
-# ╔═╡ 723490e1-ae51-4e0f-a69f-2572a823973a
-@htl """
-<script>
-	$([asd, lol])
-</script>
-"""
-
-# ╔═╡ d7a6a1b2-5bb5-4743-b6d2-9f11208711b4
-md"""
-## HTLBypass
-"""
-
-# ╔═╡ a29fb2ee-f71b-411c-a427-e79bde9f9687
-bpclass = "magic";
-
-# ╔═╡ f61d937b-e6a8-4f77-b253-f13dc2e8bc16
-bplol = @htl """
-<div class=$bpclass>
-	MAGIC
-</div>
-"""
-
-# ╔═╡ d10026e7-5736-4555-aa8b-adb769280dbe
-bpasd = HTLBypass(@htl """
-<div>This is $bplol</div>
-""")
-
-# ╔═╡ e95076b9-a4bb-4a94-8b29-ae2b33bfc47a
-Script.formatted_js(bpasd)
-
-# ╔═╡ d49ca300-2dd2-48b3-a27e-fab90b61de7e
-@htl """
-<script>
-	let out = html`$bpasd`
-	console.log(out)
-	return out
-</script>
-"""
-
-# ╔═╡ 453ee62b-d1b4-4bad-aafa-cba13559b698
-md"""
-## PlutoScript
-"""
-
-# ╔═╡ 14d239b3-1402-4ae4-a620-8de9c191a20e
-s = PlutoScript("console.log('asd')")
-
-# ╔═╡ 4774accb-a3f7-4cee-9e9e-da1a413eb5a0
-PlutoScript(s)
-
-# ╔═╡ b5464d21-dc4d-4be1-83fa-a4c351015944
-combine_scripts([(s for _ in 1:4)..., "console.log('lol')"];id=missing)
-
-# ╔═╡ cc41848a-3fcb-4c65-9a5d-452b3fecdf63
-dio = let
-	a = PlutoScript("console.log('asd1')", "console.log('lol1')", "lol")
-	b = PlutoScript("console.log('asd2');", "console.log('lol2')", "gesu")
-	combine_scripts([a,b]; id = "lol")
+		})
+	"""; returned_element = "dv") # To avoid having a return statement within the script that will stop the rest of the content. Returned elements name should be given as a separated keyword argument.
+	formatted_code(ps_js)
 end
 
-# ╔═╡ f631b4ea-3ce9-43ac-8a87-dba733deec18
-let
-	r = @htl "<asd>lol</asd>$dio"
-	io = IOBuffer()
-	show(io, r)
-	String(take!(io))
-end
+# ╔═╡ a87c1d5f-1160-477b-9de9-432f1b742e3f
+# One can also just show the content without the scripts parts added by PlutoDevMacros
+ps_js |> formatted_code(;only_contents = true)
+
+# ╔═╡ a4004826-ee3d-451f-a944-dff8d0787481
+md"""
+And here is the generated script which will create a div which changes its border color upon click
+"""
+
+# ╔═╡ 5ec6e1a4-ece4-4cdf-81f5-fe0d1c9c39b9
+ps_js
+
+# ╔═╡ f8e10efd-f29d-431b-bbc7-ae4c0608e4d6
+md"""
+## DualScript
+"""
+
+# ╔═╡ c30afe44-ac82-4f80-82d2-ba89677f49b0
+ScriptContent(@htl("""
+<script>
+asd
+</script>
+"""); context_pairs = [:pluto => true])
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -585,6 +569,7 @@ version = "17.4.0+2"
 # ╟─01368463-0f95-4ced-abb1-6c8800ca2524
 # ╠═65bff575-5dcb-4d81-b357-2b2f8bfd43d7
 # ╠═c862e547-3b62-4218-b06e-0e84d05d6587
+# ╟─d115c2b6-f92d-4609-94a9-59391c160645
 # ╟─201323b9-8caf-4acb-904e-b76d16e5ffb1
 # ╟─f1bde184-7487-4745-8c47-0df407da6813
 # ╠═adf46403-ec6b-4278-ae65-5747f319dc96
@@ -605,27 +590,21 @@ version = "17.4.0+2"
 # ╠═318a9af6-a7e9-449d-8299-db4b6ab11fea
 # ╟─cc621eb7-b977-4ee8-9fbf-600a6f2bcfd2
 # ╟─02f7b708-1f21-4533-bc3c-de4573d0a14b
+# ╟─1e2d7cc9-45d8-4aca-806b-76f1e50986b0
 # ╠═73932307-b68c-453a-a7e6-8ba5d8bd8334
 # ╠═d866e092-f24b-4553-971f-c1f74f3a1c1a
 # ╠═3dfb8184-2fce-4296-9c47-f0a034e99f73
+# ╟─7f70ce43-567b-47aa-856e-bb41ee00fcc4
 # ╟─07db9619-2cfe-4796-a083-f571f6c30721
 # ╠═ebd5e071-e151-43d6-806e-ca6582c0046b
 # ╠═22589abd-63f4-46de-9fed-b673a72a449f
 # ╟─0b129e2a-842f-44cd-9d5e-61f7090ab63d
-# ╠═bdac5c70-2114-4f2b-9a0b-14ff172a1559
+# ╟─bdac5c70-2114-4f2b-9a0b-14ff172a1559
 # ╠═d508ea5d-cc5d-44d1-a1b0-8ae6c18bf954
-# ╠═723490e1-ae51-4e0f-a69f-2572a823973a
-# ╠═d7a6a1b2-5bb5-4743-b6d2-9f11208711b4
-# ╠═a29fb2ee-f71b-411c-a427-e79bde9f9687
-# ╠═f61d937b-e6a8-4f77-b253-f13dc2e8bc16
-# ╠═d10026e7-5736-4555-aa8b-adb769280dbe
-# ╠═e95076b9-a4bb-4a94-8b29-ae2b33bfc47a
-# ╠═d49ca300-2dd2-48b3-a27e-fab90b61de7e
-# ╠═453ee62b-d1b4-4bad-aafa-cba13559b698
-# ╠═14d239b3-1402-4ae4-a620-8de9c191a20e
-# ╠═4774accb-a3f7-4cee-9e9e-da1a413eb5a0
-# ╠═b5464d21-dc4d-4be1-83fa-a4c351015944
-# ╠═cc41848a-3fcb-4c65-9a5d-452b3fecdf63
-# ╠═f631b4ea-3ce9-43ac-8a87-dba733deec18
+# ╠═a87c1d5f-1160-477b-9de9-432f1b742e3f
+# ╟─a4004826-ee3d-451f-a944-dff8d0787481
+# ╠═5ec6e1a4-ece4-4cdf-81f5-fe0d1c9c39b9
+# ╟─f8e10efd-f29d-431b-bbc7-ae4c0608e4d6
+# ╠═c30afe44-ac82-4f80-82d2-ba89677f49b0
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

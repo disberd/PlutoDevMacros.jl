@@ -13,44 +13,58 @@ const SingleNode = Node{<:SingleDisplayLocation}
 const SingleScript = Script{<:SingleDisplayLocation}
 
 ## ScriptContent ##
-	"""
-	struct ScriptContent
-This struct is a simple wrapper around an `IOBuffer` and is intended to provide
+"""
+	$TYPEDEF
+This struct is a simple wrapper for JS script content and is intended to provide
 pretty printing of script contents and custom interpolation inside the
 `<script>` tags of the `@htl` macro.
 
-It is intended for use within Pluto notebooks to simply decouple parts of a
-javascript script into separate variables and still be able to interpolate them
-within <script> tags to compose a bigger script.
+It is used as building block for creating and combining JS scripts to correctly
+render inside and outside Pluto notebooks. 
 
-Compared to simply using strings wrapped in `HypertextLiteral.JavaScript`, this
-gives the opportunity to exploit the experimental htmlmixed synthax highlighting
-of code inside cells by also accepting `HypertextLiteral.Result` objects during
-construction.
+# Field
+$TYPEDFIELDS
 
-The struct can be initialized as follows:
+## Note
+The `addedEventListeners` field is usually automatically computed based on the
+provided `content` value when using one of the 2 main constructors below:
+
+# Main Constructors
+	ScriptContent(s::AbstractString; kwargs...)
+	ScriptContent(r::HypertextLiteral.Result; kwargs...)
+One would usually call the constructor either with a `String` or
+`HypertextLiteral.Result`. In this case, the provided content is parsed and
+checked for calls to the `addScriptEventListeners` function, eventually setting the `addedEventListeners` field accordingly.
+One can force the flag to a custom value either by directly calling the
+(default) inner constructor with 2 positional arguments, or by passing
+`addedEventListeners = value` kwarg to one of the two constructrs above.
+
+For what concerns construction with `HypertextLiteral.Result` as input, the
+provided `Result` needs to contain an opening and closing `<script>` tag. 
+In the example below, the constructor will parse the `Result` and only extracts the content within the tags, so only the `code...` part below.
+All content appearing before or after the <script> tag (including additional
+script tags) will be ignored and a warning will be produced.
 ```julia
 wrapper = ScriptContent(@htl(\"\"\"
+something_before
 <script>
 code...
 </script>
+something_after
 \"\"\"))
 ```
 When interpolating `wrapper` above inside another `@htl` macro as `@htl
 "<script>\$wrapper</script>"` it would be as equivalent to directly writing
-`@htl "<script>code...</script>` inside the script. This is clearly only
+`code...` inside the script. This is clearly only
 beneficial if multiple `ScriptContent` variables are interpolated inside a
 single <script> block.
 
 On top of the interpolation, an object of type `ScriptContent` will show its
 contents as a formatted javascript code markdown element when shown in Pluto. 
 
-The constructor also accepts either a `String` or `IOBuffer` object for its
-initialization instead of a `HypertextLiteral.Result` one.
+See also: [`PlutoScript`](@ref), [`NormalScript`](@ref), [`DualScript`](@ref)
 
-See also: [`PlutoScript`](@ref)
-
-Examples:
+# Examples
 
 ```julia
 let
@@ -80,23 +94,35 @@ end
 ```
 """
 struct ScriptContent
+	"Content of the script part"
 	content::String
+	"Flag indicating if the script has custom listeners added via the  `addScriptEventListeners` function."
 	addedEventListeners::Bool
 end
 
 ## PlutoScript ##
 """
-```julia
-Base.@kwdef struct PlutoScript
-	body::ScriptContent
-	invalidation::Union{ScriptContent, Missing}
-	id::Union{Missing, Nothing, String}
-end
-```
+$TYPEDEF
 # Fields
-- `body::ScriptContent` -> The main body of the script
-- `invalidation::Union{ScriptContent, Missing}` -> The code to be executed inside the invalidation promise. Defaults to `missing`
-- `id::Union{Missing, Nothing, String}` -> The id to assign to the script. Defaults to `missing`
+$TYPEDFIELDS
+
+## Note
+Eventual elements that have to be returned from the script (this is a feature of
+Pluto) should not be directly _returned_ from the script content but should be
+simply assigned to a JS variable whose name is set to the `returned_element`
+field.
+This is necessary to prevent exiting early from a chain of Scripts. For example, the following code which is a valid JS code inside a Pluto cell to create a custom div as output:
+```julia
+@htl \"\"\"
+<script>
+	return html`<div>MY DIV</div>`
+</script>
+\"\"\"
+```
+must be constructed when using `PlutoScript` as:
+```julia
+PlutoScript("let out = html`<div>MY DIV</div>`"; returned_element = "out")
+```
 
 # Additional Constructors
 	PlutoScript(body; kwargs...)
@@ -224,9 +250,13 @@ is equivalent to writing directly
 ```
 """
 struct PlutoScript <: Script{InsidePluto}
+	"The main body of the script"
     body::Union{Missing,ScriptContent}
+	"The code to be executed inside the invalidation promise. Defaults to `missing`"
     invalidation::Union{Missing,ScriptContent}
+	"The id to assign to the script. Defaults to `missing`"
     id::Union{Missing, String}
+	"The name of the JS element that is returned by the script. Defaults to `missing`"
 	returned_element::Union{Missing, String}
     function PlutoScript(b,i,id::Union{Missing, Nothing, String}, returned_element; kwargs...) 
         body = ScriptContent(b; kwargs...)
@@ -238,9 +268,13 @@ end
 
 ## NormalScript
 struct NormalScript <: Script{OutsidePluto}
+	"The main body of the script"
 	body::Union{Missing, ScriptContent}
+	"A flag to indicate if the script should include basic JS libraries available from Pluto. Defaults to `true`"
 	add_pluto_compat::Bool
+	"The id to assign to the script. Defaults to `missing`"
 	id::Union{Missing, String}
+	"The name of the JS element that is returned by the script. Defaults to `missing`"
 	returned_element::Union{Missing, String}
     function NormalScript(b, add_pluto_compat, id, returned_element; kwargs...) 
         body = ScriptContent(b; kwargs...)

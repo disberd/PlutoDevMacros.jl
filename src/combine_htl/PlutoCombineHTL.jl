@@ -5,6 +5,7 @@ using HypertextLiteral
 using HypertextLiteral: Result, Bypass, Reprint, Render
 using Markdown
 using AbstractPlutoDingetjes: is_inside_pluto
+using DocStringExtensions
 
 export make_node, make_html, make_script, formatted_code
 
@@ -16,6 +17,7 @@ include("js_events.jl")
 include("helpers.jl")
 # include("combine.jl")
 include("show.jl")
+# include("docstrings.jl")
 
 module WithTypes
     _ex_names = (

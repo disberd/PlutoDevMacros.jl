@@ -21,10 +21,10 @@ function ScriptContent(s::AbstractString; kwargs...)
 end
 
 ## Result constructor ##
-function ScriptContent(r::Result; kwargs...)
-	temp = IOBuffer()
+function ScriptContent(r::Result; iocontext = IOContext(devnull), kwargs...)
+	temp = IOContext(IOBuffer(), iocontext)
 	show(temp, r)
-	str_content = strip(String(take!(temp)))
+	str_content = strip(String(take!(temp.io)))
 	isempty(str_content) && return ScriptContent()
 	n_matches = 0
 	first_idx = 0

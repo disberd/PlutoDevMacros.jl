@@ -12,9 +12,9 @@ export make_node, make_html, make_script, formatted_code
 const LOCAL_MODULE_URL = Ref("https://cdn.jsdelivr.net/gh/disberd/PlutoDevMacros@$(pkgversion(@__MODULE__))/src/combine_htl/pluto_compat.js")
 
 include("typedef.jl")
+include("helpers.jl")
 include("constructors.jl")
 include("js_events.jl")
-include("helpers.jl")
 # include("combine.jl")
 include("show.jl")
 # include("docstrings.jl")

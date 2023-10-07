@@ -81,7 +81,7 @@ load_notebook, Configuration
         "asd",
         "lol",
     ])
-    @test hasreturn(cs, InsideAndOutsidePluto()) === false
+    @test !(hasreturn(cs, InsidePluto()) || hasreturn(cs, OutsidePluto()))
     @test hasinvalidation(cs) === false
     @test add_pluto_compat(cs) === true
     @test cs isa CombinedScripts

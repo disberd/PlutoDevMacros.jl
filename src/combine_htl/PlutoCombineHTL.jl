@@ -41,7 +41,7 @@ module HelperFunctions
     _ex_names = (
         :shouldskip, :haslisteners, :hasreturn, :returned_element,
         :script_id, :add_pluto_compat, :hasinvalidation, :plutodefault,
-        :displaylocation, :children, :inner_node, :getfirst,
+        :displaylocation, :children, :inner_node,
     )
     for n in _ex_names
         eval(:(import ..PlutoCombineHTL: $n))

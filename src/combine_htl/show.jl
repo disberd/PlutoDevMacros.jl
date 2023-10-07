@@ -6,7 +6,7 @@ function _iterate_scriptcontents(io::IO, iter, location::SingleDisplayLocation, 
 	# We cycle through the DualScript iterable
 	pluto = plutodefault(location)
 	for pts in iter
-		kwargs = if _eltype(pts) isa Script
+		kwargs = if _eltype(pts) <: Script
 			(;
 				pluto,
 				kind,
@@ -131,12 +131,12 @@ function print_html(io::IO, n::NonScript{L}; pluto = plutodefault(n)) where L <:
 	return
 end
 print_html(io::IO, dn::DualNode; pluto = plutodefault(dn)) = print_html(io, inner_node(dn, displaylocation(pluto)); pluto)
-function print_html(io::IO, cn::CombinedNodes; pluto = plutodefault(io))
+function print_html(io::IO, cn::CombinedNodes; pluto = is_inside_pluto(io))
 	for n in children(cn)
 		print_html(io, n; pluto)
 	end
 end
-print_html(io::IO, swph::ShowWithPrintHTML; pluto = plutodefault(io)) = print_html(io, swph.el; pluto)
+print_html(io::IO, swph::ShowWithPrintHTML; pluto = plutodefault(io, swph)) = print_html(io, swph.el; pluto)
 # Catchall method reverting to show text/javascript
 print_html(io::IO, x; kwargs...) = (@nospecialize; show(io, MIME"text/html"(), x))
 

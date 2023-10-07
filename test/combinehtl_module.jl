@@ -115,8 +115,20 @@ load_notebook, Configuration
     @test returned_element(ds3, InsidePluto()) === "asd"
     @test returned_element(ds3, OutsidePluto()) === "boh"
 
+    cs = make_script([
+        PrintToScript(3)
+    ]; returned_element = "asd")
+    @test last(children(cs)).el isa DualScript
+
     @test make_script(:outside, ds2) === ds2.outside_pluto
     @test make_script(:Inside, ds2) === ds2.inside_pluto
+
+    pts = PrintToScript(3)
+    @test make_script(pts) === pts
+    @test make_node(pts) isa CombinedScripts
+
+    @test PrintToScript(pts) === pts
+    @test_throws "You can't wrap" PrintToScript(PlutoNode("asd"))
 end
 
 @testset "make_node" begin
@@ -135,8 +147,13 @@ end
         "lol"
     ])
     @test cn isa CombinedNodes
+    @test CombinedNodes(cn) === cn
     @test length(children(cn)) === 2 # We skipped the second empty element
     @test make_node(cn) === cn
+
+    cn = CombinedNodes(dn)
+    dn_test = cn.children[1].el
+    @test dn_test == dn
 
     @test PlutoNode(dn.inside_pluto) === dn.inside_pluto
     @test PlutoNode(@htl("")).empty === true
@@ -156,6 +173,7 @@ end
     dn = DualNode("asd", "lol")
     @test inner_node(dn, InsidePluto()) == pn
     @test inner_node(dn, OutsidePluto()) == nn
+    @test DualNode(dn) === dn
 
     function compare_content(n1, n2; pluto = missing)
         io1 = IOBuffer()
@@ -267,14 +285,51 @@ end
     swp2 = ShowWithPrintHTML(make_node("asd"); display_type = :both) # :both is the default
     @test plutodefault(io, swp1) === plutodefault(swp1)
     @test plutodefault(io, swp2) === is_inside_pluto(io) !== plutodefault(swp1)
+
+    @test displaylocation(PrintToScript(3)) === InsideAndOutsidePluto()
+    @test displaylocation(PrintToScript(PlutoScript("asd"))) === InsidePluto()
+
+    swph = ShowWithPrintHTML(3)
+    @test PlutoCombineHTL._eltype(swph) === Int
+    @test shouldskip(swph, InsidePluto()) === false
+
+    swph = ShowWithPrintHTML(3; display_type = :outside)
+    @test shouldskip(swph, InsidePluto()) === true
+
+    @test add_pluto_compat(3) === false
+    @test hasinvalidation(3) === false
+
+    @test haslisteners(PrintToScript(3)) === false
+    @test hasreturn(PrintToScript(3)) === false
+
+    @test script_id(PlutoScript("asd"), OutsidePluto()) === missing
+    pts = PrintToScript(3)
+    @test script_id(pts) === missing
 end
 
 @testset "Show methods" begin
-    ps = PlutoScript("asd")
+    ps = PlutoScript("asd", "lol")
     s = to_string(ps, MIME"text/javascript"())
     hs = to_string(ps, MIME"text/html"())
     @test contains(s, r"JS Listeners .* PlutoDevMacros") === false # No listeners helpers should be added
+    @test contains(s, "invalidation.then(() => {\nlol") === true # Test that the invaliation script is printed
     @test contains(hs, r"<script id='\w+'") === true
+
+    struct ASD end
+    function PlutoCombineHTL.print_javascript(io::IO, ::ASD; pluto)
+        if pluto
+            println(io, "ASD_PLUTO")
+        else
+            println(io, "ASD_NONPLUTO")
+        end
+    end
+
+    cs = make_script([ASD() |> PrintToScript])
+    s_in = to_string(cs, MIME"text/javascript"(); pluto = true)
+    s_out = to_string(cs, MIME"text/javascript"(); pluto = false)
+    @test contains(s_in, "ASD_PLUTO")
+    @test contains(s_out, "ASD_NONPLUTO")
+    
 
     ds = DualScript("addScriptEventListeners('lol')", "magic"; id = "custom_id")
     s_in = to_string(ds, MIME"text/javascript"(); pluto = true)
@@ -290,7 +345,31 @@ end
     @test_throws "Interpolation of `Script` subtypes is not allowed" HypertextLiteral.print_script(IOBuffer(), ds)
     # Test error with show javascript ShowWithPrintHTML
     @test_throws "not supposed to be shown with mime 'text/javascript'" show(IOBuffer(), MIME"text/javascript"(), make_html("asd"))
+    # Test error when trying to print invalidation of a NormalScript
+    pts = PrintToScript(NormalScript("lol"))
+    @test_throws "can't print invalidation" print_javascript(IOBuffer(), pts; pluto = false, kind = :invalidation)
+    # Test that print_javascript goes to Base.show with mime text/javascript by default
+    @test_throws r"matching show\(.*::Missing" print_javascript(IOBuffer(), missing)
+    # Test that print_javascript goes to Base.show with mime text/javascript by default
+    @test_throws r"matching show\(.*::Missing" print_html(IOBuffer(), missing)
+    # Test that to_string only supports text/html and text/javascript
+    @test_throws "Unsupported mime" to_string(1, MIME"text/plain"())
 
+    n = NormalNode("asd")
+    # Test that interpolation of nodes in @htl works
+    r = @htl("$n")
+    s = to_string(r, MIME"text/html"())
+    @test contains(s, "asd")
+
+    cn = make_node([n])
+    s = to_string(cn, MIME"text/html"(); pluto = false)
+    @test contains(s, "asd")
+
+    # Test that interpolation of ScriptContent inside @htl <script> tags work 
+    sc = ScriptContent("asd")
+    r = @htl("<script>$([sc])</script>")
+    s = to_string(r, MIME"text/html"())
+    @test contains(s, "<script>asd")
 
     # Show outside Pluto
     # PlutoScript should be empty when shown out of Pluto
@@ -351,6 +430,19 @@ end
     @test formatted_code(ds) == formatted_code(ds, MIME"text/html"())
     sc = ScriptContent("asd")
     @test formatted_code(sc) == formatted_code(sc, MIME"text/javascript"())
+    s = let
+        io = IOBuffer()
+        show(io, MIME"text/html"(), sc)
+        String(take!(io))
+    end
+    @test contains(s, "<div class=\"markdown\"")
+    s = let
+        io = IOBuffer()
+        n = NormalNode("lol")
+        show(io, MIME"text/html"(), n; pluto = false)
+        String(take!(io))
+    end
+    @test contains(s, "lol")
 end
 
 function noerror(cell; verbose=true)

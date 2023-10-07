@@ -318,7 +318,7 @@ struct CombinedScripts <: Script{InsideAndOutsidePluto}
 		returned_element === missing && return new(v)
 		final_v = if return_idx === 0
 			# We have to add a DualScript that just returns the element
-			new_v = vcat(v, DualScript(""; returned_element))
+			new_v = vcat(v, DualScript(""; returned_element) |> PrintToScript)
 		else
 			new_v = copy(v)
 			dn = new_v[return_idx].el

@@ -1,9 +1,3 @@
-function getfirst(f, iterable)
-    @inbounds for iter in iterable
-        f(iter) && return iter
-    end
-end
-
 # Basics
 plutodefault(::Union{InsidePluto, InsideAndOutsidePluto}) = true
 plutodefault(::OutsidePluto) = false

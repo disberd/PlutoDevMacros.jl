@@ -272,12 +272,8 @@ md"""
 ## DualScript
 """
 
-# ╔═╡ c30afe44-ac82-4f80-82d2-ba89677f49b0
-ScriptContent(@htl("""
-<script>
-asd
-</script>
-"""); context_pairs = [:pluto => true])
+# ╔═╡ 0e16969e-197f-4fca-a0f1-cbe4c4c4822e
+v = PrintToScript
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -605,6 +601,6 @@ version = "17.4.0+2"
 # ╟─a4004826-ee3d-451f-a944-dff8d0787481
 # ╠═5ec6e1a4-ece4-4cdf-81f5-fe0d1c9c39b9
 # ╟─f8e10efd-f29d-431b-bbc7-ae4c0608e4d6
-# ╠═c30afe44-ac82-4f80-82d2-ba89677f49b0
+# ╠═0e16969e-197f-4fca-a0f1-cbe4c4c4822e
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

@@ -14,7 +14,7 @@ _events_listeners_preamble = let
 	}
 	/* # JS Listeners Preamble added by PlutoDevMacros */
 """, false) # We for this to avoid detecting the listeners and avoid stripping newlines
-	ds = DualScript(PlutoScript(body), NormalScript(body))
+	ds = DualScript(PlutoScript(body), NormalScript(body)) |> PrintToScript
 end
 
 _events_listeners_postamble = let
@@ -41,5 +41,5 @@ _events_listeners_postamble = let
 	}
 	/* # JS Listeners invalidation added by PlutoDevMacros */
 """; addedEventListeners = false)
-	ds = DualScript(PlutoScript(body, invalidation), NormalScript(body))
+	ds = DualScript(PlutoScript(body, invalidation), NormalScript(body)) |> PrintToScript
 end

@@ -97,17 +97,32 @@ DualScript(ds::DualScript; kwargs...) = DualScript(ds.inside_pluto, ds.outside_p
 
 # CombinedScripts #
 function CombinedScripts(v::Vector; kwargs...)
-    filtered = filter(map(make_script, v)) do el
-        !shouldskip(el, InsideAndOutsidePluto())
+	pts_vec = map(v) do el
+		make_script(el) |> PrintToScript
+	end
+    filtered = filter(pts_vec) do el
+		skip_both = shouldskip(el, InsidePluto()) && shouldskip(el, OutsidePluto())
+		!skip_both
     end 
     CombinedScripts(filtered; kwargs...)
 end
 CombinedScripts(cs::CombinedScripts) = cs
-CombinedScripts(s) = CombinedScripts([DualScript(s)])
+CombinedScripts(el) = CombinedScripts([el])
+
+# CombinedNodes #
+CombinedNodes(cn::CombinedNodes) = cn
+CombinedNodes(el) = CombinedNodes([el])
 
 # ShowWithPrintHTML #
-ShowWithPrintHTML(@nospecialize(t); display_type = :both) = ShowWithPrintHTML(t, displaylocation(display_type))
-ShowWithPrintHTML(@nospecialize(t::ShowWithPrintHTML); display_type = :both) = ShowWithPrintHTML(t.el, displaylocation(display_type))
+ShowWithPrintHTML(@nospecialize(t); display_type = displaylocation(t)) = ShowWithPrintHTML(t, displaylocation(display_type))
+ShowWithPrintHTML(@nospecialize(t::ShowWithPrintHTML); display_type = displaylocation(t)) = ShowWithPrintHTML(t.el, displaylocation(display_type))
+ShowWithPrintHTML(@nospecialize(t::PrintToScript); kwargs...) = error("You can't wrap object of type $(typeof(t)) with ShowWithPrintHTML")
+
+# PrintToScript #
+PrintToScript(@nospecialize(t); display_type = displaylocation(t)) = PrintToScript(t, displaylocation(display_type))
+PrintToScript(@nospecialize(t::PrintToScript); display_type = displaylocation(t)) = PrintToScript(t.el, displaylocation(display_type))
+PrintToScript(@nospecialize(t::AbstractHTML); kwargs...) = error("You can't wrap object of type $(typeof(t)) with PrintToScript")
+PrintToScript(@nospecialize(t::Union{SingleScript, DualScript}); display_type = displaylocation(t)) = PrintToScript(t, displaylocation(display_type))
 
 # DualNode #
 DualNode(i, o) = DualNode(PlutoNode(i), NormalNode(o))

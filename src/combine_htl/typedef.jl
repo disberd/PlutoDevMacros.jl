@@ -293,26 +293,39 @@ end
 	end
 end
 
+
+## PrintToScript
+struct PrintToScript{D<:DisplayLocation, T}
+	el::T
+	PrintToScript(el::T, ::D) where {T, D<:DisplayLocation} = new{D,T}(el)
+end
+
 ## CombinedScripts ##
 struct CombinedScripts <: Script{InsideAndOutsidePluto}
-	scripts::Vector{DualScript}
-	function CombinedScripts(v::Vector{DualScript}; returned_element = missing) 
+	scripts::Vector{<:PrintToScript}
+	function CombinedScripts(v::Vector{<:PrintToScript}; returned_element = missing) 
 		# We check for only one return expression and it being in the last script
 		return_count = 0
-		for s in v
-			# If not return is present we skip this script
-			hasreturn(s, InsideAndOutsidePluto()) || continue
+		return_idx = something(findfirst(x -> x isa Script, v), 0)
+		for (i, s) in enumerate(v)
+			# If no return is present we skip this script
+			hasreturn(s, InsidePluto()) || hasreturn(s, OutsidePluto()) || continue
 			return_count += 1
+			return_idx = i
 		end
 		@assert return_count < 2 "More than one return expression was found while constructing the CombinedScripts. This is not allowed."
-		if return_count > 0
-			@assert hasreturn(v[end], InsideAndOutsidePluto()) "The return expression is not in the last Script in the vector. This is not allowed."
+		# If we don't have to set a custom returned_element we just create a new CombinedScripts
+		returned_element === missing && return new(v)
+		final_v = if return_idx === 0
+			# We have to add a DualScript that just returns the element
+			new_v = vcat(v, DualScript(""; returned_element))
+		else
+			new_v = copy(v)
+			dn = new_v[return_idx].el
+			new_v[return_idx] = DualScript(dn; returned_element) |> PrintToScript
+			new_v
 		end
-		if returned_element !== missing
-			dn = v[end]
-			v[end] = DualScript(dn; returned_element)
-		end
-		new(v)
+		new(final_v)
 	end
 end
 struct ShowWithPrintHTML{D<:DisplayLocation, T} <: AbstractHTML{D}
@@ -390,10 +403,18 @@ end
 
 ## CombinedNodes
 struct CombinedNodes <: NonScript{InsideAndOutsidePluto}
-	nodes::Vector{<:Node{InsideAndOutsidePluto}}
-	CombinedNodes(v::Vector) = new(filter(x -> !shouldskip(x, InsideAndOutsidePluto()), map(make_node, v)))
+	nodes::Vector{<:ShowWithPrintHTML}
+	function CombinedNodes(v::Vector) 
+		swph_vec = map(v) do el
+			make_node(el) |> ShowWithPrintHTML
+		end
+		filtered = filter(swph_vec) do el
+			skip_both = shouldskip(el, InsidePluto()) && shouldskip(el, OutsidePluto())
+			!skip_both
+		end
+		new(filtered)
+	end
 end
-
 
 const Single = Union{SingleNode, SingleScript}
 const Dual = Union{DualScript, DualNode}

@@ -22,12 +22,26 @@ include("show.jl")
 module WithTypes
     _ex_names = (
         :PlutoCombineHTL,
-        :make_node, :make_html, :make_script, :formatted_code,
+        :make_node, :make_html, :make_script, 
+        :formatted_code, :print_html, :print_javascript, :to_string,
         :ScriptContent,
+        :PrintToScript,
         :Node, :DualNode, :CombinedNodes, :PlutoNode, :NormalNode,
         :Script, :DualScript, :CombinedScripts, :PlutoScript, :NormalScript,
         :SingleDisplayLocation, :DisplayLocation, :InsidePluto, :OutsidePluto, :InsideAndOutsidePluto,
         :ShowWithPrintHTML, :AbstractHTML
+    )
+    for n in _ex_names
+        eval(:(import ..PlutoCombineHTL: $n))
+        eval(:(export $n))
+    end
+end
+
+module HelperFunctions
+    _ex_names = (
+        :shouldskip, :haslisteners, :hasreturn, :returned_element,
+        :script_id, :add_pluto_compat, :hasinvalidation, :plutodefault,
+        :displaylocation, :children, :inner_node, :getfirst,
     )
     for n in _ex_names
         eval(:(import ..PlutoCombineHTL: $n))

@@ -17,7 +17,6 @@ load_notebook, Configuration
     @test make_script(ds) === ds
     @test ds isa DualScript
     @test inner_node(ds, InsidePluto()).body == inner_node(ds, OutsidePluto()).body
-    @test shouldskip(ds, InsideAndOutsidePluto()) === false
     @test ds.inside_pluto.body.content === "test"
     ds = make_script("lol"; id = "asdfasdf")
     @test script_id(ds, InsidePluto()) === "asdfasdf"
@@ -49,11 +48,11 @@ load_notebook, Configuration
     """))
     @test_throws "No closing </script>" make_script(@htl("<script>asd"))
     ds = make_script(;invalidation = @htl("lol"))
-    @test shouldskip(ds, InsideAndOutsidePluto()) # The script is empty because with `@htl` we only get the content between the first <script> tag.
+    @test shouldskip(ds, InsidePluto()) && shouldskip(ds, OutsidePluto()) # The script is empty because with `@htl` we only get the content between the first <script> tag.
     ds = make_script(;invalidation = "lol")
-    @test shouldskip(ds, InsideAndOutsidePluto()) === false
+    @test shouldskip(ds, InsidePluto()) === false
     ds = make_script(;invalidation = @htl("<script>lol</script>"))
-    @test !shouldskip(ds, InsideAndOutsidePluto())
+    @test !shouldskip(ds, InsidePluto())
     @test shouldskip(ds, OutsidePluto())
     @test shouldskip(ds.inside_pluto.body)
     @test ds.inside_pluto.invalidation.content === "lol"
@@ -99,10 +98,6 @@ load_notebook, Configuration
     # Now we test that constructing a CombinedScripts with a return in not the last script or more returns errors.
     ds1 = make_script(PlutoScript(;returned_element = "asd"))
     ds2 = make_script("asd")
-    @test_throws "not in the last" make_script([
-        ds1,
-        ds2
-    ])
 
     @test_throws "More than one return" make_script([
         ds1,
@@ -117,6 +112,8 @@ load_notebook, Configuration
     )
     @test returned_element(cs, InsidePluto()) === "lol"
     @test returned_element(cs, OutsidePluto()) === "lol"
+    @test returned_element(ds3, InsidePluto()) === "asd"
+    @test returned_element(ds3, OutsidePluto()) === "boh"
 
     @test make_script(:outside, ds2) === ds2.outside_pluto
     @test make_script(:Inside, ds2) === ds2.inside_pluto
@@ -125,7 +122,7 @@ end
 @testset "make_node" begin
     dn = make_node()
     @test dn isa DualNode
-    @test shouldskip(dn) === true
+    @test shouldskip(dn, InsidePluto()) && shouldskip(dn, OutsidePluto())
 
     s = make_script("asd")
     dn = make_node("asd")
@@ -147,12 +144,13 @@ end
     nn = NormalNode("lol")
     dn = DualNode(nn)
     @test inner_node(dn, OutsidePluto()) === nn
-    @test shouldskip(inner_node(dn, InsidePluto()))
+    @test shouldskip(dn, InsidePluto())
 
     pn = PlutoNode("asd")
     dn = DualNode(pn)
     @test inner_node(dn, InsidePluto()) === pn
-    @test shouldskip(inner_node(dn, OutsidePluto()))
+    @test shouldskip(dn, OutsidePluto())
+    @test shouldskip(dn, InsidePluto()) === false
 
 
     dn = DualNode("asd", "lol")

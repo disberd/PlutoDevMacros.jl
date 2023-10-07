@@ -1,34 +1,40 @@
 
 # Helpers #
 # This function just iterates and print the javascript of an iterable containing DualScript elements
-function _iterate_scriptcontents(io::IO, iter, selec::Function, location::SingleDisplayLocation)
+function _iterate_scriptcontents(io::IO, iter, location::SingleDisplayLocation, kind::Symbol = :body)
 	mime = MIME"text/javascript"()
 	# We cycle through the DualScript iterable
-	for ds in iter
-		s = inner_node(ds, location)
-		sc = selec(s)
-		shouldskip(sc) && continue
-		show(io, mime, sc)
+	pluto = plutodefault(location)
+	for pts in iter
+		kwargs = if _eltype(pts) isa Script
+			(;
+				pluto,
+				kind,
+			)
+		else
+			(;pluto)
+		end
+		print_javascript(io, pts; kwargs...)
 	end
 	return nothing
 end
 
-function write_script(io::IO, contents::Vector{DualScript}, location::InsidePluto; returns = missing, kwargs...)
+function write_script(io::IO, contents::Vector{<:PrintToScript}, location::InsidePluto; returns = missing, kwargs...)
 	# We cycle through the contents to write the body part
-	_iterate_scriptcontents(io, contents, x -> x.body, location)
+	_iterate_scriptcontents(io, contents, location, :body)
 	# If there is no valid invalidation, we simply return
 	if hasinvalidation(contents)
 		# We add a separating newline
 		println(io)
 		# Start processing the invalidation
 		println(io, "invalidation.then(() => {")
-		_iterate_scriptcontents(io, contents, x -> x.invalidation, location)
+		_iterate_scriptcontents(io, contents, location, :invalidation)
 		println(io, "})")
 	end
 	maybe_add_return(io, returns, location)
 	return
 end
-function write_script(io::IO, contents::Vector{DualScript}, location::OutsidePluto; returns = missing, only_contents = false)
+function write_script(io::IO, contents::Vector{<:PrintToScript}, location::OutsidePluto; returns = missing, only_contents = false)
 	# We wrap everything in an async call as we want to use await
 	only_contents || println(io, "(async (currentScript) => {")
 	# If the script should have the added Pluto compat packages we load them
@@ -39,7 +45,7 @@ function write_script(io::IO, contents::Vector{DualScript}, location::OutsidePlu
 """)
 	end
 	# We cycle through the contents to write the body part
-	_iterate_scriptcontents(io, contents, x -> x.body, location)
+	_iterate_scriptcontents(io, contents, location, :body)
 	# We print the returned element if provided
 	maybe_add_return(io, returns, location)
 	# We close the async function definition and call it with the currentScript
@@ -73,6 +79,26 @@ plutodefault(io), only_contents = false)
 	write_script(io, contents, location; 
 	returns = returned_element(ms, location), only_contents)
 end
+# PrintToScript
+# Default version that just forwards
+print_javascript(io::IO, pts::PrintToScript; pluto = plutodefault(pts), kwargs...) = print_javascript(io, pts.el; pluto, kwargs...)
+# Here we add methods for PrintToScript containing scripts. These will simply print the relevant ScriptContent
+function print_javascript(io::IO, pts::PrintToScript{<:DisplayLocation, <:Script}; pluto = plutodefault(pts.el), kind = :body)
+	l = displaylocation(pluto)
+	el = pts.el
+	s = el isa DualScript ? inner_node(el, l) : el
+	# We return if the location we want to print is not supported by the script
+	shouldskip(s, l) && return
+	if kind === :invalidation && s isa NormalScript
+		# We error if we are trying to print the invalidation field of a NormalScript
+		error("You can't print invalidation for a NormalScript")
+	end
+	sc = getproperty(s, kind)
+	shouldskip(sc, l) || print_javascript(io, sc)
+	return nothing
+end
+# Catchall method reverting to show text/javascript
+print_javascript(io::IO, x; kwargs...) = (@nospecialize; show(io, MIME"text/javascript"(), x))
 
 ## Maybe add return ##
 maybe_add_return(::IO, ::Missing, ::SingleDisplayLocation) = nothing
@@ -84,7 +110,7 @@ maybe_add_return(io::IO, name::String, ::OutsidePluto) = print(io, "
 
 # This function will simply write into IO the html code of the script, including the <script> tag
 # This is applicable for CombinedScripts and DualScript
-function print_html(io::IO, s::Script{InsideAndOutsidePluto}; pluto = plutodefault(s), only_contents = false)
+function print_html(io::IO, s::Script; pluto = plutodefault(s), only_contents = false)
 	location = displaylocation(pluto)
 	shouldskip(s, location) && return
 	# We write the script tag
@@ -96,9 +122,7 @@ function print_html(io::IO, s::Script{InsideAndOutsidePluto}; pluto = plutodefau
 	println(io, "</script>")
 	return
 end
-print_html(io::IO, s::SingleScript; pluto = plutodefault(s), kwargs...) = print_html(io, DualScript(s); pluto, kwargs...)
 print_html(io::IO, s::AbstractString; kwargs...) = write(io, strip_nl(s))
-print_html(io::IO, r::Union{HypertextLiteral.Result, HTML}; kwargs...) = show(io, MIME"text/html"(), r)
 function print_html(io::IO, n::NonScript{L}; pluto = plutodefault(n)) where L <: SingleDisplayLocation 
 	_pluto = plutodefault(n)
 	# If the location doesn't match the provided kwarg we do nothing
@@ -107,14 +131,17 @@ function print_html(io::IO, n::NonScript{L}; pluto = plutodefault(n)) where L <:
 	return
 end
 print_html(io::IO, dn::DualNode; pluto = plutodefault(dn)) = print_html(io, inner_node(dn, displaylocation(pluto)); pluto)
-function print_html(io::IO, cn::CombinedNodes; pluto = plutodefault(cn))
-	for n in cn.nodes
+function print_html(io::IO, cn::CombinedNodes; pluto = plutodefault(io))
+	for n in children(cn)
 		print_html(io, n; pluto)
 	end
 end
+print_html(io::IO, swph::ShowWithPrintHTML; pluto = plutodefault(io)) = print_html(io, swph.el; pluto)
+# Catchall method reverting to show text/javascript
+print_html(io::IO, x; kwargs...) = (@nospecialize; show(io, MIME"text/html"(), x))
 
 ## Formatted Code ##
-function to_string(n::Union{ScriptContent,Node}, ::M; kwargs...) where M <: MIME
+function to_string(element, ::M; kwargs...) where M <: MIME
 	f = if M === MIME"text/javascript"
 		print_javascript
 	elseif M === MIME"text/html"
@@ -123,7 +150,7 @@ function to_string(n::Union{ScriptContent,Node}, ::M; kwargs...) where M <: MIME
 		error("Unsupported mime $M provided as input")
 	end
 	io = IOBuffer()
-	f(io, n; kwargs...)
+	f(io, element; kwargs...)
 	code = String(take!(io))
 	return code
 end

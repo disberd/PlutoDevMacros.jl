@@ -483,6 +483,13 @@ end
     s_out = to_string(swph, print_html; pluto = false)
     @test s_in === "PLUTO"
     @test s_out === "NONPLUTO"
+
+    # We test print_javascript for dicts
+    d = Dict("asd" => "lol")
+    s_in = to_string(d, print_javascript; pluto = true) 
+    s_out = to_string(d, print_javascript; pluto = false)
+    @test contains(s_in, "published object on Pluto")
+    @test s_out === """{"asd": "lol"}""" 
 end
 
 # import Pluto: update_save_run!, update_run!, WorkspaceManager, ClientSession,

@@ -1,3 +1,6 @@
 [deps]
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
 PlutoDevMacros = "a0499f29-c39b-4c5c-807c-88074221b949"
+
+[compat]
+Documenter = "0.27"

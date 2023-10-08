@@ -23,7 +23,8 @@ makedocs(;
             "Use with PlutoPkg" => "frompackage/use_with_plutopkg.md",
             "Package Extensions" => "frompackage/package_extensions.md",
         ],
-        "Other Exports" => "other_functions.md"
+        "Other Exports" => "other_functions.md",
+        # "PlutoHTLCombine" => "htl_combine.md",
     ],
 )
 

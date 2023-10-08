@@ -91,17 +91,17 @@ end
             expected = :(import $(parent_path...).PlutoDevMacros)
             @test expected == f(ex) # This works because PlutoDevMacros is the name of the loaded package
 
-            ex = :(import PackageModule.Script)
-            expected = :(import $(parent_path...).PlutoDevMacros.Script)
+            ex = :(import PackageModule.PlutoCombineHTL)
+            expected = :(import $(parent_path...).PlutoDevMacros.PlutoCombineHTL)
             @test expected == f(ex)
 
-            ex = :(using PackageModule.Script)
-            expected = :(import $(parent_path...).PlutoDevMacros.Script: HTLBypass, HTLScript, HTLScriptPart, Script, combine_scripts, make_script)
+            ex = :(using PackageModule.PlutoCombineHTL)
+            expected = :(import $(parent_path...).PlutoDevMacros.PlutoCombineHTL: PlutoCombineHTL, formatted_code, make_html, make_node, make_script)
             @test expected == f(ex)
 
             # Relative imports
-            ex = :(import ..Script)
-            expected = :(import $(parent_path...).PlutoDevMacros.Script)
+            ex = :(import ..PlutoCombineHTL)
+            expected = :(import $(parent_path...).PlutoDevMacros.PlutoCombineHTL)
             @test expected == f(ex) # This should work as Script is a valid sibling module of FromPackage
 
             ex = :(import ..NonExistant)
@@ -128,8 +128,8 @@ end
             f(ex) = parseinput(deepcopy(ex), dict)
             parent_path = modname_path(fromparent_module[])
 
-            ex = :(import PackageModule.Script)
-            expected = :(import $(parent_path...).PlutoDevMacros.Script)
+            ex = :(import PackageModule.PlutoCombineHTL)
+            expected = :(import $(parent_path...).PlutoDevMacros.PlutoCombineHTL)
             @test expected == f(ex)
 
             # FromParent import
@@ -205,7 +205,7 @@ end
 
         # Now we test providing lines as abs path
         dict = get_package_data(outpackage_target)
-        fullpath = abspath("../src/frompackage/FromPackage.jl")
+        fullpath = abspath(@__DIR__, "../../src/frompackage/FromPackage.jl")
         ex = quote
             import >.HypertextLiteral
             @skiplines begin

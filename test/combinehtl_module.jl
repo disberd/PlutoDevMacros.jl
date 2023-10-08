@@ -9,10 +9,6 @@ formatted_contents
 import PlutoDevMacros
 using PlutoDevMacros.PlutoCombineHTL.AbstractPlutoDingetjes.Display
 
-import Pluto: update_save_run!, update_run!, WorkspaceManager, ClientSession,
-ServerSession, Notebook, Cell, project_relative_path, SessionActions,
-load_notebook, Configuration
-
 @testset "make_script" begin
     ds = make_script("test")
     @test make_script(ds) === ds
@@ -383,7 +379,7 @@ end
     n = NormalNode("asd")
     # Test that interpolation of nodes in @htl works
     r = @htl("$n")
-    s = to_string(r, MIME"text/html"())
+    s = to_string(r, MIME"text/html"(); pluto = false)
     @test contains(s, "asd")
 
     cn = make_node([n])
@@ -470,17 +466,20 @@ end
     @test contains(s, "lol")
 end
 
-function noerror(cell; verbose=true)
-    if cell.errored && verbose
-        @show cell.output.body
-    end
-    !cell.errored
-end
+# import Pluto: update_save_run!, update_run!, WorkspaceManager, ClientSession,
+# ServerSession, Notebook, Cell, project_relative_path, SessionActions,
+# load_notebook, Configuration
 
+# function noerror(cell; verbose=true)
+#     if cell.errored && verbose
+#         @show cell.output.body
+#     end
+#     !cell.errored
+# end
 
-options = Configuration.from_flat_kwargs(; disable_writing_notebook_files=true)
-srcdir = normpath(@__DIR__, "./notebooks")
-eval_in_nb(sn, expr) = WorkspaceManager.eval_fetch_in_workspace(sn, expr)
+# options = Configuration.from_flat_kwargs(; disable_writing_notebook_files=true)
+# srcdir = normpath(@__DIR__, "./notebooks")
+# eval_in_nb(sn, expr) = WorkspaceManager.eval_fetch_in_workspace(sn, expr)
 
 # @testset "Script test notebook" begin
 #     ss = ServerSession(; options)

@@ -466,6 +466,23 @@ end
         String(take!(io))
     end
     @test contains(s, "lol")
+
+    # We test PrintToScript and ShowWithPrintHTML with io accepting functions
+    pts = PrintToScript((io; pluto, kwargs...) -> let # We wrap everything in an async call as we want to use await
+        write(io, pluto ? "PLUTO" : "NONPLUTO")
+    end)
+    s_in = to_string(pts, print_javascript; pluto = true)
+    s_out = to_string(pts, print_javascript; pluto = false)
+    @test s_in === "PLUTO"
+    @test s_out === "NONPLUTO"
+
+    swph = ShowWithPrintHTML((io; pluto, kwargs...) -> let # We wrap everything in an async call as we want to use await
+        write(io, pluto ? "PLUTO" : "NONPLUTO")
+    end)
+    s_in = to_string(swph, print_html; pluto = true)
+    s_out = to_string(swph, print_html; pluto = false)
+    @test s_in === "PLUTO"
+    @test s_out === "NONPLUTO"
 end
 
 # import Pluto: update_save_run!, update_run!, WorkspaceManager, ClientSession,

@@ -83,7 +83,13 @@ plutodefault(io), only_contents = false)
 end
 # PrintToScript
 # Default version that just forwards
-print_javascript(io::IO, pts::PrintToScript; pluto = plutodefault(pts), kwargs...) = print_javascript(io, pts.el; pluto, kwargs...)
+function print_javascript(io::IO, pts::PrintToScript; pluto = plutodefault(pts), kwargs...) 
+	l = displaylocation(pluto)
+	# We skip if the loction of pts is explicitly not compatible with l
+	shouldskip(pts, l) && return
+	print_javascript(io, pts.el; pluto, kwargs...)
+	return nothing
+end
 # Here we add methods for PrintToScript containing scripts. These will simply print the relevant ScriptContent
 function print_javascript(io::IO, pts::PrintToScript{<:DisplayLocation, <:Script}; pluto = plutodefault(pts.el), kind = :body)
 	l = displaylocation(pluto)
@@ -97,6 +103,15 @@ function print_javascript(io::IO, pts::PrintToScript{<:DisplayLocation, <:Script
 	end
 	sc = getproperty(s, kind)
 	shouldskip(sc, l) || print_javascript(io, sc)
+	return nothing
+end
+# If the PrintToScript element is a function, we call it passing io and kwargs to it
+function print_javascript(io::IO, pts::PrintToScript{<:DisplayLocation, <:Function}; pluto = is_inside_pluto(io), kwargs...)
+	l = displaylocation(pluto)
+	# We skip if the loction of pts is explicitly not compatible with l
+	shouldskip(pts, l) && return
+	f = pts.el
+	f(io; pluto, kwargs...)
 	return nothing
 end
 # Catchall method reverting to show text/javascript
@@ -138,7 +153,22 @@ function print_html(io::IO, cn::CombinedNodes; pluto = is_inside_pluto(io))
 		print_html(io, n; pluto)
 	end
 end
-print_html(io::IO, swph::ShowWithPrintHTML; pluto = plutodefault(io, swph)) = print_html(io, swph.el; pluto)
+function print_html(io::IO, swph::ShowWithPrintHTML; pluto = plutodefault(io, swph)) 
+	l = displaylocation(pluto)
+	# We skip if the loction of pts is explicitly not compatible with l
+	shouldskip(swph, l) && return
+	print_html(io, swph.el; pluto)
+	return nothing
+end
+# If the ShowWithPrintHTML element is a function, we call it passing io and kwargs to it
+function print_html(io::IO, swph::ShowWithPrintHTML{<:DisplayLocation, <:Function}; pluto = plutodefault(io, swph), kwargs...)
+	l = displaylocation(pluto)
+	# We skip if the loction of pts is explicitly not compatible with l
+	shouldskip(swph, l) && return
+	f = swph.el
+	f(io; pluto, kwargs...)
+	return nothing
+end
 # Catchall method reverting to show text/javascript
 print_html(io::IO, x; kwargs...) = (@nospecialize; show(io, MIME"text/html"(), x))
 

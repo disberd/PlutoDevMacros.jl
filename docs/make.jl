@@ -24,7 +24,7 @@ makedocs(;
             "Package Extensions" => "frompackage/package_extensions.md",
         ],
         "Other Exports" => "other_functions.md",
-        "PlutoHTLCombine" => "htl_combine.md",
+        # "PlutoHTLCombine" => "htl_combine.md",
     ],
 )
 

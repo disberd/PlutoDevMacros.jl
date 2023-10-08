@@ -115,7 +115,7 @@ function print_javascript(io::IO, pts::PrintToScript{<:DisplayLocation, <:Functi
 	return nothing
 end
 # For AbstractDicts, we use HypertextLiteral.print_script 
-function print_javascript(io::IO, d::Union{AbstractDict, NamedTuple}; pluto = is_inside_pluto(io), kwargs...)
+function print_javascript(io::IO, d::Union{AbstractDict, NamedTuple, Tuple, AbstractVector}; pluto = is_inside_pluto(io), kwargs...)
 	if pluto
 		pjs = published_to_js(d)
 		show(io, MIME"text/javascript"(), pjs)

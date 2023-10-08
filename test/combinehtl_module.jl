@@ -309,6 +309,8 @@ end
     @test script_id(PlutoScript("asd"), OutsidePluto()) === missing
     pts = PrintToScript(3)
     @test script_id(pts) === missing
+
+    @test_throws "You can't wrap object" ShowWithPrintHTML(PrintToScript(3))
 end
 
 @testset "Show methods" begin

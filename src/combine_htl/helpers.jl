@@ -53,8 +53,8 @@ shouldskip(p::ScriptContent, args...) = shouldskip(p.content, args...)
 shouldskip(::Any, args...) = (@nospecialize; return false)
 shouldskip(n::AbstractHTML, l::SingleDisplayLocation) = (@nospecialize; shouldskip(displaylocation(n), l))
 
-shouldskip(x::PlutoScript, ::InsidePluto) = shouldskip(x.body) && shouldskip(x.invalidation) && !hasreturn(x)
-shouldskip(x::NormalScript, ::OutsidePluto) = shouldskip(x.body) && !hasreturn(x)
+shouldskip(x::PlutoScript, ::InsidePluto) = shouldskip(x.body) && shouldskip(x.invalidation) && shouldskip(x.id) && !hasreturn(x)
+shouldskip(x::NormalScript, ::OutsidePluto) = shouldskip(x.body) && shouldskip(x.id) && !hasreturn(x)
 shouldskip(n::NonScript{L}, ::L) where L <: SingleDisplayLocation = n.empty
 # Dual Script/Node
 shouldskip(d::Dual, l::SingleDisplayLocation) = shouldskip(inner_node(d, l), l)

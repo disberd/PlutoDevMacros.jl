@@ -226,6 +226,13 @@ end
         @test shouldskip(T("")) === true
     end
 
+    # We should not skip a script it is empty content but with an id
+    @test shouldskip(PlutoScript(""), InsidePluto()) == true
+    @test shouldskip(PlutoScript(""; id = "lol"), InsidePluto()) == false
+    @test shouldskip(NormalScript(""; id = "lol"), OutsidePluto()) == false
+    ds = DualScript(""; id = "lol")
+    @test shouldskip(ds, InsidePluto()) == shouldskip(ds, OutsidePluto()) == false
+
     for l in (InsidePluto(), OutsidePluto())
         @test haslisteners(make_script("asd"), l) === false
     end

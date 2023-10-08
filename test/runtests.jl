@@ -1,4 +1,7 @@
 using SafeTestsets
+using Aqua
+using PlutoDevMacros
+Aqua.test_all(PlutoDevMacros)
 
 @safetestset "PlutoCombineHTL Module" begin include("combinehtl_module.jl") end
 @safetestset "Basics" begin include("basics.jl") end

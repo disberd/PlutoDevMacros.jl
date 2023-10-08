@@ -7,6 +7,7 @@ script_id, inner_node, plutodefault, haslisteners, is_inside_pluto, hasreturn,
 add_pluto_compat, hasinvalidation, displaylocation, returned_element, to_string,
 formatted_contents
 import PlutoDevMacros
+using PlutoDevMacros.PlutoCombineHTL.AbstractPlutoDingetjes.Display
 
 import Pluto: update_save_run!, update_run!, WorkspaceManager, ClientSession,
 ServerSession, Notebook, Cell, project_relative_path, SessionActions,
@@ -336,7 +337,24 @@ end
     s_out = to_string(cs, MIME"text/javascript"(); pluto = false)
     @test contains(s_in, "ASD_PLUTO")
     @test contains(s_out, "ASD_NONPLUTO")
-    
+
+    struct LOL end
+    function PlutoCombineHTL.print_javascript(io::IO, ::LOL; pluto)
+        if pluto
+            show(io, MIME"text/javascript"(), published_to_js(3))
+            println(io)
+        else
+            println(io, "LOL_NONPLUTO")
+        end
+    end
+
+    # We test that the custom struct wrapped with PrintToScript is not also being printed as invalidaion
+    cs = CombinedScripts([
+        PrintToScript(LOL())
+        PlutoScript("asd","lol")    
+    ]) 
+    s_in = to_string(cs, print_javascript; pluto = true)
+    @test length(findall("published object on Pluto", s_in)) == 1
 
     ds = DualScript("addScriptEventListeners('lol')", "magic"; id = "custom_id")
     s_in = to_string(ds, MIME"text/javascript"(); pluto = true)
@@ -446,7 +464,7 @@ end
     s = let
         io = IOBuffer()
         n = NormalNode("lol")
-        show(io, MIME"text/html"(), n; pluto = false)
+        show(io, MIME"text/html"(), n)
         String(take!(io))
     end
     @test contains(s, "lol")

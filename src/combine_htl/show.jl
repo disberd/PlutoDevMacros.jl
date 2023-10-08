@@ -143,7 +143,26 @@ print_html(io::IO, swph::ShowWithPrintHTML; pluto = plutodefault(io, swph)) = pr
 print_html(io::IO, x; kwargs...) = (@nospecialize; show(io, MIME"text/html"(), x))
 
 ## Formatted Code ##
-function to_string(element, ::M; kwargs...) where M <: MIME
+
+# We simulate the Pluto iocontext even outside Pluto if want to force printing as in pluto
+_pluto_default_iocontext() = try
+	Main.PlutoRunner.default_iocontext 
+catch
+	function core_published_to_js(io, x)
+		write(io, "/* Here you'd have your published object on Pluto */")
+		return nothing
+	end
+	IOContext(devnull, 
+		:color => false, 
+		:limit => true, 
+		:displaysize => (18, 88), 
+		:is_pluto => true, 
+		# :pluto_supported_integration_features => supported_integration_features,
+		:pluto_published_to_js => (io, x) -> core_published_to_js(io, x),
+	)
+end
+
+function to_string(element, ::M, args...; kwargs...) where M <: MIME
 	f = if M === MIME"text/javascript"
 		print_javascript
 	elseif M === MIME"text/html"
@@ -151,8 +170,14 @@ function to_string(element, ::M; kwargs...) where M <: MIME
 	else
 		error("Unsupported mime $M provided as input")
 	end
-	io = IOBuffer()
-	f(io, element; kwargs...)
+	to_string(element, f, args...; kwargs...)
+end
+function to_string(element, f::Function, io::IO = IOBuffer(); kwargs...)
+	iocontext = get(kwargs, :iocontext) do 
+		pluto = get(kwargs, :pluto, is_inside_pluto())
+		pluto ? _pluto_default_iocontext() : IOContext(devnull)
+	end
+	f(IOContext(io, iocontext), element; kwargs...)
 	code = String(take!(io))
 	return code
 end
@@ -199,15 +224,15 @@ function Base.show(io::IO, ::MIME"text/javascript", s::Union{ScriptContent, Scri
 	print_javascript(io, s)
 end
 
-Base.show(::IO, ::MIME"text/javascript", ::T; pluto = true) where T <: Union{ShowWithPrintHTML, NonScript} =
+Base.show(::IO, ::MIME"text/javascript", ::T) where T <: Union{ShowWithPrintHTML, NonScript} =
 error("Objects of type `$T` are not supposed to be shown with mime 'text/javascript'")
 
 # Show - text/html #
-Base.show(io::IO, mime::MIME"text/html", sc::ScriptContent; pluto = true) = 
+Base.show(io::IO, mime::MIME"text/html", sc::ScriptContent) = 
 show(io, mime, formatted_code(sc))
 
-Base.show(io::IO, ::MIME"text/html", s::Node; pluto = is_inside_pluto(io)) =
-print_html(io, s; pluto)
+Base.show(io::IO, ::MIME"text/html", s::Node) =
+print_html(io, s; pluto = is_inside_pluto(io))
 
-Base.show(io::IO, ::MIME"text/html", s::ShowWithPrintHTML; pluto = plutodefault(io, s)) = 
-print_html(io, s.el; pluto)
+Base.show(io::IO, ::MIME"text/html", s::ShowWithPrintHTML) = 
+print_html(io, s.el; pluto = plutodefault(io, s))

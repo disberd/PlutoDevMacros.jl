@@ -4,7 +4,7 @@ using Random
 using HypertextLiteral
 using HypertextLiteral: Result, Bypass, Reprint, Render
 using Markdown
-using AbstractPlutoDingetjes: is_inside_pluto
+using AbstractPlutoDingetjes: is_inside_pluto, AbstractPlutoDingetjes
 using DocStringExtensions
 
 export make_node, make_html, make_script, formatted_code

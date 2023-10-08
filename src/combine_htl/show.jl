@@ -12,6 +12,8 @@ function _iterate_scriptcontents(io::IO, iter, location::SingleDisplayLocation, 
 				kind,
 			)
 		else
+			# We only print when iterating the body for non Script elements
+			kind === :body || continue
 			(;pluto)
 		end
 		print_javascript(io, pts; kwargs...)

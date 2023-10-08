@@ -490,6 +490,13 @@ end
     s_out = to_string(d, print_javascript; pluto = false)
     @test contains(s_in, "published object on Pluto")
     @test s_out === """{"asd": "lol"}""" 
+
+    # We test print_javascript for vectors
+    v = ["asd", "lol"]
+    s_in = to_string(v, print_javascript; pluto = true) 
+    s_out = to_string(v, print_javascript; pluto = false)
+    @test contains(s_in, "published object on Pluto")
+    @test s_out === """["asd", "lol"]""" 
 end
 
 # import Pluto: update_save_run!, update_run!, WorkspaceManager, ClientSession,

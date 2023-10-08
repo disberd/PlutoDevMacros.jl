@@ -123,6 +123,7 @@ PrintToScript(@nospecialize(t); display_type = displaylocation(t)) = PrintToScri
 PrintToScript(@nospecialize(t::PrintToScript); display_type = displaylocation(t)) = PrintToScript(t.el, displaylocation(display_type))
 PrintToScript(@nospecialize(t::AbstractHTML); kwargs...) = error("You can't wrap object of type $(typeof(t)) with PrintToScript")
 PrintToScript(@nospecialize(t::Union{SingleScript, DualScript}); display_type = displaylocation(t)) = PrintToScript(t, displaylocation(display_type))
+PrintToScript(x::Union{AbstractString, ScriptContent, Result}; kwargs...) = PrintToScript(DualScript(ScriptContent(x)); kwargs...)
 
 # DualNode #
 DualNode(i, o) = DualNode(PlutoNode(i), NormalNode(o))

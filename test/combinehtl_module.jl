@@ -126,6 +126,9 @@ using PlutoDevMacros.PlutoCombineHTL.AbstractPlutoDingetjes.Display
 
     @test PrintToScript(pts) === pts
     @test_throws "You can't wrap" PrintToScript(PlutoNode("asd"))
+
+    pts = PrintToScript("asd")
+    @test pts.el isa DualScript
 end
 
 @testset "make_node" begin

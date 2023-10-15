@@ -215,15 +215,15 @@ function to_string(element, f::Function, io::IO = IOBuffer(); kwargs...)
 	code = String(take!(io))
 	return code
 end
-function formatted_code(language::String, x, f, args...; kwargs...)
-	codestring = to_string(x, f; kwargs...)
+function _formatted_code(language::String, x, f_or_mime::Union{Function, MIME}, args...; kwargs...)
+	codestring = to_string(x, f_or_mime, args...; kwargs...)
 	Markdown.MD(Markdown.Code(language, codestring))
 end
 function formatted_code(x, f_or_mime::Union{MIME"text/javascript", typeof(print_javascript)}, args...; kwargs...)
-	formatted_code("js", x, f_or_mime, args...; kwargs...)
+	_formatted_code("js", x, f_or_mime, args...; kwargs...)
 end
 function formatted_code(x, f_or_mime::Union{MIME"text/html", MIME"juliavscode/html", typeof(print_html)}, args...; kwargs...)
-	formatted_code("html", x, f_or_mime, args...; kwargs...)
+	_formatted_code("html", x, f_or_mime, args...; kwargs...)
 end
 # Default MIMEs
 default_print(::ScriptContent) = print_javascript

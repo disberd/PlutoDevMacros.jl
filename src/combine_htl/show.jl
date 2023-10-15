@@ -202,14 +202,8 @@ catch
 	)
 end
 
-function to_string(element, ::M, args...; kwargs...) where M <: MIME
-	f = if M === MIME"text/javascript"
-		print_javascript
-	elseif M === MIME"text/html"
-		print_html
-	else
-		error("Unsupported mime $M provided as input")
-	end
+function to_string(element, mime::M, args...; kwargs...) where M <: MIME
+	f = (io, x; kwargs...) -> show(io, mime, x; kwargs...)
 	to_string(element, f, args...; kwargs...)
 end
 function to_string(element, f::Function, io::IO = IOBuffer(); kwargs...)
@@ -221,18 +215,20 @@ function to_string(element, f::Function, io::IO = IOBuffer(); kwargs...)
 	code = String(take!(io))
 	return code
 end
-function formatted_code(s::Union{Script, ScriptContent}, mime::MIME"text/javascript"; kwargs...)
-	codestring = to_string(s, mime; kwargs...)
-	Markdown.MD(Markdown.Code("js", codestring))
+function formatted_code(language::String, x, f, args...; kwargs...)
+	codestring = to_string(x, f; kwargs...)
+	Markdown.MD(Markdown.Code(language, codestring))
 end
-function formatted_code(n::Node, mime::MIME"text/html"; kwargs...)
-	codestring = to_string(n, mime; kwargs...)
-	Markdown.MD(Markdown.Code("html", codestring))
+function formatted_code(x, f_or_mime::Union{MIME"text/javascript", typeof(print_javascript)}, args...; kwargs...)
+	formatted_code("js", x, f_or_mime, args...; kwargs...)
+end
+function formatted_code(x, f_or_mime::Union{MIME"text/html", MIME"juliavscode/html", typeof(print_html)}, args...; kwargs...)
+	formatted_code("html", x, f_or_mime, args...; kwargs...)
 end
 # Default MIMEs
-default_mime(::ScriptContent) = MIME"text/javascript"()
-default_mime(::Node) = MIME"text/html"()
-formatted_code(s::Union{ScriptContent, Node}; kwargs...) = formatted_code(s, default_mime(s); kwargs...)
+default_print(::ScriptContent) = print_javascript
+default_print(::Node) = print_html
+formatted_code(s::Union{ScriptContent, Node}; kwargs...) = formatted_code(s, default_print(s); kwargs...)
 # Versions returning functions
 formatted_code(mime::MIME; kwargs...) = x -> formatted_code(x, mime; kwargs...)
 # This forces just the location using the DisplayLocation type
@@ -261,7 +257,7 @@ Use `make_node` to generate a `<script>` node directly in HTML")
 
 # Show - text/javascript #
 function Base.show(io::IO, ::MIME"text/javascript", s::Union{ScriptContent, Script})
-	print_javascript(io, s)
+	print_javascript(io, s; pluto = is_inside_pluto(io))
 end
 
 Base.show(::IO, ::MIME"text/javascript", ::T) where T <: Union{ShowWithPrintHTML, NonScript} =

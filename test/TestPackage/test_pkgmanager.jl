@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.27
+# v0.19.36
 
 using Markdown
 using InteractiveUtils
@@ -29,13 +29,13 @@ end
 end
 
 # ╔═╡ d341f653-e1d0-4fbf-b83f-fccaa383cfa8
-isdefined(@__MODULE__, :toplevel_variable) || error("Something went wrong")
+isdefined(@__MODULE__, :toplevel_variable) || error("toplevel_variable should be defined")
 
 # ╔═╡ f2aebf0c-b135-4735-89d2-716d9983d42c
-GreatStructure isa DataType || error("Something went wrong")
+GreatStructure isa DataType || error("GreatStructure should be defined (and a Type)")
 
 # ╔═╡ 3decbd80-c1bc-4d00-b89e-7f3ddaa07683
-isdefined(@__MODULE__, Symbol("@benchmark")) || error("Something went wrong")
+isdefined(@__MODULE__, Symbol("@benchmark")) || error("@benchmark should be available as BenchmarkTools should have been loaded as dependency by @fromparent")
 
 # ╔═╡ Cell order:
 # ╠═071ec1a4-eda6-11ed-3a1b-c1347c9fafa5

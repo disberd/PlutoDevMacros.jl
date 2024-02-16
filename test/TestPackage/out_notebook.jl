@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.25
+# v0.19.36
 
 using Markdown
 using InteractiveUtils
@@ -29,38 +29,40 @@ this_file = relpath(split(@__FILE__,"#==#")[1], dirname(dirname(dirname(@__DIR__
 @fromparent begin
 	import TestPackage
 	@skiplines begin
-		"11" # Skip line 11 in the main file TestPackage.jl.
+		"13" # Skip line 13 in the main file TestPackage.jl, which defines module Inner
 		"test_macro2.jl" # This skips the whole file test_macro2.jl
-		"22-23" # This skips from line 22 to 23 in the main file, including extrema.
+		"24-25" # This skips from line 24 to 25 in the main file, including extrema. Which are the 2 include statements of the inner SpecificImport module
 		"test_macro1.jl:::28-10000" # This skips parts of test_macro1.jl
 	end
 end
 
 # ╔═╡ 09d5606d-d68e-4610-ae11-f3712e2d6aa2
-# This module does not exist as it was removed because we skip line 11
-!isdefined(TestPackage, :Inner) || error("This is unexpected")
+# This module does not exist as it was removed because we skip line 13
+!isdefined(TestPackage, :Inner) || error("Module Inner should not be defined as we skipped the line defining it")
 
 # ╔═╡ 16a4e5e1-bde4-45a6-8777-ee4c7aa3d8f2
-isdefined(TestPackage, :Issue2) || error("This is unexpected")
+isdefined(TestPackage, :Issue2) || error("TestPackage should have the Issue2 module")
 
 # ╔═╡ bdb4c4e3-84dd-4795-b272-eadcb0b56fb8
 # This is not defined because we skipped test_macro2.jl
-!isdefined(TestPackage.Issue2, :GreatStructure) || error("This is unexpected")
+!isdefined(TestPackage.Issue2, :GreatStructure) || error("GreatStructure should not be defined as it is inside file test_macro2.jl that we skipped")
 
 # ╔═╡ 71c1f0f3-79d9-4358-8032-9f7dee73836b
-# This is not defined because we skipped test_macro1.jl from line 28
-isdefined(TestPackage.Issue2, :CoolStruct) || error("This is unexpected")
+isdefined(TestPackage.Issue2, :CoolStruct) || error("CoolStruct2 inside module Issue2 should be defined")
 
 # ╔═╡ 705ad7ec-b73c-48d5-b6d8-43833115cdf3
 # This is not defined because we skipped test_macro1.jl from line 28
-!isdefined(TestPackage.Issue2, :NotThatCoolStruct) || error("This is unexpected")
+!isdefined(TestPackage.Issue2, :NotThatCoolStruct) || error("NotThatCoolStruct should not be defined as we should have skipped everything after line 28 in test_macro1.jl")
 
 # ╔═╡ c231c321-b89f-4f1a-8a60-5eb03c098fa1
-isdefined(TestPackage, :SpecificImport) || error("This is unexpected")
+isdefined(TestPackage, :SpecificImport) || error("The module SpecificImport was not found, it should be there but empty")
 
 # ╔═╡ 3e83aab4-5feb-4f3f-9dc1-2da208bcd599
-# Not defined because we removed line 22 and 23, so SpecificImport is an empty module
-!isdefined(TestPackage.SpecificImport, :inner_variable1) || error("This is unexpected")
+# Not defined because we removed line 24 and 25, so SpecificImport is an empty module
+!isdefined(TestPackage.SpecificImport, :inner_variable1) || error("SpecificImport should not have execute include statements at lines 24 and 25")
+
+# ╔═╡ 06408ada-f0b7-4057-9177-a79baf2fa9cf
+isdefined(TestPackage, :TEST_INIT) && TestPackage.TEST_INIT[] == 5 || error("The execution of the __init__ function did not seem to happen")
 
 # ╔═╡ Cell order:
 # ╠═931a8c2c-ed76-11ed-3721-396dae146ad4
@@ -74,3 +76,4 @@ isdefined(TestPackage, :SpecificImport) || error("This is unexpected")
 # ╠═705ad7ec-b73c-48d5-b6d8-43833115cdf3
 # ╠═c231c321-b89f-4f1a-8a60-5eb03c098fa1
 # ╠═3e83aab4-5feb-4f3f-9dc1-2da208bcd599
+# ╠═06408ada-f0b7-4057-9177-a79baf2fa9cf

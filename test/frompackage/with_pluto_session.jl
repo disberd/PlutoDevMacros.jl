@@ -23,6 +23,8 @@ eval_in_nb(sn, expr) = WorkspaceManager.eval_fetch_in_workspace(sn, expr)
     nb = SessionActions.open(ss, path; run_async=false)
     @test eval_in_nb((ss, nb), :toplevel_variable) == TestPackage.toplevel_variable
     @test eval_in_nb((ss, nb), :hidden_toplevel_variable) == TestPackage.hidden_toplevel_variable
+    # We test that __init__ was not ran, as this file will only contain the module before the __init__ function is defined
+    @test eval_in_nb((ss, nb), :(TEST_INIT[])) == 0
     for cell in nb.cells
         @test noerror(cell)
     end

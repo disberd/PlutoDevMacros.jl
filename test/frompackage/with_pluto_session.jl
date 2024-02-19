@@ -71,3 +71,20 @@ end
     end
     SessionActions.shutdown(ss, nb)
 end
+
+# We test the ParseError (issue 30)
+srcdir = joinpath(@__DIR__, "../TestParseError/src/")
+@testset "test_parse_error.jl" begin
+    ss = ServerSession(; options)
+    path = abspath(srcdir, "../parseerror_notebook.jl")
+    nb = SessionActions.open(ss, path; run_async=false)
+    cell = nb.cells[2]
+    @test cell.errored
+    msg = cell.output.body[:msg]
+    if VERSION < v"1.10"
+        @test startswith(msg, "syntax: incomplete:")
+    else
+        @test startswith(msg, "LoadError: ParseError:")
+    end
+    SessionActions.shutdown(ss, nb)
+end

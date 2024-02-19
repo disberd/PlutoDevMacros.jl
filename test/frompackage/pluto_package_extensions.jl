@@ -12,7 +12,7 @@ function noerror(cell; verbose=true)
 end
 
 
-options = Configuration.from_flat_kwargs(; disable_writing_notebook_files=true)
+options = Configuration.from_flat_kwargs(; disable_writing_notebook_files=true, workspace_use_distributed_stdlib = true)
 eval_in_nb(sn, expr) = WorkspaceManager.eval_fetch_in_workspace(sn, expr)
 
 @testset "Indirect Extension" begin

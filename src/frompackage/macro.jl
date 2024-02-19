@@ -16,6 +16,18 @@ function is_call_unique(cell_id, caller_module)
 	end
 end
 
+function wrap_parse_error(e)
+	# Just return the error if we are not in 1.10 or is not a ParseError
+	VERSION >= v"1.10" && e isa Base.Meta.ParseError && hasproperty(e, :detail) || return e
+	# Extract the filename and line of the parseerror
+	(;source, diagnostics) = e.detail
+	byte_index = first(diagnostics) |> Base.JuliaSyntax.first_byte
+	line = Base.JuliaSyntax.source_line(source, byte_index)
+	file = source.filename
+	# We wrap this in a LoadError as if we `included` the file containnig the error
+	return LoadError(file, line, e)
+end
+
 function is_macroexpand(trace, cell_id)
 	for _ ∈ eachindex(trace)
 		# We go throught the stack until we find the call to :macroexpand
@@ -100,7 +112,6 @@ function _combined(ex, target, calling_file, caller_module; macroname)
 	catch e
 		# If we are outside of pluto we simply rethrow
 		is_notebook_local(calling_file) || rethrow()
-		bt = stacktrace(catch_backtrace())
 		out = Expr(:block)
 		if !(e isa ErrorException && startswith(e.msg, "Multiple Calls: The"))
 			text = "Reload $macroname"
@@ -109,10 +120,13 @@ function _combined(ex, target, calling_file, caller_module; macroname)
 		end
 		# We have to also remove the project from the load path
 		clean_loadpath(proj_file)
+		# Wrap ParseError in LoadError (see https://github.com/disberd/PlutoDevMacros.jl/issues/30)
+		we = wrap_parse_error(e)
 		# If we are at macroexpand, simply rethrow here, ohterwise output the expression with the error
-		is_macroexpand(stacktrace(), cell_id) && rethrow()
+		is_macroexpand(stacktrace(), cell_id) && throw(we)
+		bt = stacktrace(catch_backtrace())
 		# Outputting the CaptureException as last statement allows pretty printing of errors inside Pluto
-		push!(out.args,	:(CapturedException($e, $bt)))
+		push!(out.args,	:(CapturedException($we, $bt)))
 		out
 	end
 	out

@@ -1,4 +1,4 @@
-import PlutoDevMacros.FromPackage: process_outside_pluto!, load_module_in_caller, modname_path, fromparent_module, parseinput, get_package_data, @fromparent, _combined, process_skiplines!, get_temp_module, LineNumberRange, parse_skipline, package_dependencies
+import PlutoDevMacros.FromPackage: process_outside_pluto!, load_module_in_caller, modname_path, fromparent_module, parseinput, get_package_data, @fromparent, _combined, process_skiplines!, get_temp_module, LineNumberRange, parse_skipline, package_dependencies, extract_module_expression
 import Pkg
 
 using Test
@@ -29,6 +29,20 @@ inpluto_caller = join([outpluto_caller, "#==#", "00000000-0000-0000-0000-0000000
             Pkg.activate(".")
             Pkg.add("TOML")
             get_package_data(".")
+        end
+    end
+
+    mktemp() do path, io
+        open(path, "w") do io
+            write(io, """
+            module INCOMPLETE
+            a = 1
+            """)
+        end
+        if VERSION < v"1.10"
+            @test_throws "did not generate a valid `module`" extract_module_expression(path)
+        else
+            @test_throws Base.Meta.ParseError extract_module_expression(path)
         end
     end
 end

@@ -10,6 +10,15 @@ end
 function extract_module_expression(module_filepath::AbstractString)
 	ast = extract_file_ast(module_filepath)
 	mod_exp = getfirst(x -> Meta.isexpr(x, :module), ast.args)
+	mod_exp === nothing || return mod_exp
+	# We throw an error as parsing did not create a valid `module` expression
+	ex = last(ast.args)
+	e = ex.args[end]
+	if VERSION < v"1.10"
+		e isa String && error("Parsing $module_filepath did not generate a valid `module` expression because of the following error:\n$e")
+	else
+		throw(e)
+	end
 end
 
 ## Remove Pluto Exprs

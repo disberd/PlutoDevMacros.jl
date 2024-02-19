@@ -1,0 +1,4 @@
+name = "TestParseError"
+uuid = "2ef9bb80-a223-4d9a-b8c4-554ae5050560"
+authors = ["Alberto Mengali <disberd@gmail.com>"]
+version = "0.1.0"

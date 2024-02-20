@@ -127,11 +127,12 @@ function load_module_in_caller(package_dict::Dict, caller_module)
 end
 function load_module_in_caller(mod_exp::Expr, package_dict::Dict, caller_module)
 	target_file = package_dict["target"]
+	ecg = package_dict["ecg"]
 	# If the module Reference inside fromparent_module is not assigned, we create the module in the calling workspace and assign it
 	_MODULE_ = maybe_create_module(caller_module)
 	# We reset the module path in case it was not cleaned
 	mod_name = mod_exp.args[2]
-	proj_file = Base.current_project(target_file)
+	proj_file = active_project(ecg)
 	# We inject the project in the LOAD_PATH if it is not present already
 	add_loadpath(proj_file)
 	# We try evaluating the expression within the custom module
@@ -175,8 +176,6 @@ function load_package_extensions(package_module::Module, package_dict::Dict, cal
 		maybe_add_extensions!(package_module, package_dict, caller_module)
 	catch
 		rethrow()
-	finally
-		clean_loadpath(package_dict)
 	end
 	nothing
 end

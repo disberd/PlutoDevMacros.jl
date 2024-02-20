@@ -1,18 +1,79 @@
 import ..PlutoCombineHTL: make_html, make_script
 import ..PlutoDevMacros: hide_this_log
 import Pkg, TOML
-const _stdlibs = first.(values(Pkg.Types.stdlibs()))
-
-const fromparent_module = Ref{Module}()
-const macro_cell = Ref("undefined")
-const manifest_names = ("JuliaManifest.toml", "Manifest.toml")
+using Pkg.Types: write_project
 
 get_temp_module() = fromparent_module[]
 
-struct PkgInfo 
-	name::String
-	uuid::String
-	version::String
+extensions_dir(ecg::EnvCacheGroup = ENVS) = extensions_dir(get_target(ecg))
+function extensions_dir(env::EnvCache)
+	pkg = env.pkg
+	isnothing(pkg) && return nothing
+	ext_dir = joinpath(pkg.path, "ext")
+end
+get_manifest_file(e::EnvCache) = e.manifest_file
+get_project_file(e::EnvCache) = e.project_file
+get_manifest(e::EnvCache) = e.manifest
+get_project(e::EnvCache) = e.project
+function get_entrypoint(e::EnvCache)
+	pkg = e.pkg
+	isnothing(pkg) && return ""
+	entrypoint = joinpath(pkg.path, "src", pkg.name * ".jl")
+end
+get_active(ecg::EnvCacheGroup = ENVS) = ecg.active
+get_target(ecg::EnvCacheGroup = ENVS) = ecg.target
+get_notebook(ecg::EnvCacheGroup = ENVS) = ecg.notebook
+
+function maybe_update_envcache(projfile::String, ecg::EnvCache = ENVS; notebook = false)
+	f = notebook ? get_notebook : get_target
+	env = f(ecg)
+	if isnothing(env) || env.project_file != projfile
+		setproperty!(ecg, notebook ? :notebook : :target, EnvCache(projfile))
+	end
+	return nothing
+end
+
+
+function update_envcache!(e::EnvCache)
+	e.project = read_project(e.project_file)
+	e.manifest = read_manifest(e.manifest_file)
+	return e
+end
+# Update the active EnvCache by eventually copying reduced project and manifest from the package EnvCache
+function update_ecg!(ecg::EnvCacheGroup = ENVS; force = false, io::IO = devnull, instantiate = force)
+	c = Context(; io)
+	# Update the target and notebook ecg 
+	update_envcache!(ecg |> get_target)
+	update_envcache!(ecg |> get_notebook)
+	active = get_active()
+	active_manifest = active |> get_manifest_file
+	active_project = active |> get_manifest_file
+	target_manifest = get_target() |> get_manifest_file
+    active_mtime = mtime(active_manifest)
+    target_mtime = mtime(ecg |> get_target |> get_manifest_file)
+    if force || active_mtime < target_mtime
+        pd = ecg.target.project.other
+        ad = Dict{String, Any}((k => pd[k] for k in ("deps", "compat") if haskey(pd, k)))
+        write_project(ad, active_project)
+        # We copy the Manifest
+        cp(target_manifest, active_manifest; force = true)
+        # We call instantiate
+		update_envcache!(ecg.active)
+		c.env = ecg.active
+        Pkg.instantiate(c)
+    end
+    return ecg
+end
+
+function extract_ecg(project_file::String)
+
+	project = read_project(project_file)
+	id = TargetID(project.name, project_file)
+	ecg = get!(ENVCACHE_DICT, id) do
+		EnvCacheGroup(project_file)
+	end
+	update_ecg!(ecg)
+	return ecg
 end
 
 ## Return calling DIR, basically copied from the definigion of the @__DIR__ macro
@@ -22,40 +83,8 @@ function __DIR__(__source__)
     return isempty(_dirname) ? pwd() : abspath(_dirname)
 end
 
-function get_manifest_file(project_file::String)
-	dict = try
-		TOML.parsefile(project_file)
-	catch e
-		@error "The given project_file $project_file is not a valid TOML file"
-		rethrow()
-	end
-	get_manifest_file(project_file, dict)
-end
-# This function is extracted from `Base.project_file_manifest_path` without the caching part
-function get_manifest_file(project_file::String, d)
-    dir = abspath(dirname(project_file))
-    explicit_manifest = get(d, "manifest", nothing)::Union{String, Nothing}
-    manifest_path = nothing
-    if explicit_manifest !== nothing
-        manifest_file = normpath(joinpath(dir, explicit_manifest))
-        if Base.isfile_casesensitive(manifest_file)
-            manifest_path = manifest_file
-        end
-    end
-    if manifest_path === nothing
-        for mfst in manifest_names
-            manifest_file = joinpath(dir, mfst)
-            if Base.isfile_casesensitive(manifest_file)
-                manifest_path = manifest_file
-                break
-            end
-        end
-    end
-	return manifest_path
-end
-
 # Function to get the package dependencies from the manifest
-function package_dependencies(project_location::String)
+function target_dependencies(project_location::String)
 	project_file = Base.current_project(project_location)
 	project_file isa Nothing && error("No parent project was found starting from the path $project_location")
 	proj_dict = TOML.parsefile(project_file)
@@ -82,32 +111,8 @@ function package_dependencies(project_location::String)
 	end
 	direct, indirect
 end
-package_dependencies(d::Dict) = package_dependencies(d["project"])
+target_dependencies(d::Dict) = target_dependencies(d["project"])
 
-struct LineNumberRange
-	first::LineNumberNode
-	last::LineNumberNode
-	function LineNumberRange(ln1::LineNumberNode, ln2::LineNumberNode)
-		@assert ln1.file === ln2.file "A range of LineNumbers can only be specified with LineNumbers from the same file"
-		first, last = ln1.line <= ln2.line ? (ln1, ln2) : (ln2, ln1)
-		new(first, last)
-	end
-end
-LineNumberRange(ln::LineNumberNode) = LineNumberRange(ln, ln)
-LineNumberRange(file::AbstractString, first::Int, last::Int) = LineNumberRange(
-	LineNumberNode(first, Symbol(file)),
-	LineNumberNode(last, Symbol(file))
-)
-## Inclusion in LinuNumberRange
-function _inrange(ln::LineNumberNode, lnr::LineNumberRange)
-	ln.file === lnr.first.file || return false # The file is not the same
-	if ln.line >= lnr.first.line && ln.line <= lnr.last.line
-		return true
-	else
-		return false
-	end
-end
-_inrange(ln::LineNumberNode, ln2::LineNumberNode) = ln === ln2
 
 ## simulate manual rerun
 """
@@ -138,13 +143,19 @@ end
 
 # Functions to add and remove from the LOAD_PATH
 function add_loadpath(entry::String)
-	length(LOAD_PATH) > 1 && LOAD_PATH[2] != entry && insert!(LOAD_PATH, 2, entry)
+	entry ∈ LOAD_PATH || push!(LOAD_PATH, entry)
+	return nothing
 end
-add_loadpath(package_dict::Dict) = add_loadpath(package_dict["project"])
+add_loadpath(ecg::EnvCacheGroup = ENVS) = add_loadpath(ecg |> get_active |> get_project_file)
 function clean_loadpath(entry::String)
-	LOAD_PATH[2] == entry && deleteat!(LOAD_PATH, 2)
+	for i in length(LOAD_PATH):-1:1
+		if LOAD_PATH[i] == entry
+			deleteat!(LOAD_PATH, i)
+		end
+	end
+	return nothing
 end
-clean_loadpath(package_dict::Dict) = clean_loadpath(package_dict["project"])
+clean_loadpath(ecg::EnvCacheGroup = ENVS) = clean_loadpath(ecg |> get_active |> get_project_file)
 
 ## execute only in notebook
 # We have to create our own simple check to only execute some stuff inside the notebook where they are defined. We have stuff in basics.jl but we don't want to include that in this notebook
@@ -169,12 +180,15 @@ is_notebook_local(calling_file::Symbol) = is_notebook_local(String(calling_file)
 has_extensions(package_data) = haskey(package_data, "extensions") && haskey(package_data, "weakdeps")
 
 # This will extract all the useful extension data for each weakdep
-function data_from_weakdeps(package_dict)
-	ext_dir = joinpath(package_dict["dir"], "ext")
-	weakdeps = package_dict["weakdeps"]
-	exts = Dict((v,k) for (k,v) in package_dict["extensions"])
+function target_extension_data(ecg::EnvCacheGroup = ENVS)
+	target = ecg |> get_target
+	project = target |> get_project
 	out = Dict{String, Any}()
-	for (k,v) in package_dict["weakdeps"]
+	isempty(project.exts) && return out
+	ext_dir = extensions_dir(ecg)
+	weakdeps = project.weak_dependencies
+	exts = Dict((v,k) for (k,v) in package_dict["extensions"])
+	for (k,v) in weakdeps
 		module_name = exts[k]
 		uuid = Base.UUID(v)
 		filename = module_name * ".jl"
@@ -215,16 +229,18 @@ function get_package_data(packagepath::AbstractString)
 	project_file isa Nothing && error("No project was found starting from $packagepath")
 	project_file = abspath(project_file)
 
-	package_dir = dirname(project_file) |> abspath
-	package_data = TOML.parsefile(project_file)
-	haskey(package_data, "name") || error("The project found at $project_file is not a package, simple environments are currently not supported")
-
+	maybe_update_envcache(project_file; notebook = false)
+	target = get_target()
+	isnothing(target.pkg) && error("The project found at $project_file is not a package, simple environments are currently not supported")
 
 	# Check that the package file actually exists
-	package_file = joinpath(package_dir,"src", package_data["name"] * ".jl")
+	package_file = get_entrypoint(target)
+	package_dir = dirname(package_file) |> abspath
+
 	isfile(package_file) || error("The package package main file was not found at path $package_file")
+
+	package_data = deepcopy(target.project.other)
 	package_data["dir"] = package_dir
-	package_data["project"] = project_file
 	package_data["file"] = package_file
 	package_data["target"] = packagepath
 
@@ -235,7 +251,7 @@ function get_package_data(packagepath::AbstractString)
 	end
 
 	# We extract the PkgInfo for all packages in this environment
-	d,i = package_dependencies(project_file)
+	d,i = target_dependencies(project_file)
 	package_data["PkgInfo"] = (;direct = d, indirect = i)
 	
 	return package_data

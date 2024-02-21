@@ -29,6 +29,10 @@ function maybe_update_envcache(projfile::String, ecg::EnvCacheGroup; notebook = 
 	env = f(ecg)
 	if isnothing(env) || env.project_file != projfile
 		setproperty!(ecg, notebook ? :notebook : :target, EnvCache(projfile))
+		if !notebook
+			# We changed the target so we force an update to ecg
+			update_ecg!(ecg; force = true)
+		end
 	end
 	return nothing
 end
@@ -39,15 +43,16 @@ function update_envcache!(e::EnvCache)
 	e.manifest = read_manifest(e.manifest_file)
 	return e
 end
+update_envcache!(::Nothing) = nothing
 # Update the active EnvCache by eventually copying reduced project and manifest from the package EnvCache
-function update_ecg!(ecg::EnvCacheGroup; force = false, io::IO = devnull, instantiate = force)
+function update_ecg!(ecg::EnvCacheGroup; force = false, io::IO = devnull)
 	c = Context(; io)
 	# Update the target and notebook ecg 
 	update_envcache!(ecg |> get_target)
 	update_envcache!(ecg |> get_notebook)
 	active = get_active(ecg)
 	active_manifest = active |> get_manifest_file
-	active_project = active |> get_manifest_file
+	active_project = active |> get_project_file
 	target_manifest = get_target(ecg) |> get_manifest_file
 	if !isfile(active_manifest) || !isfile(active_project)
 		force = true
@@ -213,8 +218,10 @@ function get_package_data(packagepath::AbstractString)
 	ecg = ENVS
 
 	maybe_update_envcache(project_file, ecg; notebook = false)
-	target = get_target(update_ecg!(ecg))
+	target = get_target(ecg)
 	isnothing(target.pkg) && error("The project found at $project_file is not a package, simple environments are currently not supported")
+	# We update the notebook and active envcaches to be up to date
+	update_ecg!(ecg)
 
 	# Check that the package file actually exists
 	package_file = get_entrypoint(target)

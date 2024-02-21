@@ -1,4 +1,4 @@
-import PlutoDevMacros.FromPackage: process_outside_pluto!, load_module_in_caller, modname_path, fromparent_module, parseinput, get_package_data, @fromparent, _combined, process_skiplines!, get_temp_module, LineNumberRange, parse_skipline, package_dependencies, extract_module_expression
+import PlutoDevMacros.FromPackage: process_outside_pluto!, load_module_in_caller, modname_path, fromparent_module, parseinput, get_package_data, @fromparent, _combined, process_skiplines!, get_temp_module, LineNumberRange, parse_skipline, extract_module_expression, ENVS
 import Pkg
 
 using Test
@@ -18,9 +18,6 @@ outpluto_caller = abspath(@__DIR__,"../..")
 inpluto_caller = join([outpluto_caller, "#==#", "00000000-0000-0000-0000-000000000000"])
 
 @testset "Errors" begin
-    @test_throws "No parent project" mktempdir() do tmpdir
-            package_dependencies(tmpdir)
-    end
     @test_throws "No project" mktempdir() do tmpdir
             get_package_data(tmpdir)
     end 

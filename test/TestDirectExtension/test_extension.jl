@@ -39,17 +39,23 @@ end
 	using PackageModule
 end
 
-# ╔═╡ 6721d53c-f94d-45ec-ad4e-be5e186fc58f
-PlutoDevMacros.FromPackage.getfirst
-
-# ╔═╡ d456f788-244a-4be6-91dc-0c64ecdca071
-PlutoDevMacros.FromPackage.bare_project
-
 # ╔═╡ 675230da-e628-4059-b44d-6137a4dd4987
 standard_extension_output = to_extend(plot(rand(4)).Plot)
 
 # ╔═╡ 8e7563ce-d2ba-4356-93e4-70ebe0f2be87
 weird_extension_output = to_extend(Example)
+
+# ╔═╡ 25b8a9d0-d790-4b18-854d-4392291db823
+getproperty(TestDirectExtension, :plot_this)
+
+# ╔═╡ 3c8d1e3c-f081-4b73-82ab-e0a9b3958c92
+TestDirectExtension.plot_this
+
+# ╔═╡ da703251-1f4a-4fa1-ba08-720bceb2ada6
+# ╠═╡ disabled = true
+#=╠═╡
+p = plot_this()
+  ╠═╡ =#
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -430,11 +436,12 @@ version = "17.4.0+2"
 
 # ╔═╡ Cell order:
 # ╠═f6bb9eb6-1f66-424a-9043-607aeee0cd76
-# ╠═6721d53c-f94d-45ec-ad4e-be5e186fc58f
-# ╠═d456f788-244a-4be6-91dc-0c64ecdca071
 # ╠═abccfc80-afaf-4c54-b300-c0c893de3848
 # ╠═b93cdd74-1c65-4d15-a6e3-6c1855e37cce
 # ╠═675230da-e628-4059-b44d-6137a4dd4987
 # ╠═8e7563ce-d2ba-4356-93e4-70ebe0f2be87
+# ╠═25b8a9d0-d790-4b18-854d-4392291db823
+# ╠═3c8d1e3c-f081-4b73-82ab-e0a9b3958c92
+# ╠═da703251-1f4a-4fa1-ba08-720bceb2ada6
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

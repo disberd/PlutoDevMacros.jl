@@ -16,9 +16,9 @@ end
 const ENVS = EnvCacheGroup()
 
 struct PkgInfo 
-	name::String
-	uuid::String
-	version::String
+	name::Union{Nothing, String}
+	uuid::Base.UUID
+	version::Union{Nothing, VersionNumber}
 end
 
 # LineNumberRange. This are used for skipping parts of the target package

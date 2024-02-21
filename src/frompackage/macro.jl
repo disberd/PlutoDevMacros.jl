@@ -49,7 +49,7 @@ end
 function frompackage(ex, target_file, caller, caller_module; macroname)
 	is_notebook_local(caller) || return process_outside_pluto!(ex, get_package_data(target_file))
 	_, cell_id = _cell_data(caller)
-	maybe_update_envcache(Base.active_project(); notebook = true)
+	maybe_update_envcache(Base.active_project(), ENVS; notebook = true)
 	proj_file = Base.current_project(target_file)
 	id_name = _id_name(cell_id)
 	ex isa Expr || error("You have to call this macro with an import statement or a begin-end block of import statements")

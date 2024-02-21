@@ -5,7 +5,7 @@ using Pkg.Types: write_project
 
 get_temp_module() = fromparent_module[]
 
-extensions_dir(ecg::EnvCacheGroup = ENVS) = extensions_dir(get_target(ecg))
+extensions_dir(ecg::EnvCacheGroup) = extensions_dir(get_target(ecg))
 function extensions_dir(env::EnvCache)
 	pkg = env.pkg
 	isnothing(pkg) && return nothing
@@ -20,11 +20,11 @@ function get_entrypoint(e::EnvCache)
 	isnothing(pkg) && return ""
 	entrypoint = joinpath(pkg.path, "src", pkg.name * ".jl")
 end
-get_active(ecg::EnvCacheGroup = ENVS) = ecg.active
-get_target(ecg::EnvCacheGroup = ENVS) = ecg.target
-get_notebook(ecg::EnvCacheGroup = ENVS) = ecg.notebook
+get_active(ecg::EnvCacheGroup) = ecg.active
+get_target(ecg::EnvCacheGroup) = ecg.target
+get_notebook(ecg::EnvCacheGroup) = ecg.notebook
 
-function maybe_update_envcache(projfile::String, ecg::EnvCache = ENVS; notebook = false)
+function maybe_update_envcache(projfile::String, ecg::EnvCacheGroup; notebook = false)
 	f = notebook ? get_notebook : get_target
 	env = f(ecg)
 	if isnothing(env) || env.project_file != projfile
@@ -40,18 +40,26 @@ function update_envcache!(e::EnvCache)
 	return e
 end
 # Update the active EnvCache by eventually copying reduced project and manifest from the package EnvCache
-function update_ecg!(ecg::EnvCacheGroup = ENVS; force = false, io::IO = devnull, instantiate = force)
+function update_ecg!(ecg::EnvCacheGroup; force = false, io::IO = devnull, instantiate = force)
 	c = Context(; io)
 	# Update the target and notebook ecg 
 	update_envcache!(ecg |> get_target)
 	update_envcache!(ecg |> get_notebook)
-	active = get_active()
+	active = get_active(ecg)
 	active_manifest = active |> get_manifest_file
 	active_project = active |> get_manifest_file
-	target_manifest = get_target() |> get_manifest_file
-    active_mtime = mtime(active_manifest)
-    target_mtime = mtime(ecg |> get_target |> get_manifest_file)
-    if force || active_mtime < target_mtime
+	target_manifest = get_target(ecg) |> get_manifest_file
+	if !isfile(active_manifest) || !isfile(active_project)
+		force = true
+	end
+	if !force
+		active_mtime = mtime(active_manifest)
+		target_mtime = mtime(ecg |> get_target |> get_manifest_file)
+		force = force || active_mtime < target_mtime
+	end
+    if force
+		mkpath(dirname(active_manifest))
+		# We copy a reduced version of the project, only with deps and compat
         pd = ecg.target.project.other
         ad = Dict{String, Any}((k => pd[k] for k in ("deps", "compat") if haskey(pd, k)))
         write_project(ad, active_project)
@@ -65,17 +73,6 @@ function update_ecg!(ecg::EnvCacheGroup = ENVS; force = false, io::IO = devnull,
     return ecg
 end
 
-function extract_ecg(project_file::String)
-
-	project = read_project(project_file)
-	id = TargetID(project.name, project_file)
-	ecg = get!(ENVCACHE_DICT, id) do
-		EnvCacheGroup(project_file)
-	end
-	update_ecg!(ecg)
-	return ecg
-end
-
 ## Return calling DIR, basically copied from the definigion of the @__DIR__ macro
 function __DIR__(__source__)
     __source__.file === nothing && return nothing
@@ -84,34 +81,18 @@ function __DIR__(__source__)
 end
 
 # Function to get the package dependencies from the manifest
-function target_dependencies(project_location::String)
-	project_file = Base.current_project(project_location)
-	project_file isa Nothing && error("No parent project was found starting from the path $project_location")
-	proj_dict = TOML.parsefile(project_file)
-	# We identify the names of the direct project dependencies
-	proj_deps = get(proj_dict,"deps",Dict{String,Any}())
-	manifest_file = get_manifest_file(project_file, proj_dict)
+function target_dependencies(target::EnvCache)
+	manifest_deps = target.manifest.deps
+	proj_deps = target.project.deps
 	direct = Dict{String, PkgInfo}()
 	indirect = Dict{String, PkgInfo}()
-	# manifest_file isa Nothing && error("No Manifest was found.
-	# The project located at $project_file does not seem to have a corresponding Manifest file. 
-	# Please make sure that the project has a Manifest file by calling `Pkg.resolve` in its environment")
-	if manifest_file isa Nothing
-		# In case there is not Manifest, we just populate the direct entry
-		for (name, uuid) in proj_deps
-			direct[name] = PkgInfo(name, uuid, "N/A")
-		end
-	else
-		manifest_deps = Base.get_deps(TOML.parsefile(manifest_file))
-		for (k,vv) in manifest_deps
-			v = vv[1]
-			d = haskey(proj_deps, k) ? direct : indirect
-			d[k] = PkgInfo(k, v["uuid"], get(v,"version", "stdlib"))
-		end
+	for (uuid,pkgentry) in manifest_deps
+		(;name, version) = pkgentry
+		d = haskey(proj_deps, name) ? direct : indirect
+		d[name] = PkgInfo(name, uuid, version)
 	end
 	direct, indirect
 end
-target_dependencies(d::Dict) = target_dependencies(d["project"])
 
 
 ## simulate manual rerun
@@ -146,7 +127,7 @@ function add_loadpath(entry::String)
 	entry ∈ LOAD_PATH || push!(LOAD_PATH, entry)
 	return nothing
 end
-add_loadpath(ecg::EnvCacheGroup = ENVS) = add_loadpath(ecg |> get_active |> get_project_file)
+add_loadpath(ecg::EnvCacheGroup) = add_loadpath(ecg |> get_active |> get_project_file)
 function clean_loadpath(entry::String)
 	for i in length(LOAD_PATH):-1:1
 		if LOAD_PATH[i] == entry
@@ -155,7 +136,7 @@ function clean_loadpath(entry::String)
 	end
 	return nothing
 end
-clean_loadpath(ecg::EnvCacheGroup = ENVS) = clean_loadpath(ecg |> get_active |> get_project_file)
+clean_loadpath(ecg::EnvCacheGroup) = clean_loadpath(ecg |> get_active |> get_project_file)
 
 ## execute only in notebook
 # We have to create our own simple check to only execute some stuff inside the notebook where they are defined. We have stuff in basics.jl but we don't want to include that in this notebook
@@ -180,14 +161,14 @@ is_notebook_local(calling_file::Symbol) = is_notebook_local(String(calling_file)
 has_extensions(package_data) = haskey(package_data, "extensions") && haskey(package_data, "weakdeps")
 
 # This will extract all the useful extension data for each weakdep
-function target_extension_data(ecg::EnvCacheGroup = ENVS)
-	target = ecg |> get_target
-	project = target |> get_project
+get_extension_data(ecg::EnvCacheGroup) = ecg |> get_target |> get_extension_data
+function get_extension_data(env::EnvCache)
+	project = env |> get_project
 	out = Dict{String, Any}()
 	isempty(project.exts) && return out
-	ext_dir = extensions_dir(ecg)
-	weakdeps = project.weak_dependencies
-	exts = Dict((v,k) for (k,v) in package_dict["extensions"])
+	ext_dir = extensions_dir(env)
+	weakdeps = project.weakdeps
+	exts = Dict((v,k) for (k,v) in project.exts)
 	for (k,v) in weakdeps
 		module_name = exts[k]
 		uuid = Base.UUID(v)
@@ -229,8 +210,10 @@ function get_package_data(packagepath::AbstractString)
 	project_file isa Nothing && error("No project was found starting from $packagepath")
 	project_file = abspath(project_file)
 
-	maybe_update_envcache(project_file; notebook = false)
-	target = get_target()
+	ecg = ENVS
+
+	maybe_update_envcache(project_file, ecg; notebook = false)
+	target = get_target(update_ecg!(ecg))
 	isnothing(target.pkg) && error("The project found at $project_file is not a package, simple environments are currently not supported")
 
 	# Check that the package file actually exists
@@ -246,12 +229,12 @@ function get_package_data(packagepath::AbstractString)
 
 	# Check for extensions
 	if has_extensions(package_data)
-		package_data["extension data"] = data_from_weakdeps(package_data)
+		package_data["extension data"] = get_extension_data(target)
 		package_data["loaded extensions"] = Set{Symbol}()
 	end
 
 	# We extract the PkgInfo for all packages in this environment
-	d,i = target_dependencies(project_file)
+	d,i = target_dependencies(target)
 	package_data["PkgInfo"] = (;direct = d, indirect = i)
 	
 	return package_data

@@ -12,7 +12,7 @@ pop!(LOAD_PATH)
 
 # We point at the helpers file inside the FromPackage submodule, we only load the constants in the Loaded submodule
 outpackage_target = abspath(@__DIR__,"../..")
-inpackage_target = joinpath(outpackage_target, "src/frompackage/helpers.jl")
+inpackage_target = joinpath(outpackage_target, "src/frompackage/types.jl")
 # We simulate a caller from a notebook by appending a fake cell-id
 outpluto_caller = abspath(@__DIR__,"../..")
 inpluto_caller = join([outpluto_caller, "#==#", "00000000-0000-0000-0000-000000000000"])

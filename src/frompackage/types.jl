@@ -1,3 +1,6 @@
+import Pkg
+import Pkg.Types: EnvCache, write_project, Context, read_project, read_manifest
+
 const _stdlibs = first.(values(Pkg.Types.stdlibs()))
 
 const fromparent_module = Ref{Module}()

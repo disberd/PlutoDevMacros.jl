@@ -8,9 +8,13 @@ direct_path = normpath(@__DIR__, "../TestDirectExtension/")
 
 # We add PlotlyExtensionsHelper manually in the test as it's not registered
 c = Context(;env = EnvCache(joinpath(direct_path, "Project.toml")))
-Pkg.add(c, [
-    PackageSpec(; name = "PlotlyExtensionsHelper", url = "https://github.com/disberd/PlotlyExtensionsHelper.jl", rev = "main")
-])
+let
+    url = "https://github.com/disberd/PlotlyExtensionsHelper.jl" 
+    rev = "main"
+    Pkg.add(c, [
+        PackageSpec(; url, rev, repo = Pkg.Types.GitRepo(;source = url, rev) )
+    ])
+end
 
 function noerror(cell; verbose=true)
     if cell.errored && verbose

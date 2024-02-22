@@ -54,6 +54,11 @@ function update_ecg!(ecg::EnvCacheGroup; force = false, io::IO = devnull)
 	active_manifest = active |> get_manifest_file
 	active_project = active |> get_project_file
 	target_manifest = get_target(ecg) |> get_manifest_file
+	if !isfile(target_manifest)
+		@info "It seems that the target package does not have a manifest file. Trying to instantiate its environment"
+		c.env = ecg.target
+        Pkg.instantiate(c)
+	end
 	if !isfile(active_manifest) || !isfile(active_project)
 		force = true
 	end

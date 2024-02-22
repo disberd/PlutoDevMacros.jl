@@ -16,7 +16,13 @@ const manifest_names = ("JuliaManifest.toml", "Manifest.toml")
     notebook::Union{Nothing, EnvCache} = nothing
 end
 
-const ENVS = EnvCacheGroup()
+const DEFAULT_ECG = Ref{EnvCacheGroup}()
+function default_ecg()
+	if !isassigned(DEFAULT_ECG)
+		DEFAULT_ECG[] = EnvCacheGroup()
+	end
+	return DEFAULT_ECG[]
+end
 
 struct PkgInfo 
 	name::Union{Nothing, String}

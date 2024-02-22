@@ -174,9 +174,8 @@ function get_extension_data(env::EnvCache)
 	ext_dir = extensions_dir(env)
 	weakdeps = project.weakdeps
 	exts = Dict((v,k) for (k,v) in project.exts)
-	for (k,v) in weakdeps
+	for (k,uuid) in weakdeps
 		module_name = exts[k]
-		uuid = Base.UUID(v)
 		filename = module_name * ".jl"
 		file_found = false
 		module_location = ""
@@ -186,25 +185,47 @@ function get_extension_data(env::EnvCache)
 			isfile(module_location) && (file_found = true)
 		end
 		file_found || error("The module location for extension $module_name could not be found.")
+		module_name = Symbol(module_name)
 		out[k] = (;module_name, uuid, module_location)
 	end
 	out
 end
 
-function maybe_add_extensions!(package_module::Module, package_dict, caller_module::Module)
+function maybe_add_loaded_module(id::Base.PkgId)
+	symname = id.name |> Symbol
+	# We just returns if the module is already loaded
+	isdefined(LoadedModules, symname) && return nothing
+	haskey(Base.loaded_modules, id) || error("The package $id does not seem to be loaded")
+	Core.eval(LoadedModules, :(const $symname = Base.loaded_modules[$id]))
+	return nothing
+end
+
+
+function maybe_add_extensions!(package_module::Module, package_dict)
 	# This is to trigger reloading potential indirect extensions that failed loading
 	Base.retry_load_extensions()
 	has_extensions(package_dict) || return nothing # We skip this if no extensions are in the package
-	ext_data = package_dict["extension data"]
+	ecg = default_ecg()
+	ext_datas = package_dict["extension data"]
 	loaded_ext_names = get!(package_dict, "loaded extensions", Set{Symbol}())
-	for (k,v) in ext_data
-		isdefined(caller_module, Symbol(k)) || continue # We don't have this package loaded in the caller module
-		pkgid = Base.identify_package(k)
-		pkgid !== nothing && pkgid.uuid === v.uuid || continue # The UUID does not match
-		push!(loaded_ext_names, Symbol(v.module_name))
-		# Now we evaluate the extension code in the package module
-		mod_exp = extract_module_expression(v.module_location)
-		eval_in_module(package_module,Expr(:toplevel, LineNumberNode(1, Symbol(v.module_location)), mod_exp), package_dict)
+	for (weakdep, ext_data) in ext_datas
+		(;module_name, uuid, module_location) = ext_data
+		module_name in loaded_ext_names && continue
+		for env in (get_active(ecg), get_notebook(ecg))
+			module_name in loaded_ext_names && break
+			manifest = get_manifest(env)
+			haskey(manifest.deps, uuid) || continue # We don't have this as dependency, we skip
+			pkgid = Base.PkgId(uuid, manifest.deps[uuid].name)
+			# Add the required module to LoadedModules if not there already
+			maybe_add_loaded_module(pkgid)
+			# We push this as loaded extension
+			push!(loaded_ext_names, module_name)
+			# Now we evaluate the extension code in the package module
+			mod_exp = extract_module_expression(module_location)
+			eval_in_module(package_module,Expr(:toplevel, LineNumberNode(1, Symbol(module_location)), mod_exp), package_dict)
+			# We already evaluated this so we stop
+			break
+		end
 	end
 	return nothing
 end
@@ -215,7 +236,7 @@ function get_package_data(packagepath::AbstractString)
 	project_file isa Nothing && error("No project was found starting from $packagepath")
 	project_file = abspath(project_file)
 
-	ecg = ENVS
+	ecg = default_ecg()
 
 	maybe_update_envcache(project_file, ecg; notebook = false)
 	target = get_target(ecg)
@@ -233,6 +254,7 @@ function get_package_data(packagepath::AbstractString)
 	package_data["dir"] = package_dir
 	package_data["file"] = package_file
 	package_data["target"] = packagepath
+	package_data["ecg"] = ecg
 
 	# Check for extensions
 	if has_extensions(package_data)

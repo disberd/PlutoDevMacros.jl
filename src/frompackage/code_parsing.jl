@@ -35,12 +35,25 @@ function modify_extension_using!(ex::Expr, loc, package_dict::Dict, eval_module:
 	has_extensions(package_dict) || return true
 	loaded_exts = get!(package_dict, "loaded extensions", Set{Symbol}())
 	package_name = Symbol(package_dict["name"])
-	nameof(eval_module) in loaded_exts || return true
-	package, _ = extract_import_args(ex)
-	if first(package.args) === package_name
-		# @info "Found extension" (;ex, loc, package_dict, eval_module)
+	# If we are not currently evaluating expressions inside the extension module, we return
+	eval_module_name = nameof(eval_module)
+	eval_module_name in loaded_exts || return true
+	ecg = default_ecg()
+	target_project = ecg |> get_target |> get_project
+	ext_mod_name = String(eval_module_name)
+	# Extract the name of the weakdep that triggered this extension
+	weakdep = target_project.exts[ext_mod_name] |> Symbol
+	package_expr, _ = extract_import_args(ex)
+	package_expr_args = package_expr.args
+	extracted_package_name = first(package_expr_args)
+	if extracted_package_name === package_name
 		# We just add .. to the name because the extension module was added to the toplevel of the parent
-		prepend!(package.args, (:., :.))
+		prepend!(package_expr_args, (:., :.))
+	elseif extracted_package_name === weakdep
+		# We first add :_LoadedModules_
+		pushfirst!(package_expr_args, :_LoadedModules_)
+		# We also add the module path of the fromparent_module which contains _LoadedModules_
+		prepend!(package_expr_args, modname_path(fromparent_module[])) 
 	end
 	return true
 end

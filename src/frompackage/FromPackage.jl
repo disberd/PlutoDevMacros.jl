@@ -9,4 +9,7 @@ module FromPackage
     include("loading.jl")
     include("input_parsing.jl")
     include("macro.jl")
+
+    # Here we will store modules from Base.loaded_modules that are explicitly requested inside `@frompackage` or that are needed to load extensions of the `@frompackage` target
+    module LoadedModules end
 end

@@ -1,37 +1,21 @@
 ### A Pluto.jl notebook ###
-# v0.19.38
+# v0.19.39
 
 using Markdown
 using InteractiveUtils
-
-# ╔═╡ f6bb9eb6-1f66-424a-9043-607aeee0cd76
-begin
-	parent_project = Base.current_project(@__FILE__)
-	notebook_project = Base.active_project()
-	plutodevmacros_project= Base.current_project(normpath(@__DIR__, "../..")) 
-	Base.eval(Main, quote # instantiate the parent env, mostly for CI
-		import Pkg
-		Pkg.activate($parent_project)
-		Pkg.instantiate()
-		Pkg.activate($notebook_project)
-	end)
-	pushfirst!(LOAD_PATH, parent_project) # This contains Revise
-	pushfirst!(LOAD_PATH, plutodevmacros_project) # This loads the PlutoDevMacros environment, so we can do import with the latest version
-	try
-		Base.eval(Main, :(import Revise))
-		Base.eval(Main, :(import PlutoDevMacros))
-	finally
-		popfirst!(LOAD_PATH) # Remove plutodevmacros env
-		popfirst!(LOAD_PATH) # Remove parent_env
-	end
-	using Main.Revise
-	using Main.PlutoDevMacros
-end
 
 # ╔═╡ abccfc80-afaf-4c54-b300-c0c893de3848
 begin
 	using PlutoPlotly
 	using Example
+end
+
+# ╔═╡ f6bb9eb6-1f66-424a-9043-607aeee0cd76
+import PlutoDevMacros: @frompackage as @fp
+
+# ╔═╡ a5237419-a9e2-4b0c-83e6-4eb1907bb1be
+@fp "../.." begin
+	using ^.FromPackage
 end
 
 # ╔═╡ b93cdd74-1c65-4d15-a6e3-6c1855e37cce
@@ -45,27 +29,20 @@ standard_extension_output = to_extend(plot(rand(4)).Plot)
 # ╔═╡ 8e7563ce-d2ba-4356-93e4-70ebe0f2be87
 weird_extension_output = to_extend(Example)
 
-# ╔═╡ 25b8a9d0-d790-4b18-854d-4392291db823
-getproperty(TestDirectExtension, :plot_this)
-
-# ╔═╡ 3c8d1e3c-f081-4b73-82ab-e0a9b3958c92
-TestDirectExtension.plot_this
-
 # ╔═╡ da703251-1f4a-4fa1-ba08-720bceb2ada6
-# ╠═╡ disabled = true
-#=╠═╡
 p = plot_this()
-  ╠═╡ =#
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
 Example = "7876af07-990d-54b4-ab0e-23690620f79a"
+PlutoDevMacros = "a0499f29-c39b-4c5c-807c-88074221b949"
 PlutoPlotly = "8e989ff0-3d88-8e9f-f020-2b208a939ff0"
 
 [compat]
 Example = "~0.5.3"
-PlutoPlotly = "~0.3.9"
+PlutoDevMacros = "~0.6.0"
+PlutoPlotly = "~0.4.4"
 """
 
 # ╔═╡ 00000000-0000-0000-0000-000000000002
@@ -74,7 +51,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.10.1"
 manifest_format = "2.0"
-project_hash = "d71ceab842b685ad63f73720ca026030946780f6"
+project_hash = "45c2663b0b08aa011df96ad7e600bf23da33df7e"
 
 [[deps.AbstractPlutoDingetjes]]
 deps = ["Pkg"]
@@ -91,6 +68,11 @@ uuid = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
 
 [[deps.Base64]]
 uuid = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
+
+[[deps.BaseDirs]]
+git-tree-sha1 = "3e93fcd95fe8db4704e98dbda14453a0bfc6f6c3"
+uuid = "18cc8868-cbac-4acf-b575-c8ff214dc66f"
+version = "1.2.3"
 
 [[deps.ColorSchemes]]
 deps = ["ColorTypes", "ColorVectorSpace", "Colors", "FixedPointNumbers", "PrecompileTools", "Random"]
@@ -162,23 +144,11 @@ git-tree-sha1 = "335bfdceacc84c5cdf16aadc768aa5ddfc5383cc"
 uuid = "53c48c17-4a7d-5ca2-90c5-79b7896eea93"
 version = "0.8.4"
 
-[[deps.Hyperscript]]
-deps = ["Test"]
-git-tree-sha1 = "179267cfa5e712760cd43dcae385d7ea90cc25a4"
-uuid = "47d2ed2b-36de-50cf-bf87-49c2cf4b8b91"
-version = "0.0.5"
-
 [[deps.HypertextLiteral]]
 deps = ["Tricks"]
 git-tree-sha1 = "7134810b1afce04bbc1045ca1985fbe81ce17653"
 uuid = "ac1192a8-f4b3-4bfe-ba22-af5b92cd3ab2"
 version = "0.9.5"
-
-[[deps.IOCapture]]
-deps = ["Logging", "Random"]
-git-tree-sha1 = "8b72179abc660bfab5e28472e019392b97d0985c"
-uuid = "b5f81e59-6552-4d32-b1f0-c071b021bf89"
-version = "0.2.4"
 
 [[deps.InteractiveUtils]]
 deps = ["Markdown"]
@@ -229,10 +199,11 @@ uuid = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 [[deps.Logging]]
 uuid = "56ddb016-857b-54e1-b83d-db4d58db5568"
 
-[[deps.MIMEs]]
-git-tree-sha1 = "65f28ad4b594aebe22157d6fac869786a255b7eb"
-uuid = "6c6e2e6c-3030-632d-7369-2d6c69616d65"
-version = "0.1.4"
+[[deps.MacroTools]]
+deps = ["Markdown", "Random"]
+git-tree-sha1 = "2fa9ee3e63fd3a4f7a9a4f4744a52f4856de82df"
+uuid = "1914dd2f-81c6-5fcd-8719-6d5c9610ff09"
+version = "0.5.13"
 
 [[deps.Markdown]]
 deps = ["Base64"]
@@ -264,12 +235,6 @@ git-tree-sha1 = "dfdf5519f235516220579f949664f1bf44e741c5"
 uuid = "bac558e1-5e72-5ebc-8fee-abe8a469f55d"
 version = "1.6.3"
 
-[[deps.PackageExtensionCompat]]
-git-tree-sha1 = "fb28e33b8a95c4cee25ce296c817d89cc2e53518"
-uuid = "65ce6f38-6b18-4e1d-a461-8949797d7930"
-version = "1.0.2"
-weakdeps = ["Requires", "TOML"]
-
 [[deps.Parameters]]
 deps = ["OrderedCollections", "UnPack"]
 git-tree-sha1 = "34c0e9ad262e5f7fc75b10a9952ca7692cfc5fbe"
@@ -293,23 +258,25 @@ git-tree-sha1 = "56baf69781fc5e61607c3e46227ab17f7040ffa2"
 uuid = "a03496cd-edff-5a9b-9e67-9cda94a718b5"
 version = "0.8.19"
 
+[[deps.PlutoDevMacros]]
+deps = ["AbstractPlutoDingetjes", "DocStringExtensions", "HypertextLiteral", "InteractiveUtils", "MacroTools", "Markdown", "Pkg", "Random", "TOML"]
+git-tree-sha1 = "06fa4aa7a8f2239eec99cf54eeddd34f3d4359be"
+uuid = "a0499f29-c39b-4c5c-807c-88074221b949"
+version = "0.6.0"
+
 [[deps.PlutoPlotly]]
-deps = ["AbstractPlutoDingetjes", "Colors", "Dates", "HypertextLiteral", "InteractiveUtils", "LaTeXStrings", "Markdown", "PackageExtensionCompat", "PlotlyBase", "PlutoUI", "Reexport"]
-git-tree-sha1 = "9a77654cdb96e8c8a0f1e56a053235a739d453fe"
+deps = ["AbstractPlutoDingetjes", "BaseDirs", "Colors", "Dates", "Downloads", "HypertextLiteral", "InteractiveUtils", "LaTeXStrings", "Markdown", "Pkg", "PlotlyBase", "Reexport", "TOML"]
+git-tree-sha1 = "58dcb661ba1e58a13c7adce77435c3c6ac530ef9"
 uuid = "8e989ff0-3d88-8e9f-f020-2b208a939ff0"
-version = "0.3.9"
+version = "0.4.4"
 
     [deps.PlutoPlotly.extensions]
     PlotlyKaleidoExt = "PlotlyKaleido"
+    UnitfulExt = "Unitful"
 
     [deps.PlutoPlotly.weakdeps]
     PlotlyKaleido = "f2990250-8cf9-495f-b13a-cce12b45703c"
-
-[[deps.PlutoUI]]
-deps = ["AbstractPlutoDingetjes", "Base64", "ColorTypes", "Dates", "FixedPointNumbers", "Hyperscript", "HypertextLiteral", "IOCapture", "InteractiveUtils", "JSON", "Logging", "MIMEs", "Markdown", "Random", "Reexport", "URIs", "UUIDs"]
-git-tree-sha1 = "a6783c887ca59ce7e97ed630b74ca1f10aefb74d"
-uuid = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
-version = "0.7.57"
+    Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 
 [[deps.PrecompileTools]]
 deps = ["Preferences"]
@@ -387,19 +354,10 @@ git-tree-sha1 = "1feb45f88d133a655e001435632f019a9a1bcdb6"
 uuid = "62fd8b95-f654-4bbd-a8a5-9c27f68ccd50"
 version = "0.1.1"
 
-[[deps.Test]]
-deps = ["InteractiveUtils", "Logging", "Random", "Serialization"]
-uuid = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
-
 [[deps.Tricks]]
 git-tree-sha1 = "eae1bb484cd63b36999ee58be2de6c178105112f"
 uuid = "410a4b4d-49e4-4fbc-ab6d-cb71b17b3775"
 version = "0.1.8"
-
-[[deps.URIs]]
-git-tree-sha1 = "67db6cc7b3821e19ebe75791a9dd19c9b1188f2b"
-uuid = "5c2747f8-b7ea-4ff2-ba2e-563bfd36b1d4"
-version = "1.5.1"
 
 [[deps.UUIDs]]
 deps = ["Random", "SHA"]
@@ -436,12 +394,11 @@ version = "17.4.0+2"
 
 # ╔═╡ Cell order:
 # ╠═f6bb9eb6-1f66-424a-9043-607aeee0cd76
+# ╠═a5237419-a9e2-4b0c-83e6-4eb1907bb1be
 # ╠═abccfc80-afaf-4c54-b300-c0c893de3848
 # ╠═b93cdd74-1c65-4d15-a6e3-6c1855e37cce
 # ╠═675230da-e628-4059-b44d-6137a4dd4987
 # ╠═8e7563ce-d2ba-4356-93e4-70ebe0f2be87
-# ╠═25b8a9d0-d790-4b18-854d-4392291db823
-# ╠═3c8d1e3c-f081-4b73-82ab-e0a9b3958c92
 # ╠═da703251-1f4a-4fa1-ba08-720bceb2ada6
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

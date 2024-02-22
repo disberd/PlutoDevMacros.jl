@@ -5,4 +5,3 @@ version = "0.1.0"
 
 [deps]
 PlutoPlotly = "8e989ff0-3d88-8e9f-f020-2b208a939ff0"
-Revise = "295af30f-e4ad-537b-8983-00126c2a3abe"

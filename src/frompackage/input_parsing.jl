@@ -116,11 +116,14 @@ end
 # Get the full path of the module as array of Symbols starting from Main
 function modname_path(m::Module)
 	args = [nameof(m)]
+	m_old = m
 	_m = parentmodule(m)
-	while _m !== Main
+	while _m !== m_old && _m !== Main
+		m_old = _m
 		pushfirst!(args, nameof(_m))
 		_m = parentmodule(_m)
 	end
+	_m === Main || error("modname_path did not reach Main, this is not expected")
 	pushfirst!(args, nameof(_m))
 	return args
 end

@@ -91,6 +91,11 @@ function eval_module_expr(parent_module, ex, dict)
 		block.args[1].args
 	end
 	out = eval_toplevel(new_module, args, dict)
+	# If the module has an __init__ function, we call it
+	if isdefined(new_module, :__init__) && new_module.__init__ isa Function
+		# We do Core.eval instead of just new_module.__init__() because of world age (it will error with new_module.__init__())
+		Core.eval(new_module, :(__init__()))
+	end
 	return out isa StopEval ? out : nothing
 end
 
@@ -148,11 +153,6 @@ function load_module_in_caller(mod_exp::Expr, package_dict::Dict, caller_module)
 	end
 	# Get the moduleof the parent package
 	__module = getfield(_MODULE_, mod_name)
-	# If the module has an __init__ function, we call it
-	if isdefined(__module, :__init__) && __module.__init__ isa Function
-		# We do Core.eval instead of just __module.__init__() because of world age (it will error with __module.__init__())
-		Core.eval(__module, :(__init__()))
-	end
 	# We now create a submodule of the loaded one to import all the direct dependencies
 	Core.eval(__module, deps_submodule_expr(package_dict))
 	# We put the dict inside the loaded module

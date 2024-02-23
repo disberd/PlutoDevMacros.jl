@@ -8,6 +8,13 @@ const TEST_INIT = Ref{Int}(0)
 toplevel_variable = 15
 hidden_toplevel_variable = 10
 
+module SUBINIT
+    const TEST_SUBINIT = Ref{Int}(0)
+    function __init__()
+        TEST_SUBINIT[] = 15
+    end
+end
+
 include("notebook1.jl")
 
 module Inner

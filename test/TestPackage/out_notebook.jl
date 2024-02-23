@@ -29,9 +29,9 @@ this_file = relpath(split(@__FILE__,"#==#")[1], dirname(dirname(dirname(@__DIR__
 @fromparent begin
 	import TestPackage
 	@skiplines begin
-		"13" # Skip line 13 in the main file TestPackage.jl, which defines module Inner
+		"20" # Skip line 13 in the main file TestPackage.jl, which defines module Inner
 		"test_macro2.jl" # This skips the whole file test_macro2.jl
-		"24-25" # This skips from line 24 to 25 in the main file, including extrema. Which are the 2 include statements of the inner SpecificImport module
+		"31-32" # This skips from line 24 to 25 in the main file, including extrema. Which are the 2 include statements of the inner SpecificImport module
 		"test_macro1.jl:::28-10000" # This skips parts of test_macro1.jl
 	end
 end
@@ -64,6 +64,9 @@ isdefined(TestPackage, :SpecificImport) || error("The module SpecificImport was 
 # ╔═╡ 06408ada-f0b7-4057-9177-a79baf2fa9cf
 isdefined(TestPackage, :TEST_INIT) && TestPackage.TEST_INIT[] == 5 || error("The execution of the __init__ function did not seem to happen")
 
+# ╔═╡ e37034a1-398c-45ad-803c-4b78e3388464
+isdefined(TestPackage.SUBINIT, :TEST_SUBINIT) && TestPackage.SUBINIT.TEST_SUBINIT[] == 15 || error("The execution of the __init__ function in the submodule did not seem to happen")
+
 # ╔═╡ Cell order:
 # ╠═931a8c2c-ed76-11ed-3721-396dae146ad4
 # ╠═bd0d177f-ab66-493d-89a6-a9faca81cd11
@@ -77,3 +80,4 @@ isdefined(TestPackage, :TEST_INIT) && TestPackage.TEST_INIT[] == 5 || error("The
 # ╠═c231c321-b89f-4f1a-8a60-5eb03c098fa1
 # ╠═3e83aab4-5feb-4f3f-9dc1-2da208bcd599
 # ╠═06408ada-f0b7-4057-9177-a79baf2fa9cf
+# ╠═e37034a1-398c-45ad-803c-4b78e3388464

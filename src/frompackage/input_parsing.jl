@@ -1,14 +1,3 @@
-# We define here the types to identify the imports
-abstract type ImportType end
-for name in (:FromParentImport, :FromPackageImport, :FromDepsImport, :RelativeImport)
-	expr = :(struct $name <: ImportType
-		mod_name::Symbol
-	end) 
-	eval(expr)
-end
-
-
-
 # This funtion tries to look within the expression fed to @frompackage to look for calls to @skiplines
 function process_skiplines!(ex, dict)
 	block = if Meta.isexpr(ex, :block)

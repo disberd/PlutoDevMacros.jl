@@ -1,4 +1,4 @@
-import PlutoDevMacros.FromPackage: process_outside_pluto!, load_module_in_caller, modname_path, fromparent_module, parseinput, get_package_data, @fromparent, _combined, process_skiplines!, get_temp_module, LineNumberRange, parse_skipline, extract_module_expression, _inrange
+import PlutoDevMacros.FromPackage: process_outside_pluto!, load_module_in_caller, modname_path, fromparent_module, parseinput, get_package_data, @fromparent, _combined, process_skiplines!, get_temp_module, LineNumberRange, parse_skipline, extract_module_expression, _inrange, filterednames, reconstruct_import_expr
 import Pkg
 
 using Test
@@ -52,7 +52,7 @@ end
     @test valid(:(import .ASD: lol))
     @test invalid(:(import .ASD: *))
     @test invalid(:(import PlutoDevMacros: lol)) # PlutoDevMacros is the name of the inpackage_target package, we don't allow that
-    @test invalid(:(import *))
+    @test invalid(:(import *)) # Outside of pluto the catchall is removed
 
     @test valid(:(import >.HypertextLiteral)) # This is a direct dependency
     @test valid(:(import >.Random)) # This is a direct dependency and a stdlib
@@ -143,10 +143,16 @@ end
             expected = :(import $(parent_path...).PlutoDevMacros.PlutoCombineHTL)
             @test expected == f(ex)
 
-            # FromParent import
             ex = :(import *)
-            @test_throws "The current file was not found" f(ex)
+            expected = let _mod = fromparent_module[].PlutoDevMacros
+                imported_names = filterednames(_mod; all = true, imported = true)
+                importednames_exprs = map(n -> Expr(:., n), imported_names)
+                modname_expr = Expr(:., vcat(parent_path, :PlutoDevMacros)...)
+                reconstruct_import_expr(modname_expr, importednames_exprs)
+            end
+            @test expected == f(ex)
 
+            # FromParent import
             ex = :(import ParentModule: *)
             @test_throws "The current file was not found" f(ex)
 

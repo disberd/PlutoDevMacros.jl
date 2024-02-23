@@ -70,7 +70,7 @@ function update_ecg!(ecg::EnvCacheGroup; force = false, io::IO = devnull)
 		mkpath(dirname(active_manifest))
 		# We copy a reduced version of the project, only with deps and compat
         pd = ecg.target.project.other
-        ad = Dict{String, Any}((k => pd[k] for k in ("deps", "compat") if haskey(pd, k)))
+        ad = Dict{String, Any}((k => pd[k] for k in ("deps", "compat", "weakdeps") if haskey(pd, k)))
         write_project(ad, active_project)
         # We copy the Manifest
         cp(target_manifest, active_manifest; force = true)

@@ -32,11 +32,20 @@ remove_pluto_exprs(ex, args...) = remove_pluto_exprs(ex)
 function modify_package_using!(ex::Expr, loc, package_dict::Dict, eval_module::Module)
 	Meta.isexpr(ex, (:using, :import)) || return true
 	package_name = Symbol(package_dict["name"])
-	package_expr, _ = extract_import_args(ex)
-	package_expr_args = package_expr.args
-	extracted_package_name = first(package_expr_args)
-	if extracted_package_name === package_name
-		prepend!(package_expr_args, modname_path(fromparent_module[])) 
+	package_exprs = if length(ex.args) === 1
+		# We are in the form import PkgName: vars...
+		package_expr, _ = extract_import_args(ex)
+		[package_expr]
+	else
+		# We are in the form import PkgA, PkgB
+		ex.args
+	end
+	for package_expr in package_exprs
+		package_expr_args = package_expr.args
+		extracted_package_name = first(package_expr_args)
+		if extracted_package_name === package_name
+			prepend!(package_expr_args, modname_path(fromparent_module[])) 
+		end
 	end
 	return true
 end

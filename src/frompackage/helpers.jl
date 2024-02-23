@@ -5,7 +5,6 @@ using Pkg.Types: write_project
 
 get_temp_module() = fromparent_module[]
 
-extensions_dir(ecg::EnvCacheGroup) = extensions_dir(get_target(ecg))
 function extensions_dir(env::EnvCache)
 	pkg = env.pkg
 	isnothing(pkg) && return nothing
@@ -83,13 +82,6 @@ function update_ecg!(ecg::EnvCacheGroup; force = false, io::IO = devnull)
     return ecg
 end
 
-## Return calling DIR, basically copied from the definigion of the @__DIR__ macro
-function __DIR__(__source__)
-    __source__.file === nothing && return nothing
-    _dirname = dirname(String(__source__.file::Symbol))
-    return isempty(_dirname) ? pwd() : abspath(_dirname)
-end
-
 # Function to get the package dependencies from the manifest
 function target_dependencies(target::EnvCache)
 	manifest_deps = target.manifest.deps
@@ -105,6 +97,8 @@ function target_dependencies(target::EnvCache)
 end
 
 
+#=
+We don't use manual rerun so we just comment this till after we can use it
 ## simulate manual rerun
 """
 	simulate_manual_rerun(cell_id::Base.UUID; PlutoRunner)
@@ -131,6 +125,7 @@ function simulate_manual_rerun(cell_ids::Array; kwargs...)
 		simulate_manual_rerun(cell_id;kwargs...)
 	end
 end
+=#
 
 # Functions to add and remove from the LOAD_PATH
 function add_loadpath(entry::String)
@@ -138,40 +133,18 @@ function add_loadpath(entry::String)
 	return nothing
 end
 add_loadpath(ecg::EnvCacheGroup) = add_loadpath(ecg |> get_active |> get_project_file)
-function clean_loadpath(entry::String)
-	for i in length(LOAD_PATH):-1:1
-		if LOAD_PATH[i] == entry
-			deleteat!(LOAD_PATH, i)
-		end
-	end
-	return nothing
-end
-clean_loadpath(ecg::EnvCacheGroup) = clean_loadpath(ecg |> get_active |> get_project_file)
 
 ## execute only in notebook
-# We have to create our own simple check to only execute some stuff inside the notebook where they are defined. We have stuff in basics.jl but we don't want to include that in this notebook
-function is_notebook_local()
-	cell_id = try
-		Main.PlutoRunner.currently_running_cell_id[]
-	catch e
-		return false
-	end
-	caller = stacktrace()[2] # We get the function calling this function
-	calling_file = caller.file |> string
-	return endswith(calling_file, string(cell_id))
-end
 # We have to create our own simple check to only execute some stuff inside the notebook where they are defined. We have stuff in basics.jl but we don't want to include that in this notebook
 function is_notebook_local(calling_file::String)
 	name_cell = split(calling_file, "#==#")
 	return length(name_cell) == 2 && length(name_cell[2]) == 36
 end
-is_notebook_local(calling_file::Symbol) = is_notebook_local(String(calling_file))
 
 ## package extensions helpers
 has_extensions(package_data) = haskey(package_data, "extensions") && haskey(package_data, "weakdeps")
 
 # This will extract all the useful extension data for each weakdep
-get_extension_data(ecg::EnvCacheGroup) = ecg |> get_target |> get_extension_data
 function get_extension_data(env::EnvCache)
 	project = env |> get_project
 	out = Dict{String, Any}()

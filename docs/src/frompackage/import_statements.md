@@ -56,11 +56,11 @@ A special kind parent module import is:
 ```julia
 import *
 ```
-which is equivalent to `import ParentModule: *`. 
+which is equivalent to:
+- `import ParentModule: *` if the `target` file provided to `@frompackage`/`@fromparent` **is** a file *included* in the target Package. 
+  - This tries to reproduce within the namespace of the calling notebook, the namespace that would be visible by the notebook file when it is loaded as part of the Package module outside of Pluto.
+- `import PackageModule: *` if the `target` file provided to `@frompackage`/`@fromparent` **is not** a file *included* in the target Package. 
 
-This tries to reproduce within the namespace of the calling notebook, the
-namespace that would be visible by the notebook file when it is loaded as part
-of the Package module outside of Pluto.
 
 ## Imports from Direct dependencies
 

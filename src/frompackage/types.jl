@@ -56,3 +56,11 @@ function _inrange(ln::LineNumberNode, lnr::LineNumberRange)
 end
 _inrange(ln::LineNumberNode, ln2::LineNumberNode) = ln === ln2
 
+# We define here the types to identify the imports
+abstract type ImportType end
+for name in (:FromParentImport, :FromPackageImport, :FromDepsImport, :RelativeImport)
+	expr = :(struct $name <: ImportType
+		mod_name::Symbol
+	end) 
+	eval(expr)
+end

@@ -1,14 +1,3 @@
-# We define here the types to identify the imports
-abstract type ImportType end
-for name in (:FromParentImport, :FromPackageImport, :FromDepsImport, :RelativeImport)
-	expr = :(struct $name <: ImportType
-		mod_name::Symbol
-	end) 
-	eval(expr)
-end
-
-
-
 # This funtion tries to look within the expression fed to @frompackage to look for calls to @skiplines
 function process_skiplines!(ex, dict)
 	block = if Meta.isexpr(ex, :block)
@@ -102,9 +91,12 @@ end
 function import_type(args, dict)
 	first_name = args[1]
 	mod_name = Symbol(dict["name"])
+	if first_name === :* 
+		return target_found(dict) ? FromParentImport(mod_name) : FromPackageImport(mod_name)
+	end
 	first_name ∈ (:PackageModule, mod_name, :^) && return FromPackageImport(mod_name)	
 	first_name === :. && return RelativeImport(mod_name)
-	first_name ∈ (:*, :ParentModule, :<) && return FromParentImport(mod_name)
+	first_name ∈ (:ParentModule, :<) && return FromParentImport(mod_name)
 	(;direct, indirect) = dict["PkgInfo"]
 	first_name === :> && String(args[2]) ∈ keys(direct) && return FromDepsImport(mod_name)
 	# String(first_name) ∈ _stdlibs && return FromDepsImport(mod_name)

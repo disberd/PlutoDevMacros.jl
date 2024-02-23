@@ -28,8 +28,29 @@ function remove_pluto_exprs(ex)
 end
 remove_pluto_exprs(ex, args...) = remove_pluto_exprs(ex)
 
+# This will substitute PackageName with the correct path pointed to the loaded module
+function modify_package_using!(ex::Expr, loc, package_dict::Dict, eval_module::Module)
+	Meta.isexpr(ex, (:using, :import)) || return true
+	package_name = Symbol(package_dict["name"])
+	package_exprs = if length(ex.args) === 1
+		# We are in the form import PkgName: vars...
+		package_expr, _ = extract_import_args(ex)
+		[package_expr]
+	else
+		# We are in the form import PkgA, PkgB
+		ex.args
+	end
+	for package_expr in package_exprs
+		package_expr_args = package_expr.args
+		extracted_package_name = first(package_expr_args)
+		if extracted_package_name === package_name
+			prepend!(package_expr_args, modname_path(fromparent_module[])) 
+		end
+	end
+	return true
+end
+
 # This will simply make the using/import statements of the calling package point to the parent module
-modify_extension_using!(x, args...) = true
 function modify_extension_using!(ex::Expr, loc, package_dict::Dict, eval_module::Module)
 	Meta.isexpr(ex, (:using, :import)) || return true
 	has_extensions(package_dict) || return true
@@ -46,10 +67,7 @@ function modify_extension_using!(ex::Expr, loc, package_dict::Dict, eval_module:
 	package_expr, _ = extract_import_args(ex)
 	package_expr_args = package_expr.args
 	extracted_package_name = first(package_expr_args)
-	if extracted_package_name === package_name
-		# We just add .. to the name because the extension module was added to the toplevel of the parent
-		prepend!(package_expr_args, (:., :.))
-	elseif extracted_package_name === weakdep
+	if extracted_package_name === weakdep
 		# We first add :_LoadedModules_
 		pushfirst!(package_expr_args, :_LoadedModules_)
 		# We also add the module path of the fromparent_module which contains _LoadedModules_
@@ -77,7 +95,7 @@ function process_expr!(ex, loc, dict, eval_module)
 	ex isa Expr || return true # Apart from Nothing, we keep everything that is not an expr
 	_is_block(ex) && return process_block!(ex, loc, dict, eval_module)
 	_is_include(ex) && error("A call to include not at toplevel was found around line $loc. This is not permitted")
-	keep = all((remove_pluto_exprs, modify_extension_using!)) do f
+	keep = all((remove_pluto_exprs, modify_package_using!, modify_extension_using!)) do f
 		f(ex, loc, dict, eval_module)
 	end
 end

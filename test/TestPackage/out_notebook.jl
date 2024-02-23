@@ -29,9 +29,9 @@ this_file = relpath(split(@__FILE__,"#==#")[1], dirname(dirname(dirname(@__DIR__
 @fromparent begin
 	import TestPackage
 	@skiplines begin
-		"20" # Skip line 13 in the main file TestPackage.jl, which defines module Inner
+		"22" # Skip line in the main file TestPackage.jl which defines module Inner
 		"test_macro2.jl" # This skips the whole file test_macro2.jl
-		"31-32" # This skips from line 24 to 25 in the main file, including extrema. Which are the 2 include statements of the inner SpecificImport module
+		"33-34" # This skips lines in the main file, which are the 2 include statements of the inner SpecificImport module
 		"test_macro1.jl:::28-10000" # This skips parts of test_macro1.jl
 	end
 end

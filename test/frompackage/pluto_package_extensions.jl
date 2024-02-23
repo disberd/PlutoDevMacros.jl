@@ -1,6 +1,6 @@
 using Test
 import Pkg
-import Pkg.Types: Context, EnvCache, PackageSpec
+import Pkg.Types: Context, EnvCache, PackageSpec, GitRepo
 import Pluto: update_save_run!, update_run!, WorkspaceManager, ClientSession, ServerSession, Notebook, Cell, project_relative_path, SessionActions, load_notebook, Configuration
 
 indirect_path = normpath(@__DIR__, "../TestIndirectExtension/")
@@ -11,8 +11,9 @@ c = Context(;env = EnvCache(joinpath(direct_path, "Project.toml")))
 let
     url = "https://github.com/disberd/PlotlyExtensionsHelper.jl" 
     rev = "main"
+    repo = GitRepo(;source = url, rev)
     Pkg.add(c, [
-        PackageSpec(; url, rev, repo = Pkg.Types.GitRepo(;source = url, rev) )
+        PackageSpec(; url, rev, repo)
     ])
 end
 

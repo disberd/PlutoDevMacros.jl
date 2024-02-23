@@ -1,4 +1,4 @@
-import PlutoDevMacros.FromPackage: process_outside_pluto!, load_module_in_caller, modname_path, fromparent_module, parseinput, get_package_data, @fromparent, _combined, process_skiplines!, get_temp_module, LineNumberRange, parse_skipline, extract_module_expression
+import PlutoDevMacros.FromPackage: process_outside_pluto!, load_module_in_caller, modname_path, fromparent_module, parseinput, get_package_data, @fromparent, _combined, process_skiplines!, get_temp_module, LineNumberRange, parse_skipline, extract_module_expression, _inrange
 import Pkg
 
 using Test
@@ -167,6 +167,11 @@ function clean_expr(ex)
 end
 
 @testset "Skip Lines" begin
+    # Some coverage
+    ln = LineNumberNode(3, Symbol(@__FILE__))
+    lnr = LineNumberRange(ln)
+    @test lnr.first == lnr.last
+    @test _inrange(ln, ln)
     @testset "Parsing" begin
         function iseq(lr1::LineNumberRange, lr2::LineNumberRange)
             lr1.first == lr2.first && lr1.last == lr2.last

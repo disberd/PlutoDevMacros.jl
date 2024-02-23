@@ -1,7 +1,7 @@
 name = "PlutoDevMacros"
 uuid = "a0499f29-c39b-4c5c-807c-88074221b949"
 authors = ["Alberto Mengali <disberd@gmail.com>"]
-version = "0.7.0"
+version = "0.7.1"
 
 [deps]
 AbstractPlutoDingetjes = "6e696c72-6542-2067-7265-42206c756150"

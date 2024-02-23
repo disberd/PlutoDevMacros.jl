@@ -1,4 +1,4 @@
-import PlutoDevMacros.FromPackage: process_outside_pluto!, load_module_in_caller, modname_path, fromparent_module, parseinput, get_package_data, @fromparent, _combined, process_skiplines!, get_temp_module, LineNumberRange, parse_skipline, package_dependencies, extract_module_expression
+import PlutoDevMacros.FromPackage: process_outside_pluto!, load_module_in_caller, modname_path, fromparent_module, parseinput, get_package_data, @fromparent, _combined, process_skiplines!, get_temp_module, LineNumberRange, parse_skipline, extract_module_expression, _inrange
 import Pkg
 
 using Test
@@ -12,15 +12,12 @@ pop!(LOAD_PATH)
 
 # We point at the helpers file inside the FromPackage submodule, we only load the constants in the Loaded submodule
 outpackage_target = abspath(@__DIR__,"../..")
-inpackage_target = joinpath(outpackage_target, "src/frompackage/helpers.jl")
+inpackage_target = joinpath(outpackage_target, "src/frompackage/types.jl")
 # We simulate a caller from a notebook by appending a fake cell-id
 outpluto_caller = abspath(@__DIR__,"../..")
 inpluto_caller = join([outpluto_caller, "#==#", "00000000-0000-0000-0000-000000000000"])
 
 @testset "Errors" begin
-    @test_throws "No parent project" mktempdir() do tmpdir
-            package_dependencies(tmpdir)
-    end
     @test_throws "No project" mktempdir() do tmpdir
             get_package_data(tmpdir)
     end 
@@ -170,6 +167,11 @@ function clean_expr(ex)
 end
 
 @testset "Skip Lines" begin
+    # Some coverage
+    ln = LineNumberNode(3, Symbol(@__FILE__))
+    lnr = LineNumberRange(ln)
+    @test lnr.first == lnr.last
+    @test _inrange(ln, ln)
     @testset "Parsing" begin
         function iseq(lr1::LineNumberRange, lr2::LineNumberRange)
             lr1.first == lr2.first && lr1.last == lr2.last

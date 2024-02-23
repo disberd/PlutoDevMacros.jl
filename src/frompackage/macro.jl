@@ -49,6 +49,7 @@ end
 function frompackage(ex, target_file, caller, caller_module; macroname)
 	is_notebook_local(caller) || return process_outside_pluto!(ex, get_package_data(target_file))
 	_, cell_id = _cell_data(caller)
+	maybe_update_envcache(Base.active_project(), default_ecg(); notebook = true)
 	proj_file = Base.current_project(target_file)
 	id_name = _id_name(cell_id)
 	ex isa Expr || error("You have to call this macro with an import statement or a begin-end block of import statements")
@@ -93,9 +94,6 @@ function frompackage(ex, target_file, caller, caller_module; macroname)
 			# We also send the reload button as an @info log, so that we can use the cell output to format the error nicely
 			@info $html_reload_button($cell_id; text = $text)
 			rethrow()
-		finally
-			# We add the expression that cleans the load path 
-			$clean_loadpath($proj_file)
 		end
 	end
 	return out
@@ -118,8 +116,6 @@ function _combined(ex, target, calling_file, caller_module; macroname)
 			# We send a log to maintain the reload button
 			@info html_reload_button(cell_id; text, err = true)
 		end
-		# We have to also remove the project from the load path
-		clean_loadpath(proj_file)
 		# Wrap ParseError in LoadError (see https://github.com/disberd/PlutoDevMacros.jl/issues/30)
 		we = wrap_parse_error(e)
 		# If we are at macroexpand, simply rethrow here, ohterwise output the expression with the error

@@ -1,7 +1,7 @@
 using Test
 import Pluto: update_save_run!, update_run!, WorkspaceManager, ClientSession, ServerSession, Notebook, Cell, project_relative_path, SessionActions, load_notebook, Configuration
 
-include("helpers.jl")
+include(joinpath(@__DIR__, "helpers.jl"))
 
 instantiate_and_import(:(import TestPackage), normpath(@__DIR__, "../TestPackage"))
 

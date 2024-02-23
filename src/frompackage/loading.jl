@@ -96,8 +96,11 @@ end
 
 function maybe_create_module(m::Module)
 	if !isassigned(fromparent_module) 
-		fromparent_module[] = Core.eval(m, :(module $(gensym(:frompackage)) 
+		fromparent_m = Core.eval(m, :(module $(gensym(:frompackage)) 
 		end))
+		# We also set a reference to LoadedModules for access from the notebook
+		Core.eval(fromparent_m, :(const _LoadedModules_ = $LoadedModules))
+		fromparent_module[] = fromparent_m
 	end
 	return fromparent_module[]
 end
@@ -127,11 +130,12 @@ function load_module_in_caller(package_dict::Dict, caller_module)
 end
 function load_module_in_caller(mod_exp::Expr, package_dict::Dict, caller_module)
 	target_file = package_dict["target"]
+	ecg = default_ecg()
 	# If the module Reference inside fromparent_module is not assigned, we create the module in the calling workspace and assign it
 	_MODULE_ = maybe_create_module(caller_module)
 	# We reset the module path in case it was not cleaned
 	mod_name = mod_exp.args[2]
-	proj_file = Base.current_project(target_file)
+	proj_file = ecg |> get_active |> get_project_file
 	# We inject the project in the LOAD_PATH if it is not present already
 	add_loadpath(proj_file)
 	# We try evaluating the expression within the custom module
@@ -157,26 +161,14 @@ function load_module_in_caller(mod_exp::Expr, package_dict::Dict, caller_module)
 	return package_dict
 end
 
-# This function tries to load package extensions for the module `package_module` loaded with `@frompackage`
-function load_package_extensions(package_module::Module, caller_module)
-	isdefined(package_module, :_fromparent_dict_) || error("The provided package module has not been generated with @frompackage/@fromparent")
-	package_dict = package_module._fromparent_dict_
-	load_package_extensions(package_module, package_dict, caller_module)
-end
 function load_package_extensions(package_dict::Dict, caller_module::Module)
 	mod_name = package_dict["name"] |> Symbol
 	package_module = getfield(maybe_create_module(caller_module), mod_name)
-	load_package_extensions(package_module, package_dict, caller_module)
+	load_package_extensions(package_module, package_dict)
 end
-function load_package_extensions(package_module::Module, package_dict::Dict, caller_module::Module)
-	add_loadpath(package_dict)
+function load_package_extensions(package_module::Module, package_dict::Dict)
+	add_loadpath(default_ecg())
 	# We try to reload 
-	try
-		maybe_add_extensions!(package_module, package_dict, caller_module)
-	catch
-		rethrow()
-	finally
-		clean_loadpath(package_dict)
-	end
+	maybe_add_extensions!(package_module, package_dict)
 	nothing
 end

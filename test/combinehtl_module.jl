@@ -318,11 +318,13 @@ end
 
 @testset "Show methods" begin
     ps = PlutoScript("asd", "lol")
-    s = to_string(ps, MIME"text/javascript"())
-    hs = to_string(ps, MIME"text/html"())
+    s = to_string(ps, print_javascript; pluto = true)
+    hs = to_string(ps, print_html; pluto = true)
     @test contains(s, r"JS Listeners .* PlutoDevMacros") === false # No listeners helpers should be added
     @test contains(s, "invalidation.then(() => {\nlol") === true # Test that the invaliation script is printed
     @test contains(hs, r"<script id='\w+'") === true
+
+    @test to_string(ps, print_javascript; pluto = false) == to_string(ps, MIME"text/javascript"())
 
     struct ASD end
     function PlutoCombineHTL.print_javascript(io::IO, ::ASD; pluto)
@@ -334,8 +336,8 @@ end
     end
 
     cs = make_script([ASD() |> PrintToScript])
-    s_in = to_string(cs, MIME"text/javascript"(); pluto = true)
-    s_out = to_string(cs, MIME"text/javascript"(); pluto = false)
+    s_in = to_string(cs, print_javascript; pluto = true)
+    s_out = to_string(cs, print_javascript; pluto = false)
     @test contains(s_in, "ASD_PLUTO")
     @test contains(s_out, "ASD_NONPLUTO")
 
@@ -358,12 +360,12 @@ end
     @test length(findall("published object on Pluto", s_in)) == 1
 
     ds = DualScript("addScriptEventListeners('lol')", "magic"; id = "custom_id")
-    s_in = to_string(ds, MIME"text/javascript"(); pluto = true)
-    s_out = to_string(ds, MIME"text/javascript"(); pluto = false)
+    s_in = to_string(ds, print_javascript; pluto = true)
+    s_out = to_string(ds, print_javascript; pluto = false)
     @test contains(s_in, r"JS Listeners .* PlutoDevMacros") === true
     @test contains(s_out, r"JS Listeners .* PlutoDevMacros") === false # The listeners where only added in Pluto
-    hs_in = to_string(ds, MIME"text/html"(); pluto = true)
-    hs_out = to_string(ds, MIME"text/html"(); pluto = false)
+    hs_in = to_string(ds, print_html; pluto = true)
+    hs_out = to_string(ds, print_html; pluto = false)
     @test contains(hs_in, "<script id='custom_id'>") === true
     @test contains(hs_out, "<script id='custom_id'>") === true
 
@@ -378,17 +380,15 @@ end
     @test_throws r"matching show\(.*::Missing" print_javascript(IOBuffer(), missing)
     # Test that print_javascript goes to Base.show with mime text/javascript by default
     @test_throws r"matching show\(.*::Missing" print_html(IOBuffer(), missing)
-    # Test that to_string only supports text/html and text/javascript
-    @test_throws "Unsupported mime" to_string(1, MIME"text/plain"())
 
     n = NormalNode("asd")
     # Test that interpolation of nodes in @htl works
     r = @htl("$n")
-    s = to_string(r, MIME"text/html"(); pluto = false)
+    s = to_string(r, print_html; pluto = false)
     @test contains(s, "asd")
 
     cn = make_node([n])
-    s = to_string(cn, MIME"text/html"(); pluto = false)
+    s = to_string(cn, print_html; pluto = false)
     @test contains(s, "asd")
 
     # Test that interpolation of ScriptContent inside @htl <script> tags work 
@@ -400,8 +400,8 @@ end
     # Show outside Pluto
     # PlutoScript should be empty when shown out of Pluto
     n = PlutoScript("asd")
-    s_in = to_string(n, MIME"text/html"(); pluto = true)
-    s_out = to_string(n, MIME"text/html"(); pluto = false)
+    s_in = to_string(n, print_html; pluto = true)
+    s_out = to_string(n, print_html; pluto = false)
     @test contains(s_in, "script id='") === true
     @test isempty(s_out)
     @test contains(string(formatted_code(n)), "```html\n<script id='")
@@ -415,8 +415,8 @@ end
 
     # DualScript
     n = DualScript("asd", "lol"; id = "asd")
-    s_in = to_string(n, MIME"text/html"(); pluto = true)
-    s_out = to_string(n, MIME"text/html"(); pluto = false)
+    s_in = to_string(n, print_html; pluto = true)
+    s_out = to_string(n, print_html; pluto = false)
     @test contains(s_in, "script id='asd'") === true
     @test contains(s_out, "script id='asd'") === true
     @test contains(string(formatted_code(n; pluto=true)), "```html\n<script id='asd'")
@@ -427,19 +427,19 @@ end
     # Test when Pluto compat is false
     n = DualScript(n; add_pluto_compat = false)
     @test add_pluto_compat(n) === false
-    s_out = to_string(n, MIME"text/html"(); pluto = false)
+    s_out = to_string(n, print_html; pluto = false)
     @test contains(s_out, LOCAL_MODULE_URL[]) === false
     # Test the return
     n = DualScript(PlutoScript(;returned_element = "asd"), NormalScript(;returned_element = "lol"))
-    s_in = to_string(n, MIME"text/html"(); pluto = true)
-    s_out = to_string(n, MIME"text/html"(); pluto = false)
+    s_in = to_string(n, print_html; pluto = true)
+    s_out = to_string(n, print_html; pluto = false)
     @test contains(s_in, "return asd")
     @test contains(s_out, "currentScript.insertAdjacentElement('beforebegin', lol)")
 
     # NormalNode should be empty when shown out of Pluto
     n = NormalNode("asd")
-    s_in = to_string(n, MIME"text/html"(); pluto = true)
-    s_out = to_string(n, MIME"text/html"(); pluto = false)
+    s_in = to_string(n, print_html; pluto = true)
+    s_out = to_string(n, print_html; pluto = false)
     @test isempty(s_in) === true
     @test s_out === "asd\n"
 
@@ -453,9 +453,9 @@ end
         @test formatted_contents(l)(ds) != formatted_code(l; only_contents = false)
     end
 
-    @test formatted_code(ds) == formatted_code(ds, MIME"text/html"())
+    @test formatted_code(ds) == formatted_code(ds, print_html)
     sc = ScriptContent("asd")
-    @test formatted_code(sc) == formatted_code(sc, MIME"text/javascript"())
+    @test formatted_code(sc) == formatted_code(sc, print_javascript)
     s = let
         io = IOBuffer()
         show(io, MIME"text/html"(), sc)

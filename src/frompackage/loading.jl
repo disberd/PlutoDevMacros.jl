@@ -109,7 +109,7 @@ end
 
 function deps_submodule_expr(dict)
 	(;direct) = dict["PkgInfo"]
-	ex = :(module _DirectDeps_ end)
+	ex = :(module _DepsImports_ end)
 	toplevel = ex.args[end]
 	args = toplevel.args
 	for pkg in values(direct)

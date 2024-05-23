@@ -98,9 +98,14 @@ function import_type(args, dict)
 	first_name === :. && return RelativeImport(mod_name)
 	first_name ∈ (:ParentModule, :<) && return FromParentImport(mod_name)
 	(;direct, indirect) = dict["PkgInfo"]
-	first_name === :> && String(args[2]) ∈ keys(direct) && return FromDepsImport(mod_name)
-	# String(first_name) ∈ _stdlibs && return FromDepsImport(mod_name)
-	# String(first_name) ∈ keys(indirect) && return FromDepsImport(mod_name)
+	if first_name === :> 
+        package_name = String(args[2])
+        direct_import = get(direct, package_name, nothing)
+        !isnothing(direct_import) && return FromDepsImport(mod_name, direct_import, true)
+        indirect_import = get(indirect, package_name, nothing)
+        !isnothing(indirect_import) && return FromDepsImport(mod_name, indirect_import, false)
+        error("The package $package_name was not found in the package dependencies")
+    end
 	# If we reach here we don't have a supported import type
 	error("The provided import expression is not supported, please look at @frompackage documentation to see the supported imports")
 end
@@ -222,7 +227,6 @@ function process_imported_nameargs!(args, dict, t::FromPackageImport)
 	prepend!(args, name_init)
 end
 function process_imported_nameargs!(args, dict, t::Union{FromParentImport, RelativeImport})
-	mod_name = Symbol(dict["name"])
 	name_init = modname_path(fromparent_module[])
 	# Here transform the relative module name to the one based on the full loaded module path
 	target_path = get(dict, "Target Path", []) |> reverse
@@ -238,12 +242,25 @@ function process_imported_nameargs!(args, dict, t::Union{FromParentImport, Relat
 	# We prepend the target_path to the args
 	prepend!(args, name_init, target_path)
 end
-function process_imported_nameargs!(args, dict, ::FromDepsImport)
-	args[1] = :_DirectDeps_
-	mod_name = Symbol(dict["name"])
-	pushfirst!(args, mod_name)
-	name_init = modname_path(fromparent_module[])
+# Load a direct or indirect dependency of the target package
+function process_imported_nameargs!(args, dict, t::FromDepsImport)
+    deps_module_name = :_DepsImports_
+	args[1] = deps_module_name
+    parent_module = getfield(fromparent_module[], t.mod_name)
+	name_init = modname_path(parent_module)
 	prepend!(args, name_init)
+    # If we have a direct dependency, we just return as that is already loaded in the deps
+    t.direct && return
+    # We now add the import to an array in the dict, so that we can load the specific module in the _DepsImports_ submodule
+    deps_module = getfield(parent_module, deps_module_name)
+    dep_name = Symbol(t.id.name)
+    if !isdefined(deps_module, dep_name)
+        # We add the module to the deps_module
+        _m = get(Base.loaded_modules, t.id, nothing)
+        @assert !isnothing(_m) "The module $(t.id) was not found in the loaded modules"
+        Core.eval(deps_module, :(const $dep_name = $(_m)))
+    end
+    return nothing
 end
 
 ## parseinput

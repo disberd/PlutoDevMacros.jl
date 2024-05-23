@@ -38,9 +38,20 @@ _inrange(ln::LineNumberNode, ln2::LineNumberNode) = ln === ln2
 
 # We define here the types to identify the imports
 abstract type ImportType end
-for name in (:FromParentImport, :FromPackageImport, :FromDepsImport, :RelativeImport)
+for name in (:FromParentImport, :FromPackageImport, :RelativeImport)
 	expr = :(struct $name <: ImportType
 		mod_name::Symbol
 	end) 
 	eval(expr)
+end
+# We define the FromDepsImport outside as it has custom fields
+struct FromDepsImport <: ImportType
+    mod_name::Symbol
+    id::Base.PkgId
+    direct::Bool
+end
+function FromDepsImport(mod_name, pkginfo::PkgInfo, direct::Bool)
+    uuid = pkginfo.uuid
+    id = Base.PkgId(uuid, pkginfo.name)
+    FromDepsImport(mod_name, id, direct)
 end

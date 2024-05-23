@@ -37,7 +37,11 @@ end
 # ╔═╡ 4b493e7f-78d5-4005-b7c8-630dca053e6b
 TestPackage isa Module || error("TestPackage not loaded correctly")
 
+# ╔═╡ 7af0da90-f7b5-4b36-9964-2154b07f419e
+test_type_error(TestType(), 3)
+
 # ╔═╡ Cell order:
 # ╠═9ff61650-18ef-11ef-165b-13081b75c35f
 # ╠═e9f7421b-9ed0-4f4d-b458-689b301dad5c
 # ╠═4b493e7f-78d5-4005-b7c8-630dca053e6b
+# ╠═7af0da90-f7b5-4b36-9964-2154b07f419e

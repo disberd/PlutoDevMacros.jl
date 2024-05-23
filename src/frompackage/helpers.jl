@@ -234,3 +234,18 @@ function html_reload_button(cell_id; text = "Reload @frompackage", err = false)
 	""")
 	make_script([container, hide_this_log()]) |> make_html
 end
+
+# Function to clean the filepath from the Pluto cell delimiter if present
+cleanpath(path::String) = first(split(path, "#==#")) |> abspath
+# Check if two paths are equal, ignoring case on the drive letter on windows.
+function issamepath(path1::String, path2::String)
+	path1 = abspath(path1)
+	path2 = abspath(path2)
+	if Sys.iswindows()
+		uppercase(path1[1]) == uppercase(path2[1]) || return false
+		path1[2:end] == path2[2:end] && return true
+	else
+		path1 == path2 && return true
+	end
+end
+issamepath(path1::Symbol, path2::Symbol) = issamepath(String(path1), String(path2))

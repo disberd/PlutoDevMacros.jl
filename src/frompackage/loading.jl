@@ -4,20 +4,6 @@ struct StopEval
 end
 StopEval(reason::String) = StopEval(reason, LineNumberNode(0))
 
-# Function to clean the filepath from the Pluto cell delimiter if present
-cleanpath(path::String) = first(split(path, "#==#")) |> abspath
-# Check if two paths are equal, ignoring case on the drive letter on windows.
-function issamepath(path1::String, path2::String)
-	path1 = abspath(path1)
-	path2 = abspath(path2)
-	if Sys.iswindows()
-		uppercase(path1[1]) == uppercase(path2[1]) || return false
-		path1[2:end] == path2[2:end] && return true
-	else
-		path1 == path2 && return true
-	end
-end
-
 ## general
 function eval_in_module(_mod, line_and_ex, dict)
 	loc, ex = line_and_ex.args

@@ -32,7 +32,6 @@ end
 @fromparent begin
 	using *
 	using >.TestPackage
-	using >.TestDirectExtension
 end
 
 # ╔═╡ 4b493e7f-78d5-4005-b7c8-630dca053e6b

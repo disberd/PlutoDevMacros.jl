@@ -6,8 +6,8 @@ module FromPackage
 
     export @fromparent, @addmethod, @frompackage
 
-    include("envcachegroup.jl")
     include("types.jl")
+    include("envcachegroup.jl")
     include("helpers.jl")
     include("code_parsing.jl")
     include("loading.jl")

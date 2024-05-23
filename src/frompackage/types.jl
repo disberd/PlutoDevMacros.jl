@@ -27,7 +27,7 @@ LineNumberRange(file::AbstractString, first::Int, last::Int) = LineNumberRange(
 )
 ## Inclusion in LinuNumberRange
 function _inrange(ln::LineNumberNode, lnr::LineNumberRange)
-	ln.file === lnr.first.file || return false # The file is not the same
+	issamepath(ln.file, lnr.first.file) || return false # The file is not the same
 	if ln.line >= lnr.first.line && ln.line <= lnr.last.line
 		return true
 	else

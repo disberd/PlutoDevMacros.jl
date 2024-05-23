@@ -88,3 +88,15 @@ srcdir = joinpath(@__DIR__, "../TestParseError/src/")
     end
     SessionActions.shutdown(ss, nb)
 end
+
+# We test dev dependencies with relative path (issue 30)
+srcdir = joinpath(@__DIR__, "../TestDevDependency/src/")
+@testset "test_dev_dependency.jl" begin
+    ss = ServerSession(; options)
+    path = abspath(srcdir, "../test_notebook.jl")
+    nb = SessionActions.open(ss, path; run_async=false)
+    for cell in nb.cells
+        @test noerror(cell)
+    end
+    SessionActions.shutdown(ss, nb)
+end

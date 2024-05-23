@@ -1,5 +1,6 @@
 Manifest.toml
 !test/TestPackage/Manifest.toml
+!test/TestDevDependency/Manifest.toml
 
 *.jlcov
 docs/build/

@@ -2,7 +2,7 @@
 
 julia_version = "1.10.3"
 manifest_format = "2.0"
-project_hash = "2fe7e1866c064ce396ecdc7e80f9bb1c9668da10"
+project_hash = "4e9754c54698075a330bc46991cb3483a15dc9ee"
 
 [[deps.AbstractPlutoDingetjes]]
 deps = ["Pkg"]
@@ -168,19 +168,6 @@ deps = ["Artifacts", "Dates", "Downloads", "FileWatching", "LibGit2", "Libdl", "
 uuid = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
 version = "1.10.0"
 
-[[deps.PlotlyExtensionsHelper]]
-git-tree-sha1 = "47ce2e2d72ab025a2343329eb3a66691ce7e2102"
-uuid = "a7e57fc7-3548-4021-90c3-ac0e175068b1"
-version = "0.1.0"
-
-    [deps.PlotlyExtensionsHelper.extensions]
-    PlotlyBaseExt = "PlotlyBase"
-    PlutoPlotlyExt = "PlutoPlotly"
-
-    [deps.PlotlyExtensionsHelper.weakdeps]
-    PlotlyBase = "a03496cd-edff-5a9b-9e67-9cda94a718b5"
-    PlutoPlotly = "8e989ff0-3d88-8e9f-f020-2b208a939ff0"
-
 [[deps.PlutoDevMacros]]
 deps = ["AbstractPlutoDingetjes", "DocStringExtensions", "HypertextLiteral", "InteractiveUtils", "MacroTools", "Markdown", "Pkg", "Random", "TOML"]
 path = "../.."
@@ -262,23 +249,9 @@ deps = ["ArgTools", "SHA"]
 uuid = "a4e569a6-e804-4fa4-b0f3-eef7a1d5b13e"
 version = "1.10.0"
 
-[[deps.TestDirectExtension]]
-deps = ["PlotlyExtensionsHelper"]
-path = "../TestDirectExtension"
-uuid = "f446dfe5-66ce-4684-9abf-53561df9f9a0"
-version = "0.1.0"
-
-    [deps.TestDirectExtension.extensions]
-    Magic = "Example"
-    PlotlyBaseExt = "PlotlyBase"
-
-    [deps.TestDirectExtension.weakdeps]
-    Example = "7876af07-990d-54b4-ab0e-23690620f79a"
-    PlotlyBase = "a03496cd-edff-5a9b-9e67-9cda94a718b5"
-
 [[deps.TestPackage]]
 deps = ["BenchmarkTools", "InteractiveUtils", "Markdown", "PlutoDevMacros", "Revise", "TOML"]
-path = "C:\\Users\\Alberto.Mengali\\Repos\\github\\mine\\PlutoDevMacros\\test\\TestPackage"
+path = "../TestPackage"
 uuid = "0bd6dda5-c829-4a00-b747-995a3287d1fd"
 version = "0.1.0"
 

@@ -4,5 +4,4 @@ authors = ["Alberto Mengali <disberd@gmail.com>"]
 version = "0.1.0"
 
 [deps]
-TestDirectExtension = "f446dfe5-66ce-4684-9abf-53561df9f9a0"
 TestPackage = "0bd6dda5-c829-4a00-b747-995a3287d1fd"

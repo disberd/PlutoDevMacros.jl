@@ -35,14 +35,10 @@ end
 	using >.TestDirectExtension
 end
 
-# ╔═╡ 18d4afa9-a276-46c6-85e7-f0eb0a755fba
-TestDirectExtension isa Module || error("TestDirectExtension not loaded correctly")
-
 # ╔═╡ 4b493e7f-78d5-4005-b7c8-630dca053e6b
 TestPackage isa Module || error("TestPackage not loaded correctly")
 
 # ╔═╡ Cell order:
 # ╠═9ff61650-18ef-11ef-165b-13081b75c35f
 # ╠═e9f7421b-9ed0-4f4d-b458-689b301dad5c
-# ╠═18d4afa9-a276-46c6-85e7-f0eb0a755fba
 # ╠═4b493e7f-78d5-4005-b7c8-630dca053e6b

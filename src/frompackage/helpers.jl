@@ -1,101 +1,7 @@
 import ..PlutoCombineHTL: make_html, make_script
 import ..PlutoDevMacros: hide_this_log
-import Pkg, TOML
-using Pkg.Types: write_project
 
 get_temp_module() = fromparent_module[]
-
-function extensions_dir(env::EnvCache)
-	pkg = env.pkg
-	isnothing(pkg) && return nothing
-	ext_dir = joinpath(pkg.path, "ext")
-end
-get_manifest_file(e::EnvCache) = e.manifest_file
-get_project_file(e::EnvCache) = e.project_file
-get_manifest(e::EnvCache) = e.manifest
-get_project(e::EnvCache) = e.project
-function get_entrypoint(e::EnvCache)
-	pkg = e.pkg
-	isnothing(pkg) && return ""
-	entrypoint = joinpath(pkg.path, "src", pkg.name * ".jl")
-end
-get_active(ecg::EnvCacheGroup) = ecg.active
-get_target(ecg::EnvCacheGroup) = ecg.target
-get_notebook(ecg::EnvCacheGroup) = ecg.notebook
-
-function maybe_update_envcache(projfile::String, ecg::EnvCacheGroup; notebook = false)
-	f = notebook ? get_notebook : get_target
-	env = f(ecg)
-	if isnothing(env) || env.project_file != projfile
-		setproperty!(ecg, notebook ? :notebook : :target, EnvCache(projfile))
-		if !notebook
-			# We changed the target so we force an update to ecg
-			update_ecg!(ecg; force = true)
-		end
-	end
-	return nothing
-end
-
-
-function update_envcache!(e::EnvCache)
-	e.project = read_project(e.project_file)
-	e.manifest = read_manifest(e.manifest_file)
-	return e
-end
-update_envcache!(::Nothing) = nothing
-# Update the active EnvCache by eventually copying reduced project and manifest from the package EnvCache
-function update_ecg!(ecg::EnvCacheGroup; force = false, io::IO = devnull)
-	c = Context(; io)
-	# Update the target and notebook ecg 
-	update_envcache!(ecg |> get_target)
-	update_envcache!(ecg |> get_notebook)
-	active = get_active(ecg)
-	active_manifest = active |> get_manifest_file
-	active_project = active |> get_project_file
-	target_manifest = get_target(ecg) |> get_manifest_file
-	if !isfile(target_manifest)
-		@info "It seems that the target package does not have a manifest file. Trying to instantiate its environment"
-		c.env = ecg.target
-        Pkg.instantiate(c)
-	end
-	if !isfile(active_manifest) || !isfile(active_project)
-		force = true
-	end
-	if !force
-		active_mtime = mtime(active_manifest)
-		target_mtime = mtime(ecg |> get_target |> get_manifest_file)
-		force = force || active_mtime < target_mtime
-	end
-    if force
-		mkpath(dirname(active_manifest))
-		# We copy a reduced version of the project, only with deps, weakdeps and compat
-        pd = ecg.target.project.other
-        ad = Dict{String, Any}((k => pd[k] for k in ("deps", "compat", "weakdeps") if haskey(pd, k)))
-        write_project(ad, active_project)
-        # We copy the Manifest
-        cp(target_manifest, active_manifest; force = true)
-        # We call instantiate
-		update_envcache!(ecg.active)
-		c.env = ecg.active
-        Pkg.instantiate(c)
-    end
-    return ecg
-end
-
-# Function to get the package dependencies from the manifest
-function target_dependencies(target::EnvCache)
-	manifest_deps = target.manifest.deps
-	proj_deps = target.project.deps
-	direct = Dict{String, PkgInfo}()
-	indirect = Dict{String, PkgInfo}()
-	for (uuid,pkgentry) in manifest_deps
-		(;name, version) = pkgentry
-		d = haskey(proj_deps, name) ? direct : indirect
-		d[name] = PkgInfo(name, uuid, version)
-	end
-	direct, indirect
-end
-
 
 #=
 We don't use manual rerun so we just comment this till after we can use it
@@ -328,3 +234,18 @@ function html_reload_button(cell_id; text = "Reload @frompackage", err = false)
 	""")
 	make_script([container, hide_this_log()]) |> make_html
 end
+
+# Function to clean the filepath from the Pluto cell delimiter if present
+cleanpath(path::String) = first(split(path, "#==#")) |> abspath
+# Check if two paths are equal, ignoring case on the drive letter on windows.
+function issamepath(path1::String, path2::String)
+	path1 = abspath(path1)
+	path2 = abspath(path2)
+	if Sys.iswindows()
+		uppercase(path1[1]) == uppercase(path2[1]) || return false
+		path1[2:end] == path2[2:end] && return true
+	else
+		path1 == path2 && return true
+	end
+end
+issamepath(path1::Symbol, path2::Symbol) = issamepath(String(path1), String(path2))

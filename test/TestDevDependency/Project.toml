@@ -1,0 +1,7 @@
+name = "TestDevDependency"
+uuid = "d7cf92be-9f46-459f-a08c-3d114b0b7a31"
+authors = ["Alberto Mengali <disberd@gmail.com>"]
+version = "0.1.0"
+
+[deps]
+TestPackage = "0bd6dda5-c829-4a00-b747-995a3287d1fd"

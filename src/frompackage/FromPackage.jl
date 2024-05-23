@@ -1,9 +1,13 @@
 module FromPackage
     import ..PlutoDevMacros: @addmethod, _cell_data
     using HypertextLiteral
+    import Pkg
+    import TOML
+
     export @fromparent, @addmethod, @frompackage
 
     include("types.jl")
+    include("envcachegroup.jl")
     include("helpers.jl")
     include("code_parsing.jl")
     include("loading.jl")

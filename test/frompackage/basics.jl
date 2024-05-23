@@ -120,7 +120,7 @@ end
 
             # FromParent import
             ex = :(import *)
-            expected = :(import $(parent_path...).PlutoDevMacros.FromPackage: @addmethod, @frompackage, @fromparent, FromPackage, _cell_data)
+            expected = :(import $(parent_path...).PlutoDevMacros.FromPackage: @addmethod, @frompackage, @fromparent, FromPackage, Pkg, TOML, _cell_data)
             @test expected == f(ex)
 
             ex = :(import ParentModule: *)
@@ -214,7 +214,7 @@ end
         ex = quote
             import >.HypertextLiteral
             @skiplines begin
-                "frompackage/FromPackage.jl:::8-100" # We are skipping from line 8, so we only load helpers.jl
+                "frompackage/FromPackage.jl:::12-100" # We are skipping from line 12, so we only load up to helpers.jl
             end
         end
         process_skiplines!(ex, dict)
@@ -231,7 +231,7 @@ end
         ex = quote
             import >.HypertextLiteral
             @skiplines begin
-                $("$(fullpath):::9-100") # We are skipping from line 9
+                $("$(fullpath):::13-100") # We are skipping from line 13
             end
         end
         process_skiplines!(ex, dict)
@@ -241,6 +241,6 @@ end
         @test isdefined(_m, :_cell_data) # This is directly at the top of the module
         @test isdefined(_m, :macro_cell) # this variable is defined inside helpers.jl
         @test isdefined(_m, :extract_file_ast) # This is defined inside code_parsing.jl
-        @test !isdefined(_m, :load_module_in_caller) # This is defined inside loading.jl, which should be skipped as it's line FromPackage.jl:9
+        @test !isdefined(_m, :load_module_in_caller) # This is defined inside loading.jl, which should be skipped as it's line FromPackage.jl:13
     end
 end

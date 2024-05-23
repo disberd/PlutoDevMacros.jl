@@ -1,28 +1,8 @@
-import Pkg
-import Pkg.Types: EnvCache, write_project, Context, read_project, read_manifest
-
 const _stdlibs = first.(values(Pkg.Types.stdlibs()))
 
 const fromparent_module = Ref{Module}()
 const macro_cell = Ref("undefined")
 const manifest_names = ("JuliaManifest.toml", "Manifest.toml")
-
-@kwdef mutable struct EnvCacheGroup
-    "This is the EnvCache of the environment added by @fromparent to the LOAD_PATH"
-    active::EnvCache = EnvCache(mktempdir())
-    "This is the environment of the target of @fromparent"
-    target::Union{Nothing, EnvCache} = nothing
-    "This is the environment of the notebook calling @fromparent"
-    notebook::Union{Nothing, EnvCache} = nothing
-end
-
-const DEFAULT_ECG = Ref{EnvCacheGroup}()
-function default_ecg()
-	if !isassigned(DEFAULT_ECG)
-		DEFAULT_ECG[] = EnvCacheGroup()
-	end
-	return DEFAULT_ECG[]
-end
 
 struct PkgInfo 
 	name::Union{Nothing, String}
@@ -47,7 +27,7 @@ LineNumberRange(file::AbstractString, first::Int, last::Int) = LineNumberRange(
 )
 ## Inclusion in LinuNumberRange
 function _inrange(ln::LineNumberNode, lnr::LineNumberRange)
-	ln.file === lnr.first.file || return false # The file is not the same
+	issamepath(ln.file, lnr.first.file) || return false # The file is not the same
 	if ln.line >= lnr.first.line && ln.line <= lnr.last.line
 		return true
 	else

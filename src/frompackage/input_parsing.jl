@@ -167,7 +167,9 @@ function valid_outside_pluto!(ex, dict)
 		popfirst!(args)
 		s = String(args[1])
 		(;direct, indirect) = dict["PkgInfo"]
-		s ∈ keys(direct) && return true
+		if s ∈ keys(direct) || s ∈ keys(indirect) 
+            return true
+        end
 	end
 	# s ∈ _stdlibs && return true
 	# s ∈ keys(indirect) && return true

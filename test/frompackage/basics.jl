@@ -17,6 +17,8 @@ inpackage_target = joinpath(outpackage_target, "src/frompackage/types.jl")
 outpluto_caller = abspath(@__DIR__,"../..")
 inpluto_caller = join([outpluto_caller, "#==#", "00000000-0000-0000-0000-000000000000"])
 
+current_project = Base.active_project()
+try
 @testset "Errors" begin
     @test_throws "No project" mktempdir() do tmpdir
             get_package_data(tmpdir)
@@ -43,6 +45,9 @@ inpluto_caller = join([outpluto_caller, "#==#", "00000000-0000-0000-0000-0000000
         end
     end
 end
+finally
+    Pkg.activate(current_project)
+end
 
 @testset "Outside Pluto" begin
     dict = get_package_data(inpackage_target)
@@ -56,8 +61,8 @@ end
 
     @test valid(:(import >.HypertextLiteral)) # This is a direct dependency
     @test valid(:(import >.Random)) # This is a direct dependency and a stdlib
-    @test invalid(:(import >.Tricks)) # This is an indirect dependency, from HypertextLiteral
-    @test invalid(:(import >.Base64)) # This is an stdlib, but on in the proj
+    @test valid(:(import >.Tricks)) # This is an indirect dependency, from HypertextLiteral
+    @test invalid(:(import >.Statistics)) # This is an stdlib, but on in the proj
     @test invalid(:(import >.DataFrames)) # This is not a dependency
 
 
@@ -84,9 +89,10 @@ end
             # FromDeps imports
             ex = :(using >.MacroTools)
 
-            MacroTools = get_temp_module().PlutoDevMacros._DirectDeps_.MacroTools
+            DepsImports = get_temp_module().PlutoDevMacros._DepsImports_
+            MacroTools = DepsImports.MacroTools
 
-            mod_path = Expr(:., vcat(parent_path, [:PlutoDevMacros, :_DirectDeps_, :MacroTools])...)
+            mod_path = Expr(:., vcat(parent_path, [:PlutoDevMacros, :_DepsImports_, :MacroTools])...)
             exported_names = map(x -> Expr(:., x), names(MacroTools))
             expected = Expr(:import, Expr(:(:), mod_path, exported_names...))
             @test expected == f(ex) # This should work as MacroTools is a deps of PlutoDevMacros
@@ -96,6 +102,16 @@ end
 
             ex = :(using DataFrames)
             @test_throws "import expression is not supported" f(ex)
+
+            # Test indirect import
+            tricks_id = Base.PkgId(Base.UUID("410a4b4d-49e4-4fbc-ab6d-cb71b17b3775"), "Tricks")
+            # This will load Tricks inside _DepsImports_
+            _ex = parseinput(:(using >.Tricks), dict)
+            # We now test that Tricks is loaded in DepsImports
+            @test DepsImports.Tricks === Base.loaded_modules[tricks_id]
+            
+            # We test that trying to load a package that is not a dependency throws an error saying so
+            @test_throws "The package DataFrames was not" parseinput(:(using >.DataFrames), dict)
 
             # FromPackage imports
             ex = :(import PlutoDevMacros)

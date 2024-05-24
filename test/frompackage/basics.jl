@@ -61,7 +61,7 @@ end
 
     @test valid(:(import >.HypertextLiteral)) # This is a direct dependency
     @test valid(:(import >.Random)) # This is a direct dependency and a stdlib
-    @test valid(:(import >.Tricks)) # This is an indirect dependency, from HypertextLiteral
+    @test invalid(:(import >.Tricks)) # This is an indirect dependency, from HypertextLiteral
     @test invalid(:(import >.Statistics)) # This is an stdlib, but on in the proj
     @test invalid(:(import >.DataFrames)) # This is not a dependency
 

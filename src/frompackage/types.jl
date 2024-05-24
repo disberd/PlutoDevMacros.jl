@@ -51,7 +51,6 @@ struct FromDepsImport <: ImportType
     direct::Bool
 end
 function FromDepsImport(mod_name, pkginfo::PkgInfo, direct::Bool)
-    uuid = pkginfo.uuid
-    id = Base.PkgId(uuid, pkginfo.name)
+    id = to_pkgid(pkginfo)
     FromDepsImport(mod_name, id, direct)
 end

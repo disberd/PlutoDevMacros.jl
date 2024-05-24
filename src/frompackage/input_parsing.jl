@@ -246,22 +246,12 @@ function process_imported_nameargs!(args, dict, t::Union{FromParentImport, Relat
 end
 # Load a direct or indirect dependency of the target package
 function process_imported_nameargs!(args, dict, t::FromDepsImport)
-    deps_module_name = :_DepsImports_
-	args[1] = deps_module_name
-    parent_module = getfield(fromparent_module[], t.mod_name)
-	name_init = modname_path(parent_module)
+    # We try loading the direct or indirect import into LoadedModules
+    maybe_add_loaded_module(t.id)
+    deps_module_name = :_LoadedModules_
+	args[1] = deps_module_name # We replace `>` with _LoadedModules_
+	name_init = modname_path(fromparent_module[])
 	prepend!(args, name_init)
-    # If we have a direct dependency, we just return as that is already loaded in the deps
-    t.direct && return
-    # We now add the import to an array in the dict, so that we can load the specific module in the _DepsImports_ submodule
-    deps_module = getfield(parent_module, deps_module_name)
-    dep_name = Symbol(t.id.name)
-    if !isdefined(deps_module, dep_name)
-        # We add the module to the deps_module
-        _m = get(Base.loaded_modules, t.id, nothing)
-        @assert !isnothing(_m) "The module $(t.id) was not found in the loaded modules"
-        Core.eval(deps_module, :(const $dep_name = $(_m)))
-    end
     return nothing
 end
 

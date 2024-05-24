@@ -71,9 +71,10 @@ function eval_toplevel(_mod, args, dict)
 	return nothing
 end
 
-## module_expr
+# This will evaluate an expression which defines a new module or submodule. It will first create the module in the parent module and then evaluate each expression within this newly created module. It will also deal with processing/collecting of the names coming from `using PkgName` or `using PkgName: names...` as these can not be retrieved by simply calling `Base.names(module)`.
 function eval_module_expr(parent_module, ex, dict)
 	mod_name = ex.args[2]
+    is_target_module = mod_name === Symbol(dict["name"])
 	block = ex.args[3]
 	# We create or overwrite the current module in the parent, and we redirect stderr to avoid the replace warning
 	new_module = redirect_stderr(Pipe()) do # Apparently giving devnull as stream is not enough to suprress the warning, but Pipe works
@@ -87,7 +88,34 @@ function eval_module_expr(parent_module, ex, dict)
 	else
 		block.args[1].args
 	end
+    # We extract the using names currently collected for the parent module
+    empty_names_collector = (;
+        explicit_names = Set{Symbol}(), # Will contain names explicitly import, via `using A: a,b,c`
+        used_packages = Set{Symbol}(), # Will contain names of packages without explicit imports, like `using A`
+    )
+    parent_using_names = if is_target_module
+        dict["Using Names"] = empty_names_collector
+    else
+        # Save the parent names collector
+        parent_names = dict["Using Names"]
+        # Store a new empty collector for the module which will be generated
+        dict["Using Names"] = empty_names_collector
+        parent_names
+    end
 	out = eval_toplevel(new_module, args, dict)
+    if out isa StopEval || is_target_module
+        # We have to extract all of the exported names from the `used` Packages and put them in the explicit_names
+        (; explicit_names, used_packages) = empty_names_collector
+        for module_name in used_packages
+            _m = getfield(new_module, module_name)
+            for name in names(_m)
+                isdefined(new_module, name) && push!(explicit_names, name)
+            end
+        end
+    else
+        # In case we didn't stop evaluating, we have to put back in "Using Names" the parent module collector
+        dict["Using Names"] = parent_using_names
+    end
 	# If the module has an __init__ function, we call it
 	if isdefined(new_module, :__init__) && new_module.__init__ isa Function
 		# We do Core.eval instead of just new_module.__init__() because of world age (it will error with new_module.__init__())

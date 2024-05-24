@@ -28,23 +28,47 @@ function remove_pluto_exprs(ex)
 end
 remove_pluto_exprs(ex, args...) = remove_pluto_exprs(ex)
 
+# This will add all the names introduced by `using` statements to the Set{Symbol} in dict["Using Names"], we need to do this as these names are not returned by the `names` function. See https://discourse.julialang.org/t/get-all-names-accessible-from-a-module/98492
+function add_using_names!(package_dict::Dict, package_exprs, imported_names_args)
+    explicit_names, used_packages = package_dict["Using Names"]
+    if isempty(imported_names_args)
+        # We are in the `using PkgName` situation
+        for package_path_expr in package_exprs
+            # We simply put the last name in the module path in the `used_packages` set. This is because since it's being `used`, it will be directly available in the current module
+            mod_name = last(package_path_expr.args)
+            push!(used_packages, mod_name)
+        end
+    else
+        # We have explicit names, so we just add them to the explicit names
+        for name_expr in imported_names_args
+            new_name::Symbol = name_expr.args[1]
+            push!(explicit_names, new_name)
+        end
+	end
+end
+
 # This will substitute PackageName with the correct path pointed to the loaded module
 function modify_package_using!(ex::Expr, loc, package_dict::Dict, eval_module::Module)
 	Meta.isexpr(ex, (:using, :import)) || return true
 	package_name = Symbol(package_dict["name"])
-	package_exprs = if length(ex.args) === 1
+	package_exprs, imported_names_args = if length(ex.args) === 1
 		# We are in the form import PkgName: vars...
-		package_expr, _ = extract_import_args(ex)
-		[package_expr]
+		package_expr, imported_names = extract_import_args(ex)
+		[package_expr], imported_names
 	else
 		# We are in the form import PkgA, PkgB
-		ex.args
+		ex.args, Expr[]
 	end
+    if ex.head === :using
+        add_using_names!(package_dict, package_exprs, imported_names_args)
+    end
 	for package_expr in package_exprs
 		package_expr_args = package_expr.args
 		extracted_package_name = first(package_expr_args)
 		if extracted_package_name === package_name
+            # We modify the specific using expression to point to the correct module path
 			prepend!(package_expr_args, modname_path(fromparent_module[])) 
+        else
 		end
 	end
 	return true

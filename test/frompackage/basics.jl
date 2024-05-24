@@ -108,7 +108,7 @@ end
             # This will load Tricks inside _DepsImports_
             _ex = parseinput(:(using >.Tricks), dict)
             # We now test that Tricks is loaded in DepsImports
-            @test LoadedModules.Tricks === Base.loaded_modules[tricks_id]
+            @test LoadedModules.Tricks === Base.maybe_root_module(tricks_id)
             
             # We test that trying to load a package that is not a dependency throws an error saying so
             @test_throws "The package DataFrames was not" parseinput(:(using >.DataFrames), dict)

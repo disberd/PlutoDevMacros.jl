@@ -79,8 +79,9 @@ function maybe_add_loaded_module(id::Base.PkgId)
 	symname = id.name |> Symbol
 	# We just returns if the module is already loaded
 	isdefined(LoadedModules, symname) && return nothing
-	haskey(Base.loaded_modules, id) || error("The package $id does not seem to be loaded")
-	Core.eval(LoadedModules, :(const $symname = Base.loaded_modules[$id]))
+    loaded_module = Base.maybe_root_module(id)
+	isnothing(loaded_module) && error("The package $id does not seem to be loaded")
+	Core.eval(LoadedModules, :(const $(symname) = $(loaded_module)))
 	return nothing
 end
 

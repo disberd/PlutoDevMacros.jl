@@ -3,7 +3,7 @@ The macro supports 4 different types of import statements:
 - Relative Imports 
 - Imports from the Package module
 - Import from the Parent module (or submodule)
-- Direct dependency import.
+- Import from the Package dependencies (direct or indirect).
 which are explained in more details in their respective section
 
 All of them also allow the following (*catch-all*) notation `import
@@ -62,13 +62,16 @@ which is equivalent to:
 - `import PackageModule: *` if the `target` file provided to `@frompackage`/`@fromparent` **is not** a file *included* in the target Package. 
 
 
-## Imports from Direct dependencies
+## Imports from Package dependencies
 
-It is possible to to import direct dependencies of the target Package from
-within the `@frompackage` macro. To do so, one must prepend the package name
-with `>.`, so for example if one wants to load the `BenchmarkTools` package from
-the macro, assuming that it is indeed a direct dependency of the target package,
-one can do:
+It is possible to to import direct (or indirect) dependencies of the target
+Package from within the `@frompackage` macro. Direct dependencies are the ones
+directy listed within the `[deps]` section of the `Project.toml`. Indirect
+dependencies are instead all the packages within the Package's `Manifest.toml`
+which are not direct dependencies. To import a package dependency from the
+`@frompackage` macro, one must prepend the package name with `>.`, so for
+example if one wants to load the `BenchmarkTools` package from the macro,
+assuming that it is indeed a dependency of the target package, one can do:
 ```julia
 @frompackage target begin
     using >.BenchmarkTools
@@ -76,9 +79,11 @@ end
 ```
 This modification is necessary when trying to use `@frompackage` in combination with the Pluto PkgManager, as explained in [Issue 10](https://github.com/disberd/PlutoDevMacros.jl/pull/10).
 
-These kind of statements (import/using from Direct Dependencies) are also
-supported both inside and outside Pluto, which means that the example code above will effectively translate to `using BenchmarkTools` both inside
-and outside of Pluto"
+These kind of statements (import/using from Dependencies) are also supported
+both inside and outside Pluto. **Outside of Pluto, only direct dependencies are
+supported** (as that is how julia works) which means that the example code above
+will effectively translate to `using BenchmarkTools` both inside and outside of
+Pluto if BenchmarkTools is a direct dependency.
 
 
 !!! note

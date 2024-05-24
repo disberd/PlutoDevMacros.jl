@@ -100,6 +100,8 @@ function maybe_create_module(m::Module)
 	if !isassigned(fromparent_module) 
 		fromparent_m = Core.eval(m, :(module $(gensym(:frompackage)) 
 		end))
+        # We create the dummy module where all the direct dependencies will be loaded
+		Core.eval(fromparent_m, :(module _DirectDeps_ end))
 		# We also set a reference to LoadedModules for access from the notebook
 		Core.eval(fromparent_m, :(const _LoadedModules_ = $LoadedModules))
 		fromparent_module[] = fromparent_m
@@ -107,16 +109,20 @@ function maybe_create_module(m::Module)
 	return fromparent_module[]
 end
 
-function deps_submodule_expr(dict)
-	(;direct) = dict["PkgInfo"]
-	ex = :(module _DepsImports_ end)
-	toplevel = ex.args[end]
-	args = toplevel.args
-	for pkg in values(direct)
-		n = Symbol(pkg.name)
-		push!(args, :(import $n))
-	end
-	return ex
+# This will explicitly import each direct dependency of the package inside the LoadedModules module. Loading all of the direct dependencies will help make every dependency available even if not directly loaded in the target source code.
+function load_direct_deps(package_dict, fromparent_module)
+    DepsModule = fromparent_module._DirectDeps_
+	(;direct) = package_dict["PkgInfo"]
+    for pkg in values(direct)
+        package_name_symbol = Symbol(pkg.name)
+        package_uuid_symbol = Symbol(pkg.uuid)
+        # If this is already loaded, we just skip
+        isdefined(DepsModule, package_uuid_symbol) && continue
+        # If not already defined, we import this. Note that this function will work correctly only if executed after the target environment has been added to the LOAD_PATH. In this DepsModule, we load packages with their UUID as name to potentially avoid clashes with two packages with same name.
+        Core.eval(DepsModule, :(import $(package_name_symbol) as $(package_uuid_symbol)))
+        # We also load this inside LoadedModules
+        maybe_add_loaded_module(to_pkgid(pkg))
+    end
 end
 
 
@@ -140,6 +146,8 @@ function load_module_in_caller(mod_exp::Expr, package_dict::Dict, caller_module)
 	proj_file = ecg |> get_active |> get_project_file
 	# We inject the project in the LOAD_PATH if it is not present already
 	add_loadpath(proj_file)
+    # We start by loading each of the direct dependencies in the LoadedModules submodule
+    load_direct_deps(package_dict, _MODULE_)
 	# We try evaluating the expression within the custom module
 	stop_reason = try
 		reason = eval_in_module(_MODULE_,Expr(:toplevel, LineNumberNode(1, Symbol(target_file)), mod_exp), package_dict)
@@ -150,8 +158,6 @@ function load_module_in_caller(mod_exp::Expr, package_dict::Dict, caller_module)
 	end
 	# Get the moduleof the parent package
 	__module = getfield(_MODULE_, mod_name)
-	# We now create a submodule of the loaded one to import all the direct dependencies
-	Core.eval(__module, deps_submodule_expr(package_dict))
 	# We put the dict inside the loaded module
 	Core.eval(__module, :(_fromparent_dict_ = $package_dict))
 	# @info block, __module

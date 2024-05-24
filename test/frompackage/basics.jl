@@ -61,7 +61,7 @@ end
 
     @test valid(:(import >.HypertextLiteral)) # This is a direct dependency
     @test valid(:(import >.Random)) # This is a direct dependency and a stdlib
-    @test valid(:(import >.Tricks)) # This is an indirect dependency, from HypertextLiteral
+    @test invalid(:(import >.Tricks)) # This is an indirect dependency, from HypertextLiteral
     @test invalid(:(import >.Statistics)) # This is an stdlib, but on in the proj
     @test invalid(:(import >.DataFrames)) # This is not a dependency
 
@@ -89,10 +89,10 @@ end
             # FromDeps imports
             ex = :(using >.MacroTools)
 
-            DepsImports = get_temp_module().PlutoDevMacros._DepsImports_
-            MacroTools = DepsImports.MacroTools
+            LoadedModules = get_temp_module()._LoadedModules_
+            MacroTools = LoadedModules.MacroTools
 
-            mod_path = Expr(:., vcat(parent_path, [:PlutoDevMacros, :_DepsImports_, :MacroTools])...)
+            mod_path = Expr(:., vcat(parent_path, [:_LoadedModules_, :MacroTools])...)
             exported_names = map(x -> Expr(:., x), names(MacroTools))
             expected = Expr(:import, Expr(:(:), mod_path, exported_names...))
             @test expected == f(ex) # This should work as MacroTools is a deps of PlutoDevMacros
@@ -108,7 +108,7 @@ end
             # This will load Tricks inside _DepsImports_
             _ex = parseinput(:(using >.Tricks), dict)
             # We now test that Tricks is loaded in DepsImports
-            @test DepsImports.Tricks === Base.loaded_modules[tricks_id]
+            @test LoadedModules.Tricks === Base.loaded_modules[tricks_id]
             
             # We test that trying to load a package that is not a dependency throws an error saying so
             @test_throws "The package DataFrames was not" parseinput(:(using >.DataFrames), dict)

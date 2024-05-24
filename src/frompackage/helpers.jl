@@ -249,3 +249,6 @@ function issamepath(path1::String, path2::String)
 	end
 end
 issamepath(path1::Symbol, path2::Symbol) = issamepath(String(path1), String(path2))
+
+# Create a Base.PkgId from a PkgInfo
+to_pkgid(p::PkgInfo) = Base.PkgId(p.uuid, p.name)

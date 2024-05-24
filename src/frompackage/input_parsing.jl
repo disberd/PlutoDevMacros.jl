@@ -255,12 +255,26 @@ function process_imported_nameargs!(args, dict, t::FromDepsImport)
     return nothing
 end
 
+# Check if the input expression has the `@include_using` macro. This function will also modify the expression to remove the `@include_using` macro
+function has_include_using!(ex)
+    Meta.isexpr(ex, :macrocall) || return false
+    ex.args[1] === Symbol("@include_using") || return false
+    # If we reach here, we have the include usings. We just extract the underlying expression
+    actual_ex = ex.args[end]
+    ex.head = actual_ex.head
+    ex.args = actual_ex.args
+    # Check if this contains catchall
+    @assert contains_catchall(ex) "You can only use @include_using with the catchall import statement (e.g. `@include_using import *`)."
+    return true
+end
+
 ## parseinput
 function parseinput(ex, dict)
+    include_using = has_include_using!(ex)
 	# We get the module
 	modname_expr, importednames_exprs = extract_import_args(ex)
 	# Check if we have a catchall
-	catchall = contains_catchall(ex)
+	catchall = include_using || contains_catchall(ex)
 	# Check if the statement is a using or an import, this is used to check
 	# which names to eventually import, but all statements are converted into
 	# `import` if they are not of type FromDepsImport
@@ -281,8 +295,13 @@ function parseinput(ex, dict)
 	if !catchall && (!is_using || !isempty(importednames_exprs))
 		return ex
 	end
+    explicit_names = if include_using
+        dict["Using Names"].explicit_names
+    else
+        nothing
+    end
 	# We extract the imported names either due to catchall or due to the standard using
-	imported_names = filterednames(_mod; all = catchall, imported = catchall)
+	imported_names = filterednames(_mod; all = catchall, imported = catchall, explicit_names)
 	# At this point we have all the names and we just have to create the final expression
 	importednames_exprs = map(n -> Expr(:., n), imported_names)
 	return reconstruct_import_expr(modname_expr, importednames_exprs)

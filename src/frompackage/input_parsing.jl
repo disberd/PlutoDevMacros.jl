@@ -261,10 +261,14 @@ function has_include_using!(ex)
     ex.args[1] === Symbol("@include_using") || return false
     # If we reach here, we have the include usings. We just extract the underlying expression
     actual_ex = ex.args[end]
+    # Check if this contains catchall
+    @assert try 
+        contains_catchall(actual_ex)
+    catch
+        false
+    end "You can only use @include_using with the catchall import statement (e.g. `@include_using import *`).\nInstead you passed [$(ex)] as input."
     ex.head = actual_ex.head
     ex.args = actual_ex.args
-    # Check if this contains catchall
-    @assert contains_catchall(ex) "You can only use @include_using with the catchall import statement (e.g. `@include_using import *`)."
     return true
 end
 

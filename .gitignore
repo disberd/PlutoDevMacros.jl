@@ -7,3 +7,5 @@ docs/build/
 pluto_test*.jl
 test*.jl
 !test/TestDevDependency/**
+!test/TestUsingNames/**
+test/TestUsingNames/Manifest.toml

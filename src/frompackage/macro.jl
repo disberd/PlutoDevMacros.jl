@@ -66,6 +66,9 @@ function frompackage(ex, target_file, caller, caller_module; macroname)
 	# We extract the parse dict
 	ex_args = if Meta.isexpr(ex, [:import, :using])
 		[ex]
+	elseif Meta.isexpr(ex, :macrocall) && ex.args[1] === Symbol("@include_using")
+        # This is @include_using
+        [ex]
 	elseif Meta.isexpr(ex, :block)
 		ex.args
 	else

@@ -164,9 +164,18 @@ end
 getfirst(itr) = getfirst(x -> true, itr)
 
 ## filterednames
-function filterednames(m::Module; all = true, imported = true)
+function filterednames(m::Module; all = true, imported = true, explicit_names = nothing)
 	excluded = (:eval, :include, :_fromparent_dict_, Symbol("@bind"))
-	filter(names(m;all, imported)) do s
+    mod_names = names(m;all, imported)
+    filter_args = if explicit_names isa Set{Symbol}
+        for name in mod_names
+            push!(explicit_names, name)
+        end
+        collect(explicit_names)
+    else
+        mod_names
+    end
+	filter(filter_args) do s
 		Base.isgensym(s) && return false
 		s in excluded && return false
 		return true

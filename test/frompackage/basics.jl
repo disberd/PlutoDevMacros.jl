@@ -1,4 +1,4 @@
-import PlutoDevMacros.FromPackage: process_outside_pluto!, load_module_in_caller, modname_path, fromparent_module, parseinput, get_package_data, @fromparent, _combined, process_skiplines!, get_temp_module, LineNumberRange, parse_skipline, extract_module_expression, _inrange, filterednames, reconstruct_import_expr
+import PlutoDevMacros.FromPackage: process_outside_pluto!, load_module_in_caller, modname_path, fromparent_module, parseinput, get_package_data, @fromparent, _combined, process_skiplines!, get_temp_module, LineNumberRange, parse_skipline, extract_module_expression, _inrange, filterednames, reconstruct_import_expr, extract_import_args
 import Pkg
 
 using Test
@@ -66,6 +66,7 @@ end
     @test invalid(:(import >.DataFrames)) # This is not a dependency
 
 
+
     # Here we test that the loaded TestPackage has the intended functionality
     # We verify that the relative import statement from @fromparent outside
     # of Pluto works as intended, correctly importing and extending
@@ -75,6 +76,70 @@ end
     @test testmethod(3.0) == "FLOAT"
 
     @test Issue2.foo(Issue2.c) !== nothing
+end
+
+@testset "Include using names" begin
+    target_dir = abspath(@__DIR__,"../TestUsingNames/")
+    function f(target)
+        target_file = joinpath(target_dir, target * "#==#00000000-0000-0000-0000-000000000000")
+        dict = get_package_data(target_file)
+        # Load the module
+        load_module_in_caller(dict, Main)
+        return dict
+    end
+    function has_symbol(symbol, ex::Expr)
+        _, args = extract_import_args(ex)
+        for ex in args
+            name = ex.args[1]
+            name === symbol && return true
+        end
+        return false
+    end
+    # Test1 - test1.jl
+    target = "src/test1.jl"
+    dict = f(target)
+    invalid(ex) = nothing === process_outside_pluto!(deepcopy(ex), dict)
+    # Test that this only works with catchall
+    @test_throws "You can only use @include_using" parseinput(:(@include_using import Downloads), dict)
+    # Test that it throws with ill-formed expression
+    @test_throws "You can only use @include_using" parseinput(:(@include_using), dict)
+
+    # Test that even with the @include_using macro in front the expression is filtered out outside Pluo
+    @test invalid(:(@include_using import *))
+    # Test that the names are extracted correctly
+    ex = parseinput(:(@include_using import *), dict)
+    @test has_symbol(:domath, ex)
+    ex = parseinput(:(import *), dict)
+    @test !has_symbol(:domath, ex)
+
+    # Test2 - test2.jl
+    target = "src/test2.jl"
+    dict = f(target)
+    # Test that the names are extracted correctly
+    ex = parseinput(:(@include_using import *), dict)
+    @test has_symbol(:test1, ex) # test1 is exported by Module Test1
+    @test has_symbol(:base64encode, ex) # test1 is exported by Module Base64
+    ex = parseinput(:(import *), dict)
+    @test !has_symbol(:test1, ex)
+    @test !has_symbol(:base64encode, ex)
+
+    # Test3 - test3.jl
+    target = "src/test3.jl"
+    dict = f(target)
+    # Test that the names are extracted correctly, :top_level_func is exported by TestUsingNames
+    ex = parseinput(:(@include_using import *), dict)
+    @test has_symbol(:top_level_func, ex)
+    ex = parseinput(:(import *), dict)
+    @test !has_symbol(:top_level_func, ex)
+
+    # Test from a file outside the package
+    target = ""
+    dict = f(target)
+    # Test that the names are extracted correctly, :base64encode is exported by Base64
+    ex = parseinput(:(@include_using import *), dict)
+    @test has_symbol(:base64encode, ex)
+    ex = parseinput(:(import *), dict)
+    @test !has_symbol(:base64encode, ex)
 end
 
 

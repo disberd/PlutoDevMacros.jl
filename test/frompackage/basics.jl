@@ -49,15 +49,18 @@ finally
     Pkg.activate(current_project)
 end
 
+# Test the macroexpand part
+@test nothing === Core.eval(@__MODULE__, :(@macroexpand @frompackage $(inpackage_target) import *))
+@test_throws "No project was found" Core.eval(@__MODULE__, :(@macroexpand @frompackage "/asd/lol" import TOML))
 @testset "raw_str" begin
     str, valid = extract_raw_str("asd")
     @test valid
     @test str == "asd"
-    str, valid = extract_raw_str(raw"asd\lol")
+    str, valid = extract_raw_str(:(raw"asd\lol"))
     @test valid
     @test str == "asd\\lol"
     @test_throws "Only `AbstractStrings`" Core.eval(Main, :(@frompackage 3+2 import *))
-    @test Core.eval(Main, :(@frompackage $(inpackage_target) import *)) === nothing
+    @test Core.eval(@__MODULE__, :(@frompackage $(inpackage_target) import *)) === nothing
 end
 
 @testset "Outside Pluto" begin

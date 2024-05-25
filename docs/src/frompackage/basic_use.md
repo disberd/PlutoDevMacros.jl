@@ -4,10 +4,10 @@
 @frompackage target import_block
 ```
 
-The `@frompackage` macro takes a local Package (derived from the `target` path), loads it as
-a submodule of the current Pluto workspace and then process the various
-import/using statements inside `import_block` to extract varables/functions from
-the local Package into the notebook workspace.
+The `@frompackage` macro takes a local Package (derived from the `target` path),
+loads it as a submodule of the current Pluto workspace and then process the
+various import/using statements inside `import_block` to extract
+varables/functions from the local Package into the notebook workspace.
 
 !!! note
     `@fromparent` is simply a convenience synthax that uses the calling notebook file as `target`. More details on how the target path is processed are given below.\
@@ -26,9 +26,10 @@ For this reason the *reload* of local code is only triggered manually within `@f
 
 ## `target` path
 
-The first argument to `@frompackage` (`target`) has to be a String containing the path (either
-absolute or relative to the file calling the macro) that points to a local
-Package (the path can be to any file or subfolder within the Package folder).
+The first argument to `@frompackage` (`target`) has to be an AbstractString (or
+a `@raw_str`) containing the path (either absolute or relative to the file
+calling the macro) that points to a local Package (the path can be to any file
+or subfolder within the Package folder).
 
 The main module of the package identified by the `target` path will be used as the module to process and load within the calling notebook
 

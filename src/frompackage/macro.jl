@@ -81,8 +81,6 @@ function frompackage(ex, target_file, caller, caller_module; macroname)
 	end
 	# Now we add the call to maybe load the package extensions
 	push!(args, :($load_package_extensions($dict, @__MODULE__)))
-	# Check if we are inside a direct macroexpand code, and clean the LOAD_PATH if we do as we won't be executing the retured expression
-	is_macroexpand(stacktrace(), cell_id) && clean_loadpath(proj_file)
 	# We wrap the import expressions inside a try-catch, as those also correctly work from there.
 	# This also allow us to be able to catch the error in case something happens during loading and be able to gracefully clean the work space
 	text = "Reload $macroname"

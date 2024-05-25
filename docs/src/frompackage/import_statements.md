@@ -96,7 +96,7 @@ Pluto if BenchmarkTools is a direct dependency.
 
 ## Re-export `using` names with Catch-All
 Prior to version v0.7.3 of PlutoDevMacros, the catch-all import would not allow to automatically import names in the scope of the parent/package module that were added via `using` statements.
-See https://github.com/disberd/PlutoDevMacros.jl/issues/11 for more details on the reasons.
+See [Issue 11](https://github.com/disberd/PlutoDevMacros.jl/issues/11) for more details on the reasons.
 
 This meant that to effectively have access to all of the names in the parent/package scope, the statement `@fromparent import *` would not be sufficient.
 If for example you had `using Base64` at the top of your module, to effectively have access to also the names of the `Base64` stdlib, you would have to call the macro as follows:
@@ -106,7 +106,7 @@ If for example you had `using Base64` at the top of your module, to effectively 
     using >.Base64
 end
 ```
-This is now not strictly necessary anymore, as `@frompackage`/`@fromparent` now recognize the special macro `@include_using` during expansion. This macro is not actually defined in the package but tells the `@fromparent` call to also re-export names exposed by `using` statements when paired with a [Catch-all statement](#catch-all).
+This is now not strictly necessary anymore, as `@frompackage`/`@fromparent` now recognize the special macro `@include_using` during expansion. This macro is not actually defined in the package but tells the `@fromparent` call to also re-export names exposed by `using` statements when paired with a [Catch-all statement](#Catch-All).
 Since v0.7.3, you can re-export everything including names from `using` statements with the following:
 ```julia
 @fromparent @include_using import *

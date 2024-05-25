@@ -68,7 +68,6 @@ function modify_package_using!(ex::Expr, loc, package_dict::Dict, eval_module::M
 		if extracted_package_name === package_name
             # We modify the specific using expression to point to the correct module path
 			prepend!(package_expr_args, modname_path(fromparent_module[])) 
-        else
 		end
 	end
 	return true

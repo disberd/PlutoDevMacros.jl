@@ -132,10 +132,11 @@ end
 """
 	@frompackage target import_block
 
-This macro takes a local Package (derived from the `target` path), loads it as
-a submodule of the current Pluto workspace and then process the various
-import/using statements inside `import_block` to extract varables/functions from
-the local Package into the notebook workspace.
+This macro takes a local Package (derived from the `target` path, which can be
+an `AbstractString` or a `@raw_str`), loads it as a submodule of the current
+Pluto workspace and then process the various import/using statements inside
+`import_block` to extract varables/functions from the local Package into the
+notebook workspace.
 
 Its main use is allowing to load a local package under development within a
 running Pluto notebook in order to facilitate prototyping and testing.
@@ -160,9 +161,11 @@ See the package [documentation](https://disberd.github.io/PlutoDevMacros.jl/dev/
 
 See also: [`@fromparent`](@ref)
 """
-macro frompackage(target::String, ex)
+macro frompackage(target::Union{AbstractString, Expr}, ex)
+    target_file, valid = extract_raw_str(target)
+    @assert valid "Only `AbstractStrings` or `Exprs` of type `raw\"...\"` are allowed as `target` in the `@frompackage` macro."
 	calling_file = String(__source__.file)
-	out = _combined(ex, target, calling_file, __module__; macroname = "@frompackage")
+	out = _combined(ex, target_file, calling_file, __module__; macroname = "@frompackage")
 	esc(out)
 end
 

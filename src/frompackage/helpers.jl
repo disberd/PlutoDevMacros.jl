@@ -262,3 +262,14 @@ issamepath(path1::Symbol, path2::Symbol) = issamepath(String(path1), String(path
 
 # Create a Base.PkgId from a PkgInfo
 to_pkgid(p::PkgInfo) = Base.PkgId(p.uuid, p.name)
+
+# This will extract the string from a raw_str macro, and will throw an error otherwise
+function extract_raw_str(ex::Expr)
+    valid = Meta.isexpr(ex, :macrocall) && ex.args[1] === Symbol("@raw_str")
+    if valid
+        return ex.args[end], true
+    else
+        return "", false
+    end
+end
+extract_raw_str(s::AbstractString) = String(s), true

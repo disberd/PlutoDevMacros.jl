@@ -89,6 +89,31 @@ Pluto if BenchmarkTools is a direct dependency.
 !!! note
     These kind of statements can not be used in combination with the `catch-all` imported name (*).\
     \
-    Direct dependencies imports are useful when trying to combine `@frompackage` with the integrated Pluto PkgManager. In this case, is preferable to keep in the Pluto notebook environment just the packages that are not also part of the loaded Package environment, and load the eventual packages that are also direct dependencies of the loaded Package directly from within the `@frompackage` `import_block`.\
+    Imports from package dependencies are useful when trying to combine `@frompackage` with the integrated Pluto PkgManager. In this case, is preferable to keep in the Pluto notebook environment just the packages that are not also part of the target/loaded Package environment, and load the eventual packages that are also in the environment of the loaded Package directly from within the `@frompackage` `import_block`.\
     \
     Doing so minimizes the risk of having issues caused by versions collision between dependencies that are shared both by the notebook environment and the loaded Package environment. Combining the use of `@frompackage` with the Pluto PkgManager is a very experimental feature that comes with significant caveats.  Please read the [related section](#use-of-fromparentfrompackage-with-pluto-pkgmanager) at the end of this README
+
+
+## Re-export `using` names with Catch-All
+Prior to version v0.7.3 of PlutoDevMacros, the catch-all import would not allow to automatically import names in the scope of the parent/package module that were added via `using` statements.
+See https://github.com/disberd/PlutoDevMacros.jl/issues/11 for more details on the reasons.
+
+This meant that to effectively have access to all of the names in the parent/package scope, the statement `@fromparent import *` would not be sufficient.
+If for example you had `using Base64` at the top of your module, to effectively have access to also the names of the `Base64` stdlib, you would have to call the macro as follows:
+```julia
+@fromparent begin
+    import *
+    using >.Base64
+end
+```
+This is now not strictly necessary anymore, as `@frompackage`/`@fromparent` now recognize the special macro `@include_using` during expansion. This macro is not actually defined in the package but tells the `@fromparent` call to also re-export names exposed by `using` statements when paired with a [Catch-all statement](#catch-all).
+Since v0.7.3, you can re-export everything including names from `using` statements with the following:
+```julia
+@fromparent @include_using import *
+```
+This statement can be used alone or coupled with other valid import statements within a `begin ... end` block.
+!!! note
+    Only a catch-all statement is supported after the `@include_using` macro.
+    \
+    \
+    For the moment this behavior is opt-in (via `@include_using`) to avoid a breaking change, but it will likely become the default catch-all behavior at the next breaking release.

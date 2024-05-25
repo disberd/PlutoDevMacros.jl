@@ -1,4 +1,4 @@
-import PlutoDevMacros.FromPackage: process_outside_pluto!, load_module_in_caller, modname_path, fromparent_module, parseinput, get_package_data, @fromparent, _combined, process_skiplines!, get_temp_module, LineNumberRange, parse_skipline, extract_module_expression, _inrange, filterednames, reconstruct_import_expr, extract_import_args
+import PlutoDevMacros.FromPackage: process_outside_pluto!, load_module_in_caller, modname_path, fromparent_module, parseinput, get_package_data, @fromparent, _combined, process_skiplines!, get_temp_module, LineNumberRange, parse_skipline, extract_module_expression, _inrange, filterednames, reconstruct_import_expr, extract_import_args, extract_raw_str, @frompackage
 import Pkg
 
 using Test
@@ -47,6 +47,22 @@ try
 end
 finally
     Pkg.activate(current_project)
+end
+
+# Test the macroexpand part
+@test nothing === Core.eval(@__MODULE__, :(@macroexpand @frompackage $(inpackage_target) import *))
+@test_throws "No project was found" Core.eval(@__MODULE__, :(@macroexpand @frompackage "/asd/lol" import TOML))
+@testset "raw_str" begin
+    str, valid = extract_raw_str("asd")
+    @test valid
+    @test str == "asd"
+    str, valid = extract_raw_str(:(raw"asd\lol"))
+    @test valid
+    @test str == "asd\\lol"
+    @test_throws "Only `AbstractStrings`" Core.eval(Main, :(@frompackage 3+2 import *))
+    cd(dirname(inpackage_target)) do
+        @test Core.eval(@__MODULE__, :(@frompackage raw".." import *)) === nothing
+    end
 end
 
 @testset "Outside Pluto" begin

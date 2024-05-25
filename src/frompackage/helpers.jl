@@ -1,7 +1,31 @@
 import ..PlutoCombineHTL: make_html, make_script
 import ..PlutoDevMacros: hide_this_log
 
-get_temp_module() = fromparent_module[]
+function get_temp_module() 
+    @assert isassigned(fromparent_module) "You have to assing the parent module by calling `maybe_create_module` with a Pluto workspace module as input before you can use `get_temp_module`"
+    fromparent_module[]
+end
+
+# Extract the module that is the target in dict
+function get_target_module(dict)
+    mod_name = Symbol(dict["name"])
+    m = getfield(get_temp_module(), mod_name)
+    return m
+end
+
+function get_target_uuid(dict) 
+    uuid = get(dict, "uuid", nothing)
+    if !isnothing(uuid)
+        uuid = Base.UUID(uuid)
+    end
+    return uuid
+end
+
+function get_target_pkgid(dict)
+    mod_name = dict["name"]
+    uuid = get_target_uuid(dict)
+    Base.PkgId(uuid, mod_name)
+end
 
 #=
 We don't use manual rerun so we just comment this till after we can use it

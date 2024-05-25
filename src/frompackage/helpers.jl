@@ -297,3 +297,22 @@ function extract_raw_str(ex::Expr)
     end
 end
 extract_raw_str(s::AbstractString) = String(s), true
+
+# This function will register the target module for `dict` as a root module.
+# This relies on Base internals (and even the C API) but will allow make the loaded module behave more like if we simply did `using TargetPackage` in the REPL
+function register_target_module_as_root(dict)
+    m = get_target_module(dict)
+    id = get_target_pkgid(dict)
+    uuid = id.uuid
+    entry_point = dict["file"]
+    @lock Base.require_lock begin
+        # Set the uuid of this module with the C API. This is required to get the correct UUID just from the module within `register_root_module`
+        ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), m, uuid)
+        # Register this module as root
+        Base.with_logger(Base.NullLogger()) do
+            Base.register_root_module(m)
+        end
+        # Set the path of the module to the actual package
+        Base.set_pkgorigin_version_path(id, entry_point)
+    end
+end

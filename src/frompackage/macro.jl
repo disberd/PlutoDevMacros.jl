@@ -81,6 +81,8 @@ function frompackage(ex, target_file, caller, caller_module; macroname)
 	end
 	# Now we add the call to maybe load the package extensions
 	push!(args, :($load_package_extensions($dict, @__MODULE__)))
+    # Register this module as root module. We need to this after trying to load the extensions
+    push!(args, :($register_target_module_as_root($dict)))
 	# We wrap the import expressions inside a try-catch, as those also correctly work from there.
 	# This also allow us to be able to catch the error in case something happens during loading and be able to gracefully clean the work space
 	text = "Reload $macroname"

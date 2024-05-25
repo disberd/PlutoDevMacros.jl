@@ -57,6 +57,7 @@ end
     @test valid
     @test str == "asd\\lol"
     @test_throws "Only `AbstractStrings`" Core.eval(Main, :(@frompackage 3+2 import *))
+    @test Core.eval(Main, :(@frompackage raw"asd\lol" import *)) === nothing
 end
 
 @testset "Outside Pluto" begin

@@ -11,7 +11,7 @@ module Test1
 end
 
 module Test2
-    using ..Test1
+    using ..Test1, Base64
     include("test2.jl")
 end
 

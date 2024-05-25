@@ -118,8 +118,10 @@ end
     # Test that the names are extracted correctly
     ex = parseinput(:(@include_using import *), dict)
     @test has_symbol(:test1, ex) # test1 is exported by Module Test1
+    @test has_symbol(:base64encode, ex) # test1 is exported by Module Base64
     ex = parseinput(:(import *), dict)
     @test !has_symbol(:test1, ex)
+    @test !has_symbol(:base64encode, ex)
 
     # Test3 - test3.jl
     target = "src/test3.jl"

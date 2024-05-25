@@ -60,7 +60,9 @@ end
     @test valid
     @test str == "asd\\lol"
     @test_throws "Only `AbstractStrings`" Core.eval(Main, :(@frompackage 3+2 import *))
-    @test Core.eval(@__MODULE__, :(@frompackage $(inpackage_target) import *)) === nothing
+    cd(dirname(inpackage_target)) do
+        @test Core.eval(@__MODULE__, :(@frompackage raw".." import *)) === nothing
+    end
 end
 
 @testset "Outside Pluto" begin

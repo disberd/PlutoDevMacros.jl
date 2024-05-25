@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.36
+# v0.19.42
 
 using Markdown
 using InteractiveUtils
@@ -67,6 +67,9 @@ isdefined(TestPackage, :TEST_INIT) && TestPackage.TEST_INIT[] == 5 || error("The
 # ╔═╡ e37034a1-398c-45ad-803c-4b78e3388464
 isdefined(TestPackage.SUBINIT, :TEST_SUBINIT) && TestPackage.SUBINIT.TEST_SUBINIT[] == 15 || error("The execution of the __init__ function in the submodule did not seem to happen")
 
+# ╔═╡ 14a547ce-f48a-4f19-88f5-b2ca499fc087
+(pkgdir(TestPackage) === @__DIR__) || error("`pkgdir(TestPackage)` did not return the correct path, it seems like registering as root module failed")
+
 # ╔═╡ Cell order:
 # ╠═931a8c2c-ed76-11ed-3721-396dae146ad4
 # ╠═bd0d177f-ab66-493d-89a6-a9faca81cd11
@@ -81,3 +84,4 @@ isdefined(TestPackage.SUBINIT, :TEST_SUBINIT) && TestPackage.SUBINIT.TEST_SUBINI
 # ╠═3e83aab4-5feb-4f3f-9dc1-2da208bcd599
 # ╠═06408ada-f0b7-4057-9177-a79baf2fa9cf
 # ╠═e37034a1-398c-45ad-803c-4b78e3388464
+# ╠═14a547ce-f48a-4f19-88f5-b2ca499fc087

@@ -1,7 +1,31 @@
 import ..PlutoCombineHTL: make_html, make_script
 import ..PlutoDevMacros: hide_this_log
 
-get_temp_module() = fromparent_module[]
+function get_temp_module() 
+    @assert isassigned(fromparent_module) "You have to assing the parent module by calling `maybe_create_module` with a Pluto workspace module as input before you can use `get_temp_module`"
+    fromparent_module[]
+end
+
+# Extract the module that is the target in dict
+function get_target_module(dict)
+    mod_name = Symbol(dict["name"])
+    m = getfield(get_temp_module(), mod_name)
+    return m
+end
+
+function get_target_uuid(dict) 
+    uuid = get(dict, "uuid", nothing)
+    if !isnothing(uuid)
+        uuid = Base.UUID(uuid)
+    end
+    return uuid
+end
+
+function get_target_pkgid(dict)
+    mod_name = dict["name"]
+    uuid = get_target_uuid(dict)
+    Base.PkgId(uuid, mod_name)
+end
 
 #=
 We don't use manual rerun so we just comment this till after we can use it
@@ -273,3 +297,22 @@ function extract_raw_str(ex::Expr)
     end
 end
 extract_raw_str(s::AbstractString) = String(s), true
+
+# This function will register the target module for `dict` as a root module.
+# This relies on Base internals (and even the C API) but will allow make the loaded module behave more like if we simply did `using TargetPackage` in the REPL
+function register_target_module_as_root(dict)
+    m = get_target_module(dict)
+    id = get_target_pkgid(dict)
+    uuid = id.uuid
+    entry_point = dict["file"]
+    @lock Base.require_lock begin
+        # Set the uuid of this module with the C API. This is required to get the correct UUID just from the module within `register_root_module`
+        ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), m, uuid)
+        # Register this module as root
+        Base.with_logger(Base.NullLogger()) do
+            Base.register_root_module(m)
+        end
+        # Set the path of the module to the actual package
+        Base.set_pkgorigin_version_path(id, entry_point)
+    end
+end

@@ -33,7 +33,7 @@ end
 
 # ╔═╡ 23a1bdef-5c31-4c90-a7f5-1f5a806d3d2e
 #=╠═╡
-@fromparent import *
+@fromparent @exclude_using import *
   ╠═╡ =#
 
 # ╔═╡ e4f436ed-27e9-4d19-98bd-c2b3021cf8bd

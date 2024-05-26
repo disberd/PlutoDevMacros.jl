@@ -33,7 +33,7 @@ end
 
 # ╔═╡ ac3d261a-86c9-453f-9d86-23a8f30ca583
 #=╠═╡
-@fromparent @include_using import *
+@fromparent import *
   ╠═╡ =#
 
 # ╔═╡ dd3f662f-e2ce-422d-a91a-487a4da359cc

@@ -15,7 +15,7 @@ module SUBINIT
     end
 end
 
-import TestPackage.SUBINIT: TEST_SUBINIT
+using TestPackage.SUBINIT: TEST_SUBINIT
 
 include("notebook1.jl")
 

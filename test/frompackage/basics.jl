@@ -280,6 +280,9 @@ end
     end
 end
 
+# Reconstruct import without explicit names
+@test reconstruct_import_expr(Expr(:., :ParentModule, :TestPackage), []) == :(import ParentModule.TestPackage)
+
 # Clean the given expression by removing `nothing` and LineNumberNodes
 function clean_expr(ex)
     ex = deepcopy(ex)
@@ -346,11 +349,10 @@ end
         # Now we test providing lines as abs path
         dict = get_package_data(outpackage_target)
         fullpath = abspath(TestPackage_path, "src/TestPackage.jl")
+        skip_str = "$(fullpath):::26-100"
         ex = quote
             import >.HypertextLiteral
-            @skiplines begin
-                $("$(fullpath):::26-100") # We are skipping from line 26
-            end
+            @skiplines $(skip_str) # We are skipping from line 26
         end
         process_skiplines!(ex, dict)
         load_module_in_caller(dict, Main)

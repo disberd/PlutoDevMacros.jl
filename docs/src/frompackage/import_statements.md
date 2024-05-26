@@ -107,6 +107,13 @@ If for example you had `using Base64` at the top of your module, to effectively 
 end
 ```
 Since v0.8.0 of PlutoDevMacros, the automatic inclusion of names exposed via `using` statements is the default behavior when doing `catch-all` imports.
+
+!!! note
+    Since this behavior now brings by default many more names into scope, a new functionality in 0.8 is a check that names in the target packages do not clash with existing names in the Pluto module that is calling `@frompackage`. Once a clash is identified (i.e. two different objects with the same name are defined in both the Pluto module and the target package), the specific clashed name will not be brought into scope by `@frompackage` and a warning will be issued.
+    \
+    \
+    You can see this warning for example in the test notebook at [test/TestUsingNames/test_notebook2.jl](https://github.com/disberd/PlutoDevMacros.jl/tree/master/test/TestUsingNames/test_notebook2.jl), where the name `:clash_name` is explicitly given to different values both in the target and calling modules, and results in the following warning: ![Warning Example Image](https://github.com/disberd/PlutoDevMacros.jl/assets/12846528/c32e53bd-3607-483c-9330-dad66a9b6a4a)
+
 If one wants to revert back to the previous version where only names effectively defined within the target module (or explicitly imported with `import OtherPackage: x`) would be brought into the Pluto module's scope, it is sufficient to prepend the `@exclude_using` macro to the _catch-all_ import statement like so:
 ```julia
 @fromparent @exclude_using import *

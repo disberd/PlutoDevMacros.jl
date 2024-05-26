@@ -1,7 +1,7 @@
 # Other Functions
 This package also exports some additional convenience macros for simplifying package development aided by Pluto notebooks.
 
-Additionally, the *non-exported* function [`hide_this_log`](@ref) can be used for sending javascript code through logs to Pluto and hide the corresponding log from view (without stopping the javascript code to execute)
+Additionally, the *non-exported* function [`PlutoDevMacros.hide_this_log`](@ref) can be used for sending javascript code through logs to Pluto and hide the corresponding log from view (without stopping the javascript code to execute)
 
 ## Utilities Macros
 ```@docs

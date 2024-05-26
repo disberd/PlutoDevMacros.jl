@@ -3,18 +3,19 @@ using Test
 
 import Pkg
 
+TestPackage_path = normpath(@__DIR__, "../TestPackage") 
 # The LOAD_PATH hack is required because if we add ./TestPackage as a test dependency we get the error in https://github.com/JuliaLang/Pkg.jl/issues/1585
-push!(LOAD_PATH, normpath(@__DIR__, "../TestPackage"))
+push!(LOAD_PATH, TestPackage_path)
 import TestPackage
 import TestPackage: testmethod
 import TestPackage.Issue2
 pop!(LOAD_PATH)
 
-# We point at the helpers file inside the FromPackage submodule, we only load the constants in the Loaded submodule
-outpackage_target = abspath(@__DIR__,"../..")
-inpackage_target = joinpath(outpackage_target, "src/frompackage/types.jl")
+# We point at the helpers file inside the TestPackage module, we stuff up to the first include
+outpackage_target = TestPackage_path
+inpackage_target = joinpath(outpackage_target, "src/inner_notebook2.jl")
 # We simulate a caller from a notebook by appending a fake cell-id
-outpluto_caller = abspath(@__DIR__,"../..")
+outpluto_caller = joinpath(TestPackage_path, "src")
 inpluto_caller = join([outpluto_caller, "#==#", "00000000-0000-0000-0000-000000000000"])
 
 current_project = Base.active_project()
@@ -66,18 +67,18 @@ end
 end
 
 @testset "Outside Pluto" begin
-    dict = get_package_data(inpackage_target)
+    dict = get_package_data(outpackage_target)
     valid(ex) = nothing !== process_outside_pluto!(deepcopy(ex), dict)
     invalid(ex) = nothing === process_outside_pluto!(deepcopy(ex), dict)
 
     @test valid(:(import .ASD: lol))
     @test invalid(:(import .ASD: *))
-    @test invalid(:(import PlutoDevMacros: lol)) # PlutoDevMacros is the name of the inpackage_target package, we don't allow that
+    @test invalid(:(import TestPackage: lol)) # PlutoDevMacros is the name of the inpackage_target package, we don't allow that
     @test invalid(:(import *)) # Outside of pluto the catchall is removed
 
-    @test valid(:(import >.HypertextLiteral)) # This is a direct dependency
-    @test valid(:(import >.Random)) # This is a direct dependency and a stdlib
-    @test invalid(:(import >.Tricks)) # This is an indirect dependency, from HypertextLiteral
+    @test valid(:(import >.BenchmarkTools)) # This is a direct dependency
+    @test valid(:(import >.InteractiveUtils)) # This is a direct dependency and a stdlib
+    @test invalid(:(import >.JSON)) # This is an indirect dependency, from HypertextLiteral
     @test invalid(:(import >.Statistics)) # This is an stdlib, but on in the proj
     @test invalid(:(import >.DataFrames)) # This is not a dependency
 
@@ -187,48 +188,49 @@ end
 
             parent_path = modname_path(fromparent_module[])
             # FromDeps imports
-            ex = :(using >.MacroTools)
+            ex = :(using >.BenchmarkTools)
 
             LoadedModules = get_temp_module()._LoadedModules_
-            MacroTools = LoadedModules.MacroTools
+            direct_dep_name = :BenchmarkTools
+            direct_deps_module = getfield(LoadedModules, direct_dep_name)
 
-            mod_path = Expr(:., vcat(parent_path, [:_LoadedModules_, :MacroTools])...)
-            exported_names = map(x -> Expr(:., x), names(MacroTools))
+            mod_path = Expr(:., vcat(parent_path, [:_LoadedModules_, direct_dep_name])...)
+            exported_names = map(x -> Expr(:., x), names(direct_deps_module))
             expected = Expr(:import, Expr(:(:), mod_path, exported_names...))
             @test expected == f(ex) # This should work as MacroTools is a deps of PlutoDevMacros
 
-            ex = :(using >.MacroTools: *)
+            ex = :(using >.$(direct_dep_name): *)
             @test_throws "catch-all" f(ex)
 
             ex = :(using DataFrames)
             @test_throws "import expression is not supported" f(ex)
 
             # Test indirect import
-            tricks_id = Base.PkgId(Base.UUID("410a4b4d-49e4-4fbc-ab6d-cb71b17b3775"), "Tricks")
+            indirect_id = Base.PkgId(Base.UUID("682c06a0-de6a-54ab-a142-c8b1cf79cde6"), "JSON")
             # This will load Tricks inside _DepsImports_
-            _ex = parseinput(:(using >.Tricks), dict)
+            _ex = parseinput(:(using >.JSON), dict)
             # We now test that Tricks is loaded in DepsImports
-            @test LoadedModules.Tricks === Base.maybe_root_module(tricks_id)
+            @test LoadedModules.JSON === Base.maybe_root_module(indirect_id)
             
             # We test that trying to load a package that is not a dependency throws an error saying so
             @test_throws "The package DataFrames was not" parseinput(:(using >.DataFrames), dict)
 
             # FromPackage imports
-            ex = :(import PlutoDevMacros)
-            expected = :(import $(parent_path...).PlutoDevMacros)
-            @test expected == f(ex) # This works because PlutoDevMacros is the name of the loaded package
+            ex = :(import TestPackage)
+            expected = :(import $(parent_path...).TestPackage)
+            @test expected == f(ex) # This works because TestPackage is the name of the loaded package
 
-            ex = :(import PackageModule.PlutoCombineHTL)
-            expected = :(import $(parent_path...).PlutoDevMacros.PlutoCombineHTL)
+            ex = :(import PackageModule.SUBINIT)
+            expected = :(import $(parent_path...).TestPackage.SUBINIT)
             @test expected == f(ex)
 
-            ex = :(using PackageModule.PlutoCombineHTL)
-            expected = :(import $(parent_path...).PlutoDevMacros.PlutoCombineHTL: PlutoCombineHTL, formatted_code, make_html, make_node, make_script)
+            ex = :(using PackageModule.SUBINIT)
+            expected = :(import $(parent_path...).TestPackage.SUBINIT: SUBINIT) # This does not export anything
             @test expected == f(ex)
 
             # Relative imports
-            ex = :(import ..PlutoCombineHTL)
-            expected = :(import $(parent_path...).PlutoDevMacros.PlutoCombineHTL)
+            ex = :(import ..SUBINIT)
+            expected = :(import $(parent_path...).TestPackage.SUBINIT)
             @test expected == f(ex) # This should work as Script is a valid sibling module of FromPackage
 
             ex = :(import ..NonExistant)
@@ -236,18 +238,18 @@ end
 
             # FromParent import
             ex = :(@exclude_using import *)
-            expected = :(import $(parent_path...).PlutoDevMacros.FromPackage: @addmethod, @frompackage, @fromparent, FromPackage, Pkg, TOML, _cell_data)
+            expected = :(import $(parent_path...).TestPackage.Inner: Inner, testmethod)
             @test expected == f(ex)
 
             ex = :(@exclude_using import ParentModule: *)
             @test expected == f(ex)
 
-            ex = :(import ParentModule: _cell_data)
-            expected = :(import $(parent_path...).PlutoDevMacros.FromPackage: _cell_data)
+            ex = :(import ParentModule: testmethod)
+            expected = :(import $(parent_path...).TestPackage.Inner: testmethod)
             @test expected == f(ex)
 
             ex = :(using ParentModule)
-            expected = :(import $(parent_path...).PlutoDevMacros.FromPackage: @addmethod, @frompackage, @fromparent, FromPackage)
+            expected = :(import $(parent_path...).TestPackage.Inner: Inner)
             @test expected == f(ex)
         end
         @testset "target not included in Package" begin
@@ -255,15 +257,15 @@ end
             f(ex) = parseinput(deepcopy(ex), dict)
             parent_path = modname_path(fromparent_module[])
 
-            ex = :(import PackageModule.PlutoCombineHTL)
-            expected = :(import $(parent_path...).PlutoDevMacros.PlutoCombineHTL)
+            ex = :(import PackageModule.Issue2)
+            expected = :(import $(parent_path...).TestPackage.Issue2)
             @test expected == f(ex)
 
             ex = :(@exclude_using import *)
-            expected = let _mod = fromparent_module[].PlutoDevMacros
+            expected = let _mod = fromparent_module[].TestPackage
                 imported_names = filterednames(_mod; all = true, imported = true)
                 importednames_exprs = map(n -> Expr(:., n), imported_names)
-                modname_expr = Expr(:., vcat(parent_path, :PlutoDevMacros)...)
+                modname_expr = Expr(:., vcat(parent_path, :TestPackage)...)
                 reconstruct_import_expr(modname_expr, importednames_exprs)
             end
             @test expected == f(ex)
@@ -272,7 +274,7 @@ end
             ex = :(import ParentModule: *)
             @test_throws "The current file was not found" f(ex)
 
-            ex = :(import ParentModule: _cell_data)
+            ex = :(import ParentModule: hidden_toplevel_variable)
             @test_throws "The current file was not found" f(ex)
         end
     end
@@ -315,48 +317,48 @@ end
         f(ex) = _combined(ex, inpackage_target, outpluto_caller, Main; macroname = "@frompackage") |> clean_expr
         ex = quote
             import DataFrames
-            import >.HypertextLiteral
+            import >.BenchmarkTools
             @skiplines begin
-                "frompackage/FromPackage.jl:8-100"
+                "TestPacakge.jl:8-100"
             end
         end
         out_ex = quote
-            import HypertextLiteral
+            import BenchmarkTools
         end
         @test clean_expr(out_ex) == f(ex)
     end
     @testset "Inside Pluto" begin
         dict = get_package_data(outpackage_target)
         ex = quote
-            import >.HypertextLiteral
+            import >.BenchmarkTools
             @skiplines begin
-                "frompackage/FromPackage.jl:::12-100" # We are skipping from line 12, so we only load up to helpers.jl
+                "TestPackage.jl:::21-100" # We are skipping from line 21, so we only load up to the notebook1.jl
             end
         end
         process_skiplines!(ex, dict)
         load_module_in_caller(dict, Main)
-        _m = get_temp_module().PlutoDevMacros.FromPackage
+        _m = get_temp_module().TestPackage
 
-        @test isdefined(_m, :_cell_data) # This is directly at the top of the module
-        @test isdefined(_m, :macro_cell) # this variable is defined inside helpers.jl
-        @test !isdefined(_m, :extract_file_ast) # This is defined inside code_parsing.jl, which should be skipped as it's line FromPackage.jl:8
+        @test isdefined(_m, :hidden_toplevel_variable) # This is directly at the top of the module
+        @test isdefined(_m, :testmethod) # this variable is defined inside notebook1.jl
+        @test !isdefined(_m, :Inner) # This is defined after line 20
 
         # Now we test providing lines as abs path
         dict = get_package_data(outpackage_target)
-        fullpath = abspath(@__DIR__, "../../src/frompackage/FromPackage.jl")
+        fullpath = abspath(TestPackage_path, "src/TestPackage.jl")
         ex = quote
             import >.HypertextLiteral
             @skiplines begin
-                $("$(fullpath):::13-100") # We are skipping from line 13
+                $("$(fullpath):::26-100") # We are skipping from line 26
             end
         end
         process_skiplines!(ex, dict)
         load_module_in_caller(dict, Main)
-        _m = get_temp_module().PlutoDevMacros.FromPackage
+        _m = get_temp_module().TestPackage
 
-        @test isdefined(_m, :_cell_data) # This is directly at the top of the module
-        @test isdefined(_m, :macro_cell) # this variable is defined inside helpers.jl
-        @test isdefined(_m, :extract_file_ast) # This is defined inside code_parsing.jl
-        @test !isdefined(_m, :load_module_in_caller) # This is defined inside loading.jl, which should be skipped as it's line FromPackage.jl:13
+        @test isdefined(_m, :hidden_toplevel_variable) # This is directly at the top of the module
+        @test isdefined(_m, :testmethod) # this variable is defined inside notebook1.jl
+        @test isdefined(_m, :Inner) # This is defined at line 22-25
+        @test !isdefined(_m, :Issue2) # This is defined at lines 27-30, which should be skipped
     end
 end

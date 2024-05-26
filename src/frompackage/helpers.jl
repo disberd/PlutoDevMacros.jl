@@ -219,7 +219,7 @@ function filterednames_filter_func(m; excluded, caller_module, package_dict)
                     # We are just replacing the previous implementation of this call's target package, so we want to overwrite
                     return true
                 else
-                    @warn "Symbol $s is already defined in the caller module and points to a different object. Skipping"
+                    @warn "Symbol `:$s`, is already defined in the caller module and points to a different object. Skipping"
                 end
             end
             return false

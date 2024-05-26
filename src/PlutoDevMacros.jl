@@ -1,19 +1,10 @@
 module PlutoDevMacros
 
-using MacroTools
-using HypertextLiteral
-
-# export @only_in_nb, @only_out_nb, include_mapexpr, @skip_as_script
-# export notebook_to_source
-
 # This are from basics.jl
 export @only_in_nb, @only_out_nb, plutodump, @current_pluto_cell_id,
 @current_pluto_notebook_file, @addmethod
 
 include("basics.jl")
-include("combine_htl/PlutoCombineHTL.jl")
-const HTL = PlutoCombineHTL
-
 include("html_helpers.jl")
 
 include("frompackage/FromPackage.jl")
@@ -22,7 +13,6 @@ export @fromparent, @frompackage
 
 include("../notebooks/mapexpr.jl") # hasexpr, default_exprlist, include_mapexpr
 include("../notebooks/plutoinclude_macro.jl") # hasexpr, default_exprlist, include_mapexpr
-# include("../notebooks/pluto_traits.jl") # This defines and exports the @plutotraits macro
 
 # function __init__()
 #     if isdefined(Main, :PlutoRunner)

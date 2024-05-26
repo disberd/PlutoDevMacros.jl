@@ -1,4 +1,3 @@
-import ..PlutoCombineHTL: make_html, make_script
 import ..PlutoDevMacros: hide_this_log
 
 function get_temp_module() 
@@ -267,15 +266,16 @@ _popup_style(id) = """
 
 function html_reload_button(cell_id; text = "Reload @frompackage", err = false)
 	id = string(cell_id)
-	container = @htl("""
+    style_content = _popup_style(id)
+	html_content = """
 	<script>
 			const container = document.querySelector('fromparent-container') ?? document.body.appendChild(html`<fromparent-container>`)
-			container.innerHTML = $text
+			container.innerHTML = '$text'
 			// We set the errored state
 			container.classList.toggle('errored', $err)
 			const style = container.querySelector('style') ?? container.appendChild(html`<style>`)
-			style.innerHTML = $(_popup_style(id))
-			const cell = document.getElementById($id)
+			style.innerHTML = `$(style_content)`
+			const cell = document.getElementById('$id')
 			const actions = cell._internal_pluto_actions
 			container.onclick = (e) => {
 				if (e.ctrlKey) {
@@ -285,12 +285,16 @@ function html_reload_button(cell_id; text = "Reload @frompackage", err = false)
 						block: 'center',				
 					})
 				} else {
-					actions.set_and_run_multiple([$id])
+					actions.set_and_run_multiple(['$id'])
 				}
 			}
 	</script>
-	""")
-	make_script([container, hide_this_log()]) |> make_html
+	"""
+    # We make an HTML object combining this content and the hide_this_log functionality
+    return Docs.HTML() do io
+        print(io, html_content)
+        print(io, hide_this_log().content)
+    end
 end
 
 # Function to clean the filepath from the Pluto cell delimiter if present

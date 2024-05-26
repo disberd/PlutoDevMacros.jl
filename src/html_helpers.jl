@@ -1,11 +1,10 @@
-using .PlutoCombineHTL
-
 # This function, if appearing inside a capture log message in Pluto (not with
 # println, just the @info, @warn, etc ones), will hide itself. It is mostly used
 # in combination with other scripts to inject some javascript in the notebook
 # without having an ugly empty log below the cell 
 function hide_this_log()
-	body = """
+	html"""
+    <script>
 	const logs_positioner = currentScript.closest('pluto-log-dot-positioner')
 	if (logs_positioner == undefined) {return}
 	const logs = logs_positioner.parentElement
@@ -26,10 +25,10 @@ function hide_this_log()
 
 	observer.observe(logs, {subtree: true, attributes: true, childList: true})
 	logs_positioner.toggleAttribute('hidden',true)
+    invalidation.then(() => {
+        console.log('invalidation of logs hider script')
+        observer.disconnect()
+    })
+    </script>
 	"""
-	invalidation = """
-	console.log('invalidation')
-	observer.disconnect()
-	"""
-	return make_script(;body, invalidation) |> make_html
 end

@@ -3,6 +3,8 @@ import Pluto: update_save_run!, update_run!, WorkspaceManager, ClientSession,
 ServerSession, Notebook, Cell, project_relative_path, SessionActions,
 load_notebook, Configuration
 using PlutoDevMacros
+using PlutoDevMacros: hide_this_log
+using Test
 
 function noerror(cell; verbose=true)
     if cell.errored && verbose
@@ -38,3 +40,7 @@ eval_in_nb(sn, expr) = WorkspaceManager.eval_fetch_in_workspace(sn, expr)
     end
     SessionActions.shutdown(ss, nb)
 end
+
+html_content = "asd"
+html = html"asd"
+@test hide_this_log(html_content; id = "asd") == hide_this_log(html; id = "asd")

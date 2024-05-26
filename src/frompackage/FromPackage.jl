@@ -1,6 +1,5 @@
 module FromPackage
     import ..PlutoDevMacros: @addmethod, _cell_data
-    using HypertextLiteral
     import Pkg
     import TOML
 

@@ -28,12 +28,14 @@ begin
 	end
 	using Main.Revise
 	using Main.PlutoDevMacros
+	# We defined a variable here that clashes with something in the target to show the warning
+	clash_name = 0
 end
   ╠═╡ =#
 
 # ╔═╡ ac3d261a-86c9-453f-9d86-23a8f30ca583
 #=╠═╡
-@fromparent @include_using import *
+@fromparent import *
   ╠═╡ =#
 
 # ╔═╡ dd3f662f-e2ce-422d-a91a-487a4da359cc
@@ -42,7 +44,13 @@ end
 isdefined(@__MODULE__, :base64encode) || error("base64encode from Base64 should be defined")
   ╠═╡ =#
 
+# ╔═╡ c72f2544-eb2e-4ed6-a89b-495ead20b5f6
+#=╠═╡
+clash_name === 0 || error("The clashed name was not handled correctly")
+  ╠═╡ =#
+
 # ╔═╡ Cell order:
 # ╠═4f8def86-f90b-4f74-ac47-93fe6e437cee
 # ╠═ac3d261a-86c9-453f-9d86-23a8f30ca583
 # ╠═dd3f662f-e2ce-422d-a91a-487a4da359cc
+# ╠═c72f2544-eb2e-4ed6-a89b-495ead20b5f6

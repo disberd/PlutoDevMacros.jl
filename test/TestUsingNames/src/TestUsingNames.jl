@@ -4,6 +4,7 @@ using Base64
 
 export top_level_func
 top_level_func() = 1
+clash_name = 5
 
 module Test1
     using Example

@@ -37,7 +37,6 @@ include("../notebooks/plutoinclude_macro.jl") # hasexpr, default_exprlist, inclu
 #                 logs.parentElement.style.display = "none"
 #             }
 #         </script>""")
-#         @info "GESU"
 #     else
         
 #     end

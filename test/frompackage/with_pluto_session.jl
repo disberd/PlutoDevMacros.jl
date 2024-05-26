@@ -101,7 +101,7 @@ srcdir = joinpath(@__DIR__, "../TestDevDependency/src/")
     SessionActions.shutdown(ss, nb)
 end
 
-# We test @include_using (issue 11)
+# We test @exclude_using (issue 11)
 srcdir = joinpath(@__DIR__, "../TestUsingNames/src/")
 @testset "Using Names" begin
     ss = ServerSession(; options)

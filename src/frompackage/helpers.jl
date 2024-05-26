@@ -188,7 +188,7 @@ end
 getfirst(itr) = getfirst(x -> true, itr)
 
 ## filterednames
-function filterednames(m::Module; all = true, imported = true, explicit_names = nothing)
+function filterednames(m::Module, caller_module = nothing; all = true, imported = true, explicit_names = nothing, package_dict = nothing)
 	excluded = (:eval, :include, :_fromparent_dict_, Symbol("@bind"))
     mod_names = names(m;all, imported)
     filter_args = if explicit_names isa Set{Symbol}
@@ -199,11 +199,35 @@ function filterednames(m::Module; all = true, imported = true, explicit_names = 
     else
         mod_names
     end
-	filter(filter_args) do s
-		Base.isgensym(s) && return false
-		s in excluded && return false
-		return true
-	end
+    filter_func = filterednames_filter_func(m; excluded, caller_module, package_dict)
+	filter(filter_func, filter_args)
+end
+
+function filterednames_filter_func(m; excluded, caller_module, package_dict)
+    f(s) = let excluded = excluded, caller_module = caller_module, package_dict = package_dict
+        Base.isgensym(s) && return false
+        s in excluded && return false
+        if caller_module isa Module
+            previous_target_module = get_stored_module(package_dict)
+            # We check and avoid putting in scope symbols which are already in the caller module
+            isdefined(caller_module, s) || return true
+            # Here we have to extract the symbols to compare them
+            mod_val = getfield(m, s)
+            caller_val = getfield(caller_module, s)
+            if caller_val !== mod_val 
+                if isdefined(previous_target_module, s) && caller_val === getfield(previous_target_module, s)
+                    # We are just replacing the previous implementation of this call's target package, so we want to overwrite
+                    return true
+                else
+                    @warn "Symbol `:$s`, is already defined in the caller module and points to a different object. Skipping"
+                end
+            end
+            return false
+        else # We don't check for names clashes with a caller module
+            return true
+        end
+    end
+    return f
 end
 
 
@@ -316,3 +340,8 @@ function register_target_module_as_root(dict)
         Base.set_pkgorigin_version_path(id, entry_point)
     end
 end
+
+# This function will get the module stored in the created_modules dict based on the entry point
+get_stored_module(dict) = get(created_modules, dict["file"], nothing)
+# This will store in it
+update_stored_module(dict) = created_modules[dict["file"]] = get_target_module(dict)

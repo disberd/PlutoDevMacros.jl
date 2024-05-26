@@ -106,14 +106,9 @@ If for example you had `using Base64` at the top of your module, to effectively 
     using >.Base64
 end
 ```
-This is now not strictly necessary anymore, as `@frompackage`/`@fromparent` now recognize the special macro `@include_using` during expansion. This macro is not actually defined in the package but tells the `@fromparent` call to also re-export names exposed by `using` statements when paired with a [Catch-all statement](#Catch-All).
-Since v0.7.3, you can re-export everything including names from `using` statements with the following:
+Since v0.8.0 of PlutoDevMacros, the automatic inclusion of names exposed via `using` statements is the default behavior when doing `catch-all` imports.
+If one wants to revert back to the previous version where only names effectively defined within the target module (or explicitly imported with `import OtherPackage: x`) would be brought into the Pluto module's scope, it is sufficient to prepend the `@exclude_using` macro to the _catch-all_ import statement like so:
 ```julia
-@fromparent @include_using import *
+@fromparent @exclude_using import *
 ```
 This statement can be used alone or coupled with other valid import statements within a `begin ... end` block.
-!!! note
-    Only a catch-all statement is supported after the `@include_using` macro.
-    \
-    \
-    For the moment this behavior is opt-in (via `@include_using`) to avoid a breaking change, but it will likely become the default catch-all behavior at the next breaking release.

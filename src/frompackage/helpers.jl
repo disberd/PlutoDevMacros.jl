@@ -291,10 +291,7 @@ function html_reload_button(cell_id; text = "Reload @frompackage", err = false)
 	</script>
 	"""
     # We make an HTML object combining this content and the hide_this_log functionality
-    return Docs.HTML() do io
-        print(io, html_content)
-        print(io, hide_this_log().content)
-    end
+    return hide_this_log(html_content)
 end
 
 # Function to clean the filepath from the Pluto cell delimiter if present

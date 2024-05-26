@@ -256,9 +256,12 @@ function process_imported_nameargs!(args, dict, t::FromDepsImport)
 end
 
 # Check if the input expression has the `@include_using` macro. This function will also modify the expression to remove the `@include_using` macro
-function has_include_using!(ex)
-    Meta.isexpr(ex, :macrocall) || return false
-    ex.args[1] === Symbol("@include_using") || return false
+function should_include_using_names!(ex)
+    Meta.isexpr(ex, :macrocall) || return contains_catchall(ex)
+    macro_name = ex.args[1]
+    deprecated_name = Symbol("@include_using")
+    exclude_name = Symbol("@exclude_using")
+    @assert macro_name in (deprecated_name, exclude_name) "The provided input expression is not supported.\nExpressions should be only import statements, at most prepended by the `@exclude_using` macro in combination with catch-all import statements."
     # If we reach here, we have the include usings. We just extract the underlying expression
     actual_ex = ex.args[end]
     # Check if this contains catchall
@@ -266,15 +269,21 @@ function has_include_using!(ex)
         contains_catchall(actual_ex)
     catch
         false
-    end "You can only use @include_using with the catchall import statement (e.g. `@include_using import *`).\nInstead you passed [$(ex)] as input."
+    end "You can only use @exclude_using with the catchall import statement (e.g. `@exclude_using import *`).\nInstead you passed [$(ex)] as input."
+    should_include = if macro_name === deprecated_name
+        @warn "The use of `@include_using` is deprecated and it's assumed at default. Use `@exclude_using` if you want to avoid including names from `using`"
+        true
+    elseif macro_name === exclude_name
+        false
+    end
     ex.head = actual_ex.head
     ex.args = actual_ex.args
-    return true
+    return should_include
 end
 
 ## parseinput
-function parseinput(ex, dict)
-    include_using = has_include_using!(ex)
+function parseinput(ex, package_dict; caller_module = nothing)
+    include_using = should_include_using_names!(ex)
 	# We get the module
 	modname_expr, importednames_exprs = extract_import_args(ex)
 	# Check if we have a catchall
@@ -283,7 +292,7 @@ function parseinput(ex, dict)
 	# which names to eventually import, but all statements are converted into
 	# `import` if they are not of type FromDepsImport
 	is_using = ex.head === :using 
-	args, type = process_imported_nameargs!(modname_expr.args, dict)
+	args, type = process_imported_nameargs!(modname_expr.args, package_dict)
 	# Check that we don't catchall with imported dependencies
 	if catchall && type isa FromDepsImport
 		error("You can't use the catch-all name identifier (*) while importing dependencies of the Package Environment")
@@ -300,12 +309,12 @@ function parseinput(ex, dict)
 		return ex
 	end
     explicit_names = if include_using
-        dict["Using Names"].explicit_names
+        package_dict["Using Names"].explicit_names
     else
         nothing
     end
 	# We extract the imported names either due to catchall or due to the standard using
-	imported_names = filterednames(_mod; all = catchall, imported = catchall, explicit_names)
+	imported_names = filterednames(_mod, caller_module; all = catchall, imported = catchall, explicit_names, package_dict)
 	# At this point we have all the names and we just have to create the final expression
 	importednames_exprs = map(n -> Expr(:., n), imported_names)
 	return reconstruct_import_expr(modname_expr, importednames_exprs)

@@ -54,7 +54,7 @@ function frompackage(ex, target_file, caller, caller_module; macroname)
 	id_name = _id_name(cell_id)
 	ex isa Expr || error("You have to call this macro with an import statement or a begin-end block of import statements")
 	# Try to load the module of the target package in the calling workspace and return the dict with extracted paramteres
-	dict = if is_call_unique(cell_id, caller_module)
+	package_dict = if is_call_unique(cell_id, caller_module)
 		dict = get_package_data(target_file)
 		# We try to extract eventual lines to skip
 		process_skiplines!(ex, dict)
@@ -66,7 +66,7 @@ function frompackage(ex, target_file, caller, caller_module; macroname)
 	# We extract the parse dict
 	ex_args = if Meta.isexpr(ex, [:import, :using])
 		[ex]
-	elseif Meta.isexpr(ex, :macrocall) && ex.args[1] === Symbol("@include_using")
+	elseif Meta.isexpr(ex, :macrocall) && ex.args[1] in (Symbol("@include_using"), Symbol("@exclude_using"))
         # This is @include_using
         [ex]
 	elseif Meta.isexpr(ex, :block)
@@ -77,12 +77,14 @@ function frompackage(ex, target_file, caller, caller_module; macroname)
 	# We now process/parse all the import/using statements
 	for arg in ex_args
 		arg isa LineNumberNode && continue
-		push!(args, parseinput(arg, dict))
+		push!(args, parseinput(arg, package_dict; caller_module))
 	end
+    # We add this module to the created_modules dict
+    created_modules[package_dict["file"]] = get_target_module(package_dict)
 	# Now we add the call to maybe load the package extensions
-	push!(args, :($load_package_extensions($dict, @__MODULE__)))
+	push!(args, :($load_package_extensions($package_dict, @__MODULE__)))
     # Register this module as root module. We need to this after trying to load the extensions
-    push!(args, :($register_target_module_as_root($dict)))
+    push!(args, :($register_target_module_as_root($package_dict)))
 	# We wrap the import expressions inside a try-catch, as those also correctly work from there.
 	# This also allow us to be able to catch the error in case something happens during loading and be able to gracefully clean the work space
 	text = "Reload $macroname"

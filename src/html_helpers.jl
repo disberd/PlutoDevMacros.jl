@@ -29,7 +29,7 @@ julia_output = let
 end
 ```
 Which will correctly send the message to the console even if the cell output is not the javascript script:
-![hide_this_log example gif](https://github.com/disberd/PlutoDevMacros.jl/assets/12846528/0724516b-9af8-46a5-a78e-d0569384ac27)
+![hide_this_log example gif](https://github.com/disberd/PlutoDevMacros.jl/assets/12846528/8208243b-62ce-437a-ae87-97e63ca94e12)
 """
 function hide_this_log(content::AbstractString = ""; id = randid())
     this_contents = "<script id = '$id'>
@@ -53,6 +53,7 @@ function hide_this_log(content::AbstractString = ""; id = randid())
 
 	observer.observe(logs, {subtree: true, attributes: true, childList: true})
 	logs_positioner.toggleAttribute('hidden',true)
+    logs_positioner.style.display = 'none'
     invalidation.then(() => {
         console.log('invalidation of logs hider script')
         observer.disconnect()

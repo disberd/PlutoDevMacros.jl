@@ -65,4 +65,4 @@ function hide_this_log(content::AbstractString = ""; id = randid())
         print(io, this_contents)
     end
 end
-hide_this_log(html::Docs.HTML) = hide_this_log(html.content)
+hide_this_log(html::Docs.HTML; kwargs...) = hide_this_log(html.content; kwargs...)

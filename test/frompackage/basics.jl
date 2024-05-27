@@ -364,3 +364,25 @@ end
         @test !isdefined(_m, :Issue2) # This is defined at lines 27-30, which should be skipped
     end
 end
+
+# This test is just for 100% coverage by checking that absolute path includes are respected
+mktempdir() do tmpdir
+    cd(tmpdir) do
+        included_file = joinpath(tmpdir, "random_include.jl") |> abspath
+        open(included_file, "w") do io
+            write(io, "a = 15")
+        end
+        # We generate a dummy package folder
+        Pkg.generate("RandomPackage")
+        pkgdir = joinpath(tmpdir, "RandomPackage")
+        open(joinpath(pkgdir, "src", "RandomPackage.jl"), "w") do io
+            println(io, "module RandomPackage")
+            println(io, "include(raw\"$included_file\")")
+            println(io, "end")
+        end
+        dict = get_package_data(pkgdir)
+        load_module_in_caller(dict, Main)
+        m = get_target_module(dict)
+        @test isdefined(m, :a)
+    end
+end

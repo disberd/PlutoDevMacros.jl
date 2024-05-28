@@ -1,9 +1,9 @@
-import PlutoDevMacros.FromPackage: process_outside_pluto!, load_module_in_caller, modname_path, fromparent_module, parseinput, get_package_data, @fromparent, _combined, process_skiplines!, get_temp_module, LineNumberRange, parse_skipline, extract_module_expression, _inrange, filterednames, reconstruct_import_expr, extract_import_args, extract_raw_str, @frompackage, update_stored_module, get_target_module
+import PlutoDevMacros.FromPackage: process_outside_pluto!, load_module_in_caller, modname_path, fromparent_module, parseinput, get_package_data, @fromparent, _combined, process_skiplines!, get_temp_module, LineNumberRange, parse_skipline, extract_module_expression, _inrange, filterednames, reconstruct_import_expr, extract_import_args, extract_raw_str, @frompackage, update_stored_module, get_target_module, frompackage, FromPackage
 using Test
 
 import Pkg
 
-TestPackage_path = normpath(@__DIR__, "../TestPackage") 
+TestPackage_path = normpath(@__DIR__, "../TestPackage")
 # The LOAD_PATH hack is required because if we add ./TestPackage as a test dependency we get the error in https://github.com/JuliaLang/Pkg.jl/issues/1585
 push!(LOAD_PATH, TestPackage_path)
 import TestPackage
@@ -20,32 +20,35 @@ inpluto_caller = join([outpluto_caller, "#==#", "00000000-0000-0000-0000-0000000
 
 current_project = Base.active_project()
 try
-@testset "Errors" begin
-    @test_throws "No project" mktempdir() do tmpdir
+    @testset "Errors" begin
+        @test_throws "No project" mktempdir() do tmpdir
             get_package_data(tmpdir)
-    end 
-    @test_throws "is not a package" mktempdir() do tmpdir
-        cd(tmpdir) do 
-            Pkg.activate(".")
-            Pkg.add("TOML")
-            get_package_data(".")
         end
-    end
+        @test_throws "is not a package" mktempdir() do tmpdir
+            cd(tmpdir) do
+                Pkg.activate(".")
+                Pkg.add("TOML")
+                get_package_data(".")
+            end
+        end
 
-    mktemp() do path, io
-        open(path, "w") do io
-            write(io, """
-            module INCOMPLETE
-            a = 1
-            """)
-        end
-        if VERSION < v"1.10"
-            @test_throws "did not generate a valid `module`" extract_module_expression(path)
-        else
-            @test_throws Base.Meta.ParseError extract_module_expression(path)
+        mktemp() do path, io
+            open(path, "w") do io
+                write(
+                    io,
+                    """
+          module INCOMPLETE
+          a = 1
+          """
+                )
+            end
+            if VERSION < v"1.10"
+                @test_throws "did not generate a valid `module`" extract_module_expression(path)
+            else
+                @test_throws Base.Meta.ParseError extract_module_expression(path)
+            end
         end
     end
-end
 finally
     Pkg.activate(current_project)
 end
@@ -60,7 +63,7 @@ end
     str, valid = extract_raw_str(:(raw"asd\lol"))
     @test valid
     @test str == "asd\\lol"
-    @test_throws "Only `AbstractStrings`" Core.eval(Main, :(@frompackage 3+2 import *))
+    @test_throws "Only `AbstractStrings`" Core.eval(Main, :(@frompackage 3 + 2 import *))
     cd(dirname(inpackage_target)) do
         @test Core.eval(@__MODULE__, :(@frompackage raw".." import *)) === nothing
     end
@@ -96,7 +99,7 @@ end
 end
 
 @testset "Include using names" begin
-    target_dir = abspath(@__DIR__,"../TestUsingNames/")
+    target_dir = abspath(@__DIR__, "../TestUsingNames/")
     function f(target)
         target_file = joinpath(target_dir, target * "#==#00000000-0000-0000-0000-000000000000")
         dict = get_package_data(target_file)
@@ -167,7 +170,7 @@ end
     target_mod = update_stored_module(dict)
     m = Module(gensym())
     m.top_level_func = target_mod.top_level_func
-    @test :top_level_func ∉ filterednames(target_mod, m; package_dict = dict)
+    @test :top_level_func ∉ filterednames(target_mod, m; package_dict=dict)
     # We now overwrite the module to mimic reloading the macro
     package_dict = f(target)
     new_mod = get_target_module(package_dict)
@@ -175,7 +178,7 @@ end
     # We test the warning if we are trying to overwrite something we didn't put
     Core.eval(m, :(voila() = 5))
     Core.eval(new_mod, :(voila() = 6))
-    @test_logs (:warn, r"is already defined in the caller module") filterednames(new_mod, m; package_dict, explicit_names = Set([:voila]))
+    @test_logs (:warn, r"is already defined in the caller module") filterednames(new_mod, m; package_dict, explicit_names=Set([:voila]))
 end
 
 
@@ -211,7 +214,7 @@ end
             _ex = parseinput(:(using >.JSON), dict)
             # We now test that Tricks is loaded in DepsImports
             @test LoadedModules.JSON === Base.maybe_root_module(indirect_id)
-            
+
             # We test that trying to load a package that is not a dependency throws an error saying so
             @test_throws "The package DataFrames was not" parseinput(:(using >.DataFrames), dict)
 
@@ -263,7 +266,7 @@ end
 
             ex = :(@exclude_using import *)
             expected = let _mod = fromparent_module[].TestPackage
-                imported_names = filterednames(_mod; all = true, imported = true)
+                imported_names = filterednames(_mod; all=true, imported=true)
                 importednames_exprs = map(n -> Expr(:., n), imported_names)
                 modname_expr = Expr(:., vcat(parent_path, :TestPackage)...)
                 reconstruct_import_expr(modname_expr, importednames_exprs)
@@ -304,20 +307,20 @@ end
             lr1.first == lr2.first && lr1.last == lr2.last
         end
 
-        srcdir = abspath(@__DIR__,"../../src")
-        f(path) = abspath(srcdir,path)
+        srcdir = abspath(@__DIR__, "../../src")
+        f(path) = abspath(srcdir, path)
         mainfile = f("PlutoDevMacros.jl")
 
         p = "frompackage/helpers.jl"
-        @test iseq(parse_skipline("$(f(p)):::3-5", mainfile), LineNumberRange(f(p),3,5))
-        @test iseq(parse_skipline("$(f(p)):::3", mainfile), LineNumberRange(f(p),3,3))
-        @test iseq(parse_skipline("$(f(p))", mainfile), LineNumberRange(f(p),1,10^6))
-        @test iseq(parse_skipline("3-5", mainfile), LineNumberRange(mainfile,3,5))
-        @test iseq(parse_skipline("5", mainfile), LineNumberRange(mainfile,5,5))
+        @test iseq(parse_skipline("$(f(p)):::3-5", mainfile), LineNumberRange(f(p), 3, 5))
+        @test iseq(parse_skipline("$(f(p)):::3", mainfile), LineNumberRange(f(p), 3, 3))
+        @test iseq(parse_skipline("$(f(p))", mainfile), LineNumberRange(f(p), 1, 10^6))
+        @test iseq(parse_skipline("3-5", mainfile), LineNumberRange(mainfile, 3, 5))
+        @test iseq(parse_skipline("5", mainfile), LineNumberRange(mainfile, 5, 5))
     end
     @testset "Outside Pluto" begin
         # Outside of Pluto the @skiplines macro is simply removed from the exp
-        f(ex) = _combined(ex, inpackage_target, outpluto_caller, Main; macroname = "@frompackage") |> clean_expr
+        f(ex) = _combined(ex, inpackage_target, outpluto_caller, Main; macroname="@frompackage") |> clean_expr
         ex = quote
             import DataFrames
             import >.BenchmarkTools
@@ -362,6 +365,35 @@ end
         @test isdefined(_m, :testmethod) # this variable is defined inside notebook1.jl
         @test isdefined(_m, :Inner) # This is defined at line 22-25
         @test !isdefined(_m, :Issue2) # This is defined at lines 27-30, which should be skipped
+    end
+end
+
+# This tests macroexpand and the multiple calls error
+@testset "Macroexpand" begin
+    Base.with_logger(Base.NullLogger()) do
+        id1 = "4dc0e7fa-6ddc-48ba-867d-8e74d7e6e373"
+        id2 = "5288e998-6b66-4d46-ab8d-4aa3159c0982"
+        file_path = joinpath(TestPackage_path, "test_macroexpand.jl")
+        inpluto_path(id) = join([file_path, "#==#", id])
+        # Reset
+        FromPackage.macro_cell[] = "undefined"
+        # Create the fake module
+        m = Module(gensym(:MacroExpand))
+        m.var"@fromparent" = var"@fromparent"
+        # We simulate a call from cell 1 with the normal macro
+        fromparent_call_ex = Expr(:macrocall, Symbol("@fromparent"), LineNumberNode(36, Symbol(inpluto_path(id1))), :(import *))
+        macroexpand_ex = Expr(:macrocall, Symbol("@fromparent"), LineNumberNode(36, Symbol(inpluto_path(id1))), fromparent_call_ex)
+        # We try macroexpand and check that the custom variable was not generated
+        variable_name_id1 = FromPackage._id_name(id1)
+        Core.eval(m, macroexpand_ex)
+        @test !isdefined(m, variable_name_id1)
+        # Without the macroexpand, the variable should be generated
+        Core.eval(m, fromparent_call_ex)
+        @test isdefined(m, variable_name_id1)
+        # Lastly, we try calling the macro from another cell and test that it throws
+        error_ex = Expr(:macrocall, Symbol("@fromparent"), LineNumberNode(41, Symbol(inpluto_path(id2))), :(import *))
+        Core.eval(m, error_ex)
+        @test !isdefined(m, FromPackage._id_name(id2))
     end
 end
 

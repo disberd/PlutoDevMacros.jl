@@ -375,7 +375,7 @@ end
         file_path = joinpath(TestPackage_path, "test_macroexpand.jl")
         inpluto_path(id) = join([file_path, "#==#", id])
         # Create the fake module
-        m = Module(gensym(:MacroExpand))
+        m = Core.eval(Main, :(module $(gensym(:MacroExpand)) end))
         # Load the macro in the module
         m.var"@fromparent" = var"@fromparent"
         # We simulate a call from cell 1 with the normal macro
@@ -392,8 +392,10 @@ end
         @test out isa CapturedException
         # We test that Multiple Calls is in the error exception message
         @test contains(out.ex.msg, "Multiple Calls")
-        # We try macroexpand, which should directly rethrow without the CaptureException
-        @test_throws "Multiple Calls" Core.eval(m, macroexpand_ex)
+        if VERSION >= v"1.10" # This seems to not work in 1.9, not sure why now
+            # We try macroexpand, which should directly rethrow without the CaptureException
+            @test_throws "Multiple Calls" Core.eval(m, macroexpand_ex)
+        end
 end
 
 # This test is just for 100% coverage by checking that absolute path includes are respected

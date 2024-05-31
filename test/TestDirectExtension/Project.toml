@@ -13,6 +13,7 @@ PlotlyBase = "a03496cd-edff-5a9b-9e67-9cda94a718b5"
 [extensions]
 Magic = "Example"
 PlotlyBaseExt = "PlotlyBase"
+DualDepsExt = ["PlotlyBase", "Example"]
 
 [compat]
 PlotlyBase = "0.8"

@@ -29,8 +29,17 @@ standard_extension_output = to_extend(plot(rand(4)).Plot)
 # ╔═╡ 8e7563ce-d2ba-4356-93e4-70ebe0f2be87
 weird_extension_output = to_extend(Example)
 
+# ╔═╡ 8d561235-2003-4446-bd64-b7f235d653a4
+standard_extension_output === "Standard Extension works!" || error("PlotlyBase extension did not load")
+
+# ╔═╡ 6f258d3c-7c09-4009-ad8d-001dbd451ad2
+weird_extension_output === "Weird Extension name works!" || error("Example extension did not load")
+
 # ╔═╡ da703251-1f4a-4fa1-ba08-720bceb2ada6
 p = plot_this()
+
+# ╔═╡ 1e143a84-1a79-448b-a7ff-189ef167870d
+to_extend((hello, p.Plot)) === "Dual Deps Extension works!" || error("dual deps extension failed")
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -399,6 +408,9 @@ version = "17.4.0+2"
 # ╠═b93cdd74-1c65-4d15-a6e3-6c1855e37cce
 # ╠═675230da-e628-4059-b44d-6137a4dd4987
 # ╠═8e7563ce-d2ba-4356-93e4-70ebe0f2be87
+# ╠═8d561235-2003-4446-bd64-b7f235d653a4
+# ╠═6f258d3c-7c09-4009-ad8d-001dbd451ad2
+# ╠═1e143a84-1a79-448b-a7ff-189ef167870d
 # ╠═da703251-1f4a-4fa1-ba08-720bceb2ada6
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

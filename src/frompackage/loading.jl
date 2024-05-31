@@ -188,18 +188,7 @@ function load_module_in_caller(mod_exp::Expr, package_dict::Dict, caller_module)
 	__module = getfield(_MODULE_, mod_name)
 	# We put the dict inside the loaded module
 	Core.eval(__module, :(_fromparent_dict_ = $package_dict))
-	# @info block, __module
+    # Register this module as root module. 
+    register_target_module_as_root(package_dict)
 	return package_dict
-end
-
-function load_package_extensions(package_dict::Dict, caller_module::Module)
-	mod_name = package_dict["name"] |> Symbol
-	package_module = getfield(maybe_create_module(caller_module), mod_name)
-	load_package_extensions(package_module, package_dict)
-end
-function load_package_extensions(package_module::Module, package_dict::Dict)
-	add_loadpath(default_ecg())
-	# We try to reload 
-	maybe_add_extensions!(package_module, package_dict)
-	nothing
 end

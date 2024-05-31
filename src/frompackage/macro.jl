@@ -79,12 +79,10 @@ function frompackage(ex, target_file, caller, caller_module; macroname)
 		arg isa LineNumberNode && continue
 		push!(args, parseinput(arg, package_dict; caller_module))
 	end
-    # We add this module to the created_modules dict
-    created_modules[package_dict["file"]] = get_target_module(package_dict)
-	# Now we add the call to maybe load the package extensions
-	push!(args, :($load_package_extensions($package_dict, @__MODULE__)))
-    # Register this module as root module. We need to this after trying to load the extensions
-    push!(args, :($register_target_module_as_root($package_dict)))
+    # We update th stored root module
+    update_stored_module(package_dict)
+    # We call at runtime the function to trigger extensions loading
+    push!(args, :($try_load_extensions($package_dict)))
 	# We wrap the import expressions inside a try-catch, as those also correctly work from there.
 	# This also allow us to be able to catch the error in case something happens during loading and be able to gracefully clean the work space
 	text = "Reload $macroname"

@@ -6,11 +6,8 @@ function get_temp_module()
 end
 
 # Extract the module that is the target in dict
-function get_target_module(dict)
-    mod_name = Symbol(dict["name"])
-    m = getfield(get_temp_module(), mod_name)
-    return m
-end
+get_target_module(dict) = get_target_module(Symbol(dict["name"]))
+get_target_module(mod_name::Symbol) = getfield(get_temp_module(), mod_name)
 
 function get_target_uuid(dict) 
     uuid = get(dict, "uuid", nothing)
@@ -73,31 +70,6 @@ end
 ## package extensions helpers
 has_extensions(package_data) = haskey(package_data, "extensions") && haskey(package_data, "weakdeps")
 
-# This will extract all the useful extension data for each weakdep
-function get_extension_data(env::EnvCache)
-	project = env |> get_project
-	out = Dict{String, Any}()
-	isempty(project.exts) && return out
-	ext_dir = extensions_dir(env)
-	weakdeps = project.weakdeps
-	exts = Dict((v,k) for (k,v) in project.exts)
-	for (k,uuid) in weakdeps
-		module_name = exts[k]
-		filename = module_name * ".jl"
-		file_found = false
-		module_location = ""
-		for mid in ("", module_name)
-			file_found && break
-			module_location = joinpath(ext_dir, mid, filename)
-			isfile(module_location) && (file_found = true)
-		end
-		file_found || error("The module location for extension $module_name could not be found.")
-		module_name = Symbol(module_name)
-		out[k] = (;module_name, uuid, module_location)
-	end
-	out
-end
-
 function maybe_add_loaded_module(id::Base.PkgId)
 	symname = id.name |> Symbol
 	# We just returns if the module is already loaded
@@ -105,36 +77,6 @@ function maybe_add_loaded_module(id::Base.PkgId)
     loaded_module = Base.maybe_root_module(id)
 	isnothing(loaded_module) && error("The package $id does not seem to be loaded")
 	Core.eval(LoadedModules, :(const $(symname) = $(loaded_module)))
-	return nothing
-end
-
-
-function maybe_add_extensions!(package_module::Module, package_dict)
-	# This is to trigger reloading potential indirect extensions that failed loading
-	Base.retry_load_extensions()
-	has_extensions(package_dict) || return nothing # We skip this if no extensions are in the package
-	ecg = default_ecg()
-	ext_datas = package_dict["extension data"]
-	loaded_ext_names = get!(package_dict, "loaded extensions", Set{Symbol}())
-	for (weakdep, ext_data) in ext_datas
-		(;module_name, uuid, module_location) = ext_data
-		module_name in loaded_ext_names && continue
-		for env in (get_active(ecg), get_notebook(ecg))
-			module_name in loaded_ext_names && break
-			manifest = get_manifest(env)
-			haskey(manifest.deps, uuid) || continue # We don't have this as dependency, we skip
-			pkgid = Base.PkgId(uuid, manifest.deps[uuid].name)
-			# Add the required module to LoadedModules if not there already
-			maybe_add_loaded_module(pkgid)
-			# We push this as loaded extension
-			push!(loaded_ext_names, module_name)
-			# Now we evaluate the extension code in the package module
-			mod_exp = extract_module_expression(module_location)
-			eval_in_module(package_module,Expr(:toplevel, LineNumberNode(1, Symbol(module_location)), mod_exp), package_dict)
-			# We already evaluated this so we stop
-			break
-		end
-	end
 	return nothing
 end
 
@@ -158,16 +100,11 @@ function get_package_data(packagepath::AbstractString)
 	isfile(package_file) || error("The package package main file was not found at path $package_file")
 
 	package_data = deepcopy(target.project.other)
+    package_data["project"] = project_file
 	package_data["dir"] = package_dir
 	package_data["file"] = package_file
 	package_data["target"] = packagepath
 	package_data["ecg"] = ecg
-
-	# Check for extensions
-	if has_extensions(package_data)
-		package_data["extension data"] = get_extension_data(target)
-		package_data["loaded extensions"] = Set{Symbol}()
-	end
 
 	# We extract the PkgInfo for all packages in this environment
 	d,i = target_dependencies(target)
@@ -322,13 +259,28 @@ function extract_raw_str(ex::Expr)
 end
 extract_raw_str(s::AbstractString) = String(s), true
 
+function get_extensions_ids(old_module::Module, parent::Base.PkgId)
+    package_dict = old_module._fromparent_dict_
+    out = Base.PkgId[]
+    if has_extensions(package_dict)
+        for ext in keys(package_dict["extensions"])
+            id = Base.PkgId(Base.uuid5(parent.uuid, ext), ext)
+            push!(out, id)
+        end
+    end
+    return out
+end
+get_extensions_ids(::Nothing, ::Base.PkgId) = Base.PkgId[]
+
+
 # This function will register the target module for `dict` as a root module.
 # This relies on Base internals (and even the C API) but will allow make the loaded module behave more like if we simply did `using TargetPackage` in the REPL
-function register_target_module_as_root(dict)
-    m = get_target_module(dict)
-    id = get_target_pkgid(dict)
+function register_target_module_as_root(package_dict)
+    name_str = package_dict["name"]
+    m = get_target_module(Symbol(name_str))
+    id = get_target_pkgid(package_dict)
     uuid = id.uuid
-    entry_point = dict["file"]
+    entry_point = package_dict["file"]
     @lock Base.require_lock begin
         # Set the uuid of this module with the C API. This is required to get the correct UUID just from the module within `register_root_module`
         ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), m, uuid)
@@ -341,7 +293,33 @@ function register_target_module_as_root(dict)
     end
 end
 
+function try_load_extensions(package_dict::Dict)
+    has_extensions(package_dict) || return
+    m = get_target_module(package_dict)
+    proj_file = package_dict["project"]
+    id = Base.PkgId(m)
+    ext_ids = get_extensions_ids(m, id)
+    @lock Base.require_lock begin
+        # We try to clean up the eventual extensions (with target as parent) that we loaded with the previous version
+        for id in ext_ids
+            haskey(Base.EXT_PRIMED, id) && delete!(Base.EXT_PRIMED, id)
+            haskey(Base.loaded_modules, id) && delete!(Base.loaded_modules, id)
+        end
+        Base.insert_extension_triggers(proj_file, id)
+        Base.redirect_stderr(Base.DevNull()) do
+            Base.run_extension_callbacks(id)
+        end
+    end
+    return
+end
+
 # This function will get the module stored in the created_modules dict based on the entry point
-get_stored_module(dict) = get(created_modules, dict["file"], nothing)
+get_stored_module(package_dict) = get_stored_module(package_dict["uuid"])
+get_stored_module(key::String) = get(created_modules, key, nothing)
 # This will store in it
-update_stored_module(dict) = created_modules[dict["file"]] = get_target_module(dict)
+update_stored_module(key::String, m::Module) = created_modules[key] = m
+function update_stored_module(package_dict::Dict)
+    uuid = package_dict["uuid"]
+    m = get_target_module(package_dict)
+    update_stored_module(uuid, m)
+end

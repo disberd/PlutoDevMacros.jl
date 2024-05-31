@@ -17,11 +17,6 @@ function default_ecg()
 	return DEFAULT_ECG[]
 end
 
-function extensions_dir(env::EnvCache)
-	pkg = env.pkg
-	isnothing(pkg) && return nothing
-	ext_dir = joinpath(pkg.path, "ext")
-end
 get_manifest_file(e::EnvCache) = e.manifest_file
 get_project_file(e::EnvCache) = e.project_file
 get_manifest(e::EnvCache) = e.manifest

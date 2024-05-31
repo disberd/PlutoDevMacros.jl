@@ -73,32 +73,6 @@ function modify_package_using!(ex::Expr, loc, package_dict::Dict, eval_module::M
     return true
 end
 
-# This will simply make the using/import statements of the calling package point to the parent module
-function modify_extension_using!(ex::Expr, loc, package_dict::Dict, eval_module::Module)
-    Meta.isexpr(ex, (:using, :import)) || return true
-    has_extensions(package_dict) || return true
-    loaded_exts = get!(package_dict, "loaded extensions", Set{Symbol}())
-    package_name = Symbol(package_dict["name"])
-    # If we are not currently evaluating expressions inside the extension module, we return
-    eval_module_name = nameof(eval_module)
-    eval_module_name in loaded_exts || return true
-    ecg = default_ecg()
-    target_project = ecg |> get_target |> get_project
-    ext_mod_name = String(eval_module_name)
-    # Extract the name of the weakdep that triggered this extension
-    weakdep = target_project.exts[ext_mod_name] |> Symbol
-    package_expr, _ = extract_import_args(ex)
-    package_expr_args = package_expr.args
-    extracted_package_name = first(package_expr_args)
-    if extracted_package_name === weakdep
-        # We first add :_LoadedModules_
-        pushfirst!(package_expr_args, :_LoadedModules_)
-        # We also add the module path of the fromparent_module which contains _LoadedModules_
-        prepend!(package_expr_args, modname_path(fromparent_module[]))
-    end
-    return true
-end
-
 _is_include(ex) = Meta.isexpr(ex, :call) && ex.args[1] === :include
 _is_block(ex) = Meta.isexpr(ex, :block)
 
@@ -118,7 +92,7 @@ function process_expr!(ex, loc, dict, eval_module)
     ex isa Expr || return true # Apart from Nothing, we keep everything that is not an expr
     _is_block(ex) && return process_block!(ex, loc, dict, eval_module)
     _is_include(ex) && error("A call to include not at toplevel was found around line $loc. This is not permitted")
-    keep = all((remove_pluto_exprs, modify_package_using!, modify_extension_using!)) do f
+    keep = all((remove_pluto_exprs, modify_package_using!)) do f
         f(ex, loc, dict, eval_module)
     end
 end

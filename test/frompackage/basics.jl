@@ -3,6 +3,8 @@ using Test
 
 import Pkg
 
+# FromPackage.default_pkg_io[] = Pkg.stderr_f()
+
 TestPackage_path = normpath(@__DIR__, "../TestPackage")
 # The LOAD_PATH hack is required because if we add ./TestPackage as a test dependency we get the error in https://github.com/JuliaLang/Pkg.jl/issues/1585
 push!(LOAD_PATH, TestPackage_path)

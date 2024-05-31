@@ -148,7 +148,6 @@ function get_package_data(packagepath::AbstractString)
 
 	maybe_update_envcache(project_file, ecg; notebook = false)
 	target = get_target(ecg)
-	isnothing(target.pkg) && error("The project found at $project_file is not a package, simple environments are currently not supported")
 	# We update the notebook and active envcaches to be up to date
 	update_ecg!(ecg)
 

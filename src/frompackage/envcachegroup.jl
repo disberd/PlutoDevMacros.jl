@@ -1,4 +1,4 @@
-using Pkg.Types: EnvCache, write_project, Context, read_project, read_manifest, write_manifest
+using Pkg.Types: EnvCache, write_project, Context, read_project, read_manifest, write_manifest,  Manifest, Project, PackageEntry
 
 @kwdef mutable struct EnvCacheGroup
     "This is the EnvCache of the environment added by @fromparent to the LOAD_PATH"
@@ -35,6 +35,7 @@ get_active(ecg::EnvCacheGroup) = ecg.active
 get_target(ecg::EnvCacheGroup) = ecg.target
 get_notebook(ecg::EnvCacheGroup) = ecg.notebook
 
+# This will potentially update the target (or notebook) project the ECG is pointing to
 function maybe_update_envcache(projfile::String, ecg::EnvCacheGroup; notebook = false)
 	f = notebook ? get_notebook : get_target
 	env = f(ecg)
@@ -48,6 +49,7 @@ function maybe_update_envcache(projfile::String, ecg::EnvCacheGroup; notebook = 
 	return nothing
 end
 
+default_context(; io = default_pkg_io[]) = Context(; io)
 
 function update_envcache!(e::EnvCache)
 	e.project = read_project(e.project_file)
@@ -56,44 +58,80 @@ function update_envcache!(e::EnvCache)
 end
 update_envcache!(::Nothing) = nothing
 # Update the active EnvCache by eventually copying reduced project and manifest from the package EnvCache
-function update_ecg!(ecg::EnvCacheGroup; force = false, io::IO = devnull)
-	c = Context(; io)
+function update_ecg!(ecg::EnvCacheGroup; force = false, context = default_context())
 	# Update the target and notebook ecg 
-	update_envcache!(ecg |> get_target)
+    target = ecg |> get_target
+	update_envcache!(target)
 	update_envcache!(ecg |> get_notebook)
 	active = get_active(ecg)
 	active_manifest = active |> get_manifest_file
 	active_project = active |> get_project_file
-	target_manifest = get_target(ecg) |> get_manifest_file
+	target_manifest = target |> get_manifest_file
 	if !isfile(target_manifest)
 		@info "It seems that the target package does not have a manifest file. Trying to instantiate its environment"
-		c.env = ecg.target
-        Pkg.instantiate(c)
+		context.env = target
+        Pkg.instantiate(context)
 	end
 	if !isfile(active_manifest) || !isfile(active_project)
 		force = true
 	end
 	if !force
 		active_mtime = mtime(active_manifest)
-		target_mtime = mtime(ecg |> get_target |> get_manifest_file)
+		target_mtime = mtime(target_manifest)
         # Force an update if the target manifest is newer
 		force = force || active_mtime < target_mtime
 	end
-    if force
-        # This path will update the active Env by copying the project and manifest from the target
-		mkpath(dirname(active_manifest))
-		# We copy a reduced version of the project, only with deps, weakdeps and compat
-        pd = ecg.target.project.other
-        ad = Dict{String, Any}((k => pd[k] for k in ("deps", "compat", "weakdeps") if haskey(pd, k)))
-        write_project(ad, active_project)
-        # We copy the Manifest
-        copy_manifest(target_manifest, active_manifest)
-        # We call instantiate
-		update_envcache!(ecg.active)
-		c.env = ecg.active
-        Pkg.instantiate(c)
-    end
+    force && update_active_from_target!(ecg; context)
     return ecg
+end
+
+# This function will forcibly copy the target project/manifest to the active project/manifest. It will also add the target package as dev dependency to the active project/manifest. This will not rely on calling `Pkg.develop` directly as this will trigger pre-compilation and we are not really interested in precompiling the environment every time. This function assumes that the target environment is already instantiated
+function update_active_from_target!(ecg::EnvCacheGroup; context = default_context())
+    active = get_active(ecg)
+    target = get_target(ecg)
+    target_project = get_project(target)
+    # We create a deep copy of the project and manifest
+    project = active.project = let p = target_project
+        out = Project() # Initialize empty project
+        # Try to copy deps, compat, weakdeps and extensions from the target
+        for key in (:deps, :compat, :weakdeps, :exts)
+            target_val = getproperty(p, key)
+            isempty(target_val) && continue
+            setproperty!(out, key, deepcopy(target_val))
+        end
+        out
+    end
+    manifest = active.manifest = deepcopy(target.manifest)
+    # We make sure to make the path in the active manifest be absolute
+    target_dir = dirname(get_manifest_file(target))
+    for entry in values(manifest.deps)
+        path = entry.path
+        (path === nothing || isabspath(path)) && continue
+        # Make it absolute w.r.t to 
+        path = abspath(target_dir, path)
+        entry.path = path
+    end
+    # We now add the target package to the active env
+    @assert target_project.name !== nothing && target_project.uuid !== nothing "The project found at $(get_project_file(target)) is not a package, simple environments are currently not supported"
+    # Add the target within the project
+    project.deps[target_project.name] = target_project.uuid
+    target_pe = PackageEntry(;
+        name = target_project.name,
+        uuid = target_project.uuid,
+        path = target_dir,
+        version = target_project.version,
+        deps = deepcopy(target_project.deps),
+        weakdeps = deepcopy(target_project.weakdeps),
+        exts = deepcopy(target_project.exts),
+    )
+    manifest.deps[target_project.uuid] = target_pe
+    # We write the project and manifest
+    write_project(active)
+    write_manifest(active)
+    # We instantiate the active env
+    context.env = active
+    Pkg.resolve(context; update_registry = false)
+    Pkg.instantiate(context; update_registry = false, allow_build = false, allow_autoprecomp = false)
 end
 
 # Function to get the package dependencies from the manifest
@@ -108,23 +146,4 @@ function target_dependencies(target::EnvCache)
 		d[name] = PkgInfo(name, uuid, version)
 	end
 	direct, indirect
-end
-
-# This function will copy the manifest from the target environment to the active environment, taking care of making any relative path (i.e. for dev or added packages) absolute.
-function copy_manifest(target::AbstractString, active::AbstractString)
-    # We construct a TOML dict from the target manifest
-    raw_dict = TOML.parsefile(target)
-    deps = raw_dict["deps"]
-    for depval in values(deps)
-        for d in depval
-            path = get(d, "path", nothing)
-            isnothing(path) && continue
-            if !isabspath(path)
-                abs_path = abspath(dirname(target), path)
-                d["path"] = abs_path
-            end
-        end
-    end
-    write_manifest(raw_dict, active)
-    return nothing
 end

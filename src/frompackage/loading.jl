@@ -171,9 +171,8 @@ function load_module_in_caller(mod_exp::Expr, package_dict::Dict, caller_module)
 	_MODULE_ = maybe_create_module(caller_module)
 	# We reset the module path in case it was not cleaned
 	mod_name = mod_exp.args[2]
-	proj_file = ecg |> get_active |> get_project_file
 	# We inject the project in the LOAD_PATH if it is not present already
-	add_loadpath(proj_file)
+	add_loadpath(ecg)
     # We start by loading each of the direct dependencies in the LoadedModules submodule
     load_direct_deps(package_dict, _MODULE_)
 	# We try evaluating the expression within the custom module

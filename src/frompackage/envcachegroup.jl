@@ -96,7 +96,7 @@ function update_active_from_target!(ecg::EnvCacheGroup; context = default_contex
         end
         out
     end
-    manifest = active.manifest = deepcopy(target.manifest)
+    manifest = active.manifest = deepcopy(target |> get_manifest)
     # We make sure to make the path in the active manifest be absolute
     target_dir = dirname(get_manifest_file(target))
     for entry in values(manifest.deps)

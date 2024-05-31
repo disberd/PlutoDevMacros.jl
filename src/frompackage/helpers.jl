@@ -270,8 +270,6 @@ function get_extensions_ids(old_module::Module, parent::Base.PkgId)
     end
     return out
 end
-get_extensions_ids(::Nothing, ::Base.PkgId) = Base.PkgId[]
-
 
 # This function will register the target module for `dict` as a root module.
 # This relies on Base internals (and even the C API) but will allow make the loaded module behave more like if we simply did `using TargetPackage` in the REPL

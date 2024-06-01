@@ -6,7 +6,7 @@ function get_temp_module()
 end
 
 # Extract the module that is the target in dict
-get_target_module(dict) = get_target_module(Symbol(dict["name"]))
+get_target_module(dict) = dict["Created Module"]
 get_target_module(mod_name::Symbol) = getfield(get_temp_module(), mod_name)
 
 function get_target_uuid(dict) 
@@ -315,9 +315,29 @@ end
 get_stored_module(package_dict) = get_stored_module(package_dict["uuid"])
 get_stored_module(key::String) = get(created_modules, key, nothing)
 # This will store in it
-update_stored_module(key::String, m::Module) = created_modules[key] = m
+function update_stored_module(key::String, m::Module) 
+    old_module = get(created_modules, key, nothing)
+    # We eventually empty the old module
+    empty_module!(old_module)
+    created_modules[key] = m
+end
 function update_stored_module(package_dict::Dict)
     uuid = package_dict["uuid"]
     m = get_target_module(package_dict)
     update_stored_module(uuid, m)
 end
+
+# Function to clear a module, inspired by https://discourse.julialang.org/t/delete-a-module/62226/2
+function empty_module!(M::Module)
+    if isdefined(M, :_fromparent_dict_)
+        empty!(M._fromparent_dict_)
+    end
+    for name ∈ names(M, all=true)
+        if isconst(M, name)
+            applicable(empty!, getproperty(M, name)) && empty!(getproperty(M, name))
+        else
+            @eval M $name = $nothing
+        end
+    end
+end
+empty_module!(::Nothing) = nothing

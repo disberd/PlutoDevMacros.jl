@@ -45,6 +45,9 @@ function eval_include_expr(_mod, loc, ex, dict)
 		end
 		return StopEval("Target Found", loc)
 	end
+    # We track the included files
+    included_files = get!(dict, "Included Files", String[])
+    push!(included_files, filepath)
 	ast = extract_file_ast(filepath)
 	eval_toplevel(_mod, ast.args, dict)
 end

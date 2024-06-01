@@ -6,7 +6,7 @@ const fromparent_module = Ref{Module}()
 const macro_cell = Ref("undefined")
 const manifest_names = ("JuliaManifest.toml", "Manifest.toml")
 
-const created_modules = Dict{String, Module}()
+const TARGET_MODULE = Ref{Module}()
 
 struct PkgInfo 
 	name::Union{Nothing, String}

@@ -5,10 +5,6 @@ function get_temp_module()
     fromparent_module[]
 end
 
-# Extract the module that is the target in dict
-get_target_module(dict) = dict["Created Module"]
-get_target_module(mod_name::Symbol) = getfield(get_temp_module(), mod_name)
-
 function get_target_uuid(dict)
     uuid = get(dict, "uuid", nothing)
     if !isnothing(uuid)
@@ -276,7 +272,7 @@ end
 # This relies on Base internals (and even the C API) but will allow make the loaded module behave more like if we simply did `using TargetPackage` in the REPL
 function register_target_module_as_root(package_dict)
     name_str = package_dict["name"]
-    m = get_target_module(Symbol(name_str))
+    m = get_target_module(package_dict)
     id = get_target_pkgid(package_dict)
     uuid = id.uuid
     entry_point = package_dict["file"]
@@ -312,21 +308,21 @@ function try_load_extensions(package_dict::Dict)
     return
 end
 
-# This function will get the module stored in the created_modules dict based on the entry point
-get_stored_module(package_dict) = get_stored_module(package_dict["uuid"])
-get_stored_module(key::String) = get(created_modules, key, nothing)
+# This function will get the last created target module
+get_stored_module() = if isassigned(TARGET_MODULE) 
+    TARGET_MODULE[] 
+else 
+    nothing 
+end
+get_target_module(package_dict::Dict) = package_dict["Created Module"]
 # This will store in it
-function update_stored_module(key::String, m::Module) 
-    old_module = get(created_modules, key, nothing)
+function update_stored_module(m::Module) 
+    old_module = get_stored_module()
     # We eventually empty the old module
     empty_module!(old_module)
-    created_modules[key] = m
+    TARGET_MODULE[] = m
 end
-function update_stored_module(package_dict::Dict)
-    uuid = package_dict["uuid"]
-    m = get_target_module(package_dict)
-    update_stored_module(uuid, m)
-end
+update_stored_module(d::Dict) = update_stored_module(get_target_module(d))
 
 # Function to clear a module, inspired by https://discourse.julialang.org/t/delete-a-module/62226/2
 function empty_module!(M::Module)

@@ -2,7 +2,7 @@ using Pkg.Types: EnvCache, write_project, Context, read_project, read_manifest, 
 
 @kwdef mutable struct EnvCacheGroup
     "This is the EnvCache of the environment added by @fromparent to the LOAD_PATH"
-    active::EnvCache = EnvCache(mktempdir())
+    active::EnvCache = EnvCache(mktempdir(;prefix = "frompackage_"))
     "This is the environment of the target of @fromparent"
     target::Union{Nothing, EnvCache} = nothing
     "This is the environment of the notebook calling @fromparent"
@@ -87,7 +87,7 @@ function update_active_from_target!(ecg::EnvCacheGroup; context = default_contex
     target_project = get_project(target)
     # We create a deep copy of the project and manifest
     project = active.project = let p = target_project
-        # We create a generator to copy the parts of the raw dict we are interested in, see https://github.com/disberd/PlutoDevMacros.jl/issues/57
+        # We create a generator to copy the parts of the raw dict we are interested in.
         raw = (k => p.other[k] for k in ("deps", "weakdeps", "compat") if haskey(p.other,k)) |> Dict
         out = Project(raw) # Initialize empty project
         # Try to copy deps, compat, weakdeps and extensions from the target

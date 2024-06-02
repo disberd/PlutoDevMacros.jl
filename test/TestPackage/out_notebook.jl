@@ -68,7 +68,7 @@ isdefined(TestPackage, :TEST_INIT) && TestPackage.TEST_INIT[] == 5 || error("The
 isdefined(TestPackage.SUBINIT, :TEST_SUBINIT) && TestPackage.SUBINIT.TEST_SUBINIT[] == 15 || error("The execution of the __init__ function in the submodule did not seem to happen")
 
 # ╔═╡ 14a547ce-f48a-4f19-88f5-b2ca499fc087
-(pkgdir(TestPackage) === @__DIR__) || error("`pkgdir(TestPackage)` did not return the correct path, it seems like registering as root module failed")
+(FromPackage.issamepath(pkgdir(TestPackage), @__DIR__)) || error("`pkgdir(TestPackage)` did not return the correct path, it seems like registering as root module failed")
 
 # ╔═╡ Cell order:
 # ╠═931a8c2c-ed76-11ed-3721-396dae146ad4

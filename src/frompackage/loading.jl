@@ -45,6 +45,9 @@ function eval_include_expr(_mod, loc, ex, dict)
 		end
 		return StopEval("Target Found", loc)
 	end
+    # We track the included files
+    included_files = get!(dict, "Included Files", String[])
+    push!(included_files, filepath)
 	ast = extract_file_ast(filepath)
 	eval_toplevel(_mod, ast.args, dict)
 end
@@ -77,7 +80,8 @@ function eval_module_expr(parent_module, ex, dict)
     is_target_module = mod_name === Symbol(dict["name"])
 	block = ex.args[3]
 	# We create or overwrite the current module in the parent, and we redirect stderr to avoid the replace warning
-	new_module = redirect_stderr(Pipe()) do # Apparently giving devnull as stream is not enough to suprress the warning, but Pipe works
+    redirect_f = should_log() ? (f, args...) -> f() : Base.redirect_stderr 
+	new_module = redirect_f(Pipe()) do # Apparently giving devnull as stream is not enough to suprress the warning, but Pipe works
 		Core.eval(parent_module, :(module $mod_name end))
 	end
 	# If the block is empty, we just skip this block
@@ -126,7 +130,7 @@ end
 
 function maybe_create_module(m::Module)
 	if !isassigned(fromparent_module) 
-		fromparent_m = Core.eval(m, :(module $(gensym(:frompackage)) 
+		fromparent_m = Core.eval(Core.eval(m, :Main), :(module $(gensym(:frompackage)) 
 		end))
         # We create the dummy module where all the direct dependencies will be loaded
 		Core.eval(fromparent_m, :(module _DirectDeps_ end))
@@ -155,14 +159,24 @@ end
 
 
 ## load module
-function load_module_in_caller(target_file::String, caller_module)
+function maybe_load_module_in_caller(target_file::String, caller_module; force = false)
 	package_dict = get_package_data(target_file)
-	load_module_in_caller(package_dict, caller_module)
+	maybe_load_module_in_caller(package_dict, caller_module; force)
 end
-function load_module_in_caller(package_dict::Dict, caller_module)
-	package_file = package_dict["file"]
-	mod_exp = extract_module_expression(package_file)
-	load_module_in_caller(mod_exp, package_dict, caller_module)
+# This will return the module, the dict and whether the module was freshly loaded
+function maybe_load_module_in_caller(package_dict::Dict, caller_module; force = false)
+    outs = if force || ReviseHelpers.should_reload_module(package_dict)
+        package_file = package_dict["file"]
+        mod_exp = extract_module_expression(package_file)
+        m, d = load_module_in_caller(mod_exp, package_dict, caller_module)
+        (m, d, true)
+    else
+        # We simply reload the stored module
+        m = get_stored_module()
+        d = m._frompackage_dict_
+        (m, d, false)
+    end
+    return outs
 end
 function load_module_in_caller(mod_exp::Expr, package_dict::Dict, caller_module)
 	target_file = package_dict["target"]
@@ -185,9 +199,12 @@ function load_module_in_caller(mod_exp::Expr, package_dict::Dict, caller_module)
 	end
 	# Get the moduleof the parent package
 	__module = getfield(_MODULE_, mod_name)
+    package_dict["Created Module"] = __module
 	# We put the dict inside the loaded module
-	Core.eval(__module, :(_fromparent_dict_ = $package_dict))
+	Core.eval(__module, :(_frompackage_dict_ = $package_dict))
     # Register this module as root module. 
     register_target_module_as_root(package_dict)
-	return package_dict
+    # We add Revise tracking if we have it loaded
+    Base.invokelatest(ReviseHelpers.maybe_add_revise_data, package_dict)
+	return __module, package_dict
 end

@@ -1,4 +1,4 @@
-import PlutoDevMacros.FromPackage: process_outside_pluto!, load_module_in_caller, modname_path, fromparent_module, parseinput, get_package_data, @fromparent, _combined, process_skiplines!, get_temp_module, LineNumberRange, parse_skipline, extract_module_expression, _inrange, filterednames, reconstruct_import_expr, extract_import_args, extract_raw_str, @frompackage, update_stored_module, get_target_module, frompackage, FromPackage
+import PlutoDevMacros.FromPackage: process_outside_pluto!, maybe_load_module_in_caller, modname_path, fromparent_module, parseinput, get_package_data, @fromparent, _combined, process_skiplines!, get_temp_module, LineNumberRange, parse_skipline, extract_module_expression, _inrange, filterednames, reconstruct_import_expr, extract_import_args, extract_raw_str, @frompackage, update_stored_module, get_target_module, frompackage, FromPackage, get_stored_module
 using Test
 
 import Pkg
@@ -102,11 +102,11 @@ end
 
 @testset "Include using names" begin
     target_dir = abspath(@__DIR__, "../TestUsingNames/")
-    function f(target)
+    function f(target; force = true)
         target_file = joinpath(target_dir, target * "#==#00000000-0000-0000-0000-000000000000")
         dict = get_package_data(target_file)
         # Load the module
-        load_module_in_caller(dict, Main)
+        maybe_load_module_in_caller(dict, Main; force)
         return dict
     end
     function has_symbol(symbol, ex::Expr)
@@ -169,11 +169,14 @@ end
 
     # We test the new skipping capabilities of `filterednames`
     # We save the loaded module in the created_modules variable
-    target_mod = update_stored_module(dict)
+    target_mod = get_target_module(dict)
     m = Module(gensym())
-    m.top_level_func = target_mod.top_level_func
+    m.top_level_func = (x) -> x
     @test :top_level_func ∉ filterednames(target_mod, m; package_dict=dict)
     # We now overwrite the module to mimic reloading the macro
+    # We save the previous module as the stored one
+    update_stored_module(target_mod)
+    m.top_level_func = target_mod.top_level_func
     package_dict = f(target)
     new_mod = get_target_module(package_dict)
     @test :top_level_func ∈ filterednames(new_mod, m; package_dict)
@@ -187,7 +190,7 @@ end
 @testset "Inside Pluto" begin
     @testset "Input Parsing" begin
         @testset "target included in Package" begin
-            dict = load_module_in_caller(inpackage_target, Main)
+            _, dict, _ = maybe_load_module_in_caller(inpackage_target, Main)
             f(ex) = parseinput(deepcopy(ex), dict)
 
 
@@ -258,7 +261,7 @@ end
             @test expected == f(ex)
         end
         @testset "target not included in Package" begin
-            dict = load_module_in_caller(inpluto_caller, Main)
+            _, dict, _ = maybe_load_module_in_caller(inpluto_caller, Main)
             f(ex) = parseinput(deepcopy(ex), dict)
             parent_path = modname_path(fromparent_module[])
 
@@ -336,7 +339,7 @@ end
         @test clean_expr(out_ex) == f(ex)
     end
     @testset "Inside Pluto" begin
-        dict = get_package_data(outpackage_target)
+        dict = get_package_data(inpluto_caller)
         ex = quote
             import >.BenchmarkTools
             @skiplines begin
@@ -344,8 +347,8 @@ end
             end
         end
         process_skiplines!(ex, dict)
-        load_module_in_caller(dict, Main)
-        _m = get_temp_module().TestPackage
+        m, d, just = maybe_load_module_in_caller(dict, Main; force = true)
+        _m = get_target_module(dict)
 
         @test isdefined(_m, :hidden_toplevel_variable) # This is directly at the top of the module
         @test isdefined(_m, :testmethod) # this variable is defined inside notebook1.jl
@@ -360,7 +363,7 @@ end
             @skiplines $(skip_str) # We are skipping from line 26
         end
         process_skiplines!(ex, dict)
-        load_module_in_caller(dict, Main)
+        maybe_load_module_in_caller(dict, Main; force = true)
         _m = get_temp_module().TestPackage
 
         @test isdefined(_m, :hidden_toplevel_variable) # This is directly at the top of the module
@@ -416,7 +419,7 @@ mktempdir() do tmpdir
             println(io, "end")
         end
         dict = get_package_data(pkgdir)
-        load_module_in_caller(dict, Main)
+        maybe_load_module_in_caller(dict, Main)
         m = get_target_module(dict)
         @test isdefined(m, :a)
     end

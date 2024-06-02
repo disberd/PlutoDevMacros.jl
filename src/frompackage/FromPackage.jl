@@ -8,6 +8,7 @@ module FromPackage
     include("types.jl")
     include("envcachegroup.jl")
     include("helpers.jl")
+    include("revise_helpers.jl")
     include("code_parsing.jl")
     include("loading.jl")
     include("input_parsing.jl")

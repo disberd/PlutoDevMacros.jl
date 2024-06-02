@@ -8,8 +8,15 @@ MacroTools = "1914dd2f-81c6-5fcd-8719-6d5c9610ff09"
 Pkg = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
 TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
 
+[weakdeps]
+Revise = "295af30f-e4ad-537b-8983-00126c2a3abe"
+
+[extensions]
+ReviseExt = "Revise"
+
 [compat]
 MacroTools = "0.5"
 Pkg = "1"
+Revise = "3"
 TOML = "1"
 julia = "1.9"

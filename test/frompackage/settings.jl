@@ -1,4 +1,5 @@
-import PlutoDevMacros.FromPackage: FromPackage, add_loadpath, process_settings!, get_setting, get_active, get_project_file
+import PlutoDevMacros.FromPackage: FromPackage, add_loadpath, process_settings!, get_active, get_project_file
+import PlutoDevMacros.FromPackage.Settings: Settings, get_setting, SETTINGS_DEFAULTS, SETTINGS_SYNONYMS, setting_name, add_setting, remove_setting
 using Test
 
 TestPackage_path = normpath(@__DIR__, "../TestPackage")
@@ -9,15 +10,15 @@ target = TestPackage_path
 @test startswith(FromPackage.default_ecg() |> get_active |> get_project_file |> dirname |> basename, "frompackage_")
 
 @testset "Get Setting" begin
-    @test_throws "is not a valid setting" get_setting(:asdfasdf)
+    @test_throws "is not associated to any valid setting" get_setting(:asdfasdf)
     key = :SHOULD_PREPEND_LOAD_PATH
-    current = getproperty(FromPackage, key)[]
+    current = SETTINGS_DEFAULTS[key]
     @test get_setting(key) === current
 
-    getproperty(FromPackage, key)[] = !current
+    SETTINGS_DEFAULTS[key] = !current
     @test get_setting(key) === !current
 
-    getproperty(FromPackage, key)[] = current
+    SETTINGS_DEFAULTS[key] = current
     @test get_setting(key) === current
     # Test with dict
     d = Dict("Custom Settings" => Dict(key => !current))
@@ -25,6 +26,13 @@ target = TestPackage_path
 end
 
 @testset "Parsing" begin
+    # Check that we don't have a as name
+    @test_logs (:warn, r"Nothing was removed") remove_setting(:a)
+    # We add a and b as valid setting names
+    add_setting(:a, 0)
+    add_setting(:b, 0)
+    @test get_setting(:a) === 0
+    @test get_setting(:b) === 0
     ex = :(@settings a = 1)
     # Nothing done without block, as that is anyhow not supported
     @test ex === process_settings!(ex, Dict())
@@ -59,9 +67,15 @@ end
     @test haskey(d, "Custom Settings")
     @test d["Custom Settings"][:a] == 1
     @test d["Custom Settings"][:b] == 2
+    remove_setting(:a)
+    @test_throws "is not associated to any valid setting" setting_name(:a)
+    remove_setting(:b)
+    @test_throws "is not associated to any valid setting" setting_name(:b)
 end
 
 @testset "SHOULD_PREPEND_LOAD_PATH" begin
+    @test setting_name(:prepend) === :SHOULD_PREPEND_LOAD_PATH
+
     proj_file = FromPackage.default_ecg() |> get_active |> get_project_file
     # Remove the custom envs from the load path
     filter!(LOAD_PATH) do proj

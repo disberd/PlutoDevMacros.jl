@@ -41,7 +41,8 @@ function parse_settings(ex, dict)
         custom_settings = get!(Dict{Symbol, Any}, dict, "Custom Settings")
         k,v = arg.args
         @assert !(v isa Expr) "Only primitive values are allowed as values in the `@settings` block"
-        custom_settings[k] = v
+        name = Settings.setting_name(k)
+        custom_settings[name] = v
     end
 end
 

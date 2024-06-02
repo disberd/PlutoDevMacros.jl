@@ -58,7 +58,5 @@ module Settings
         end
     end
 
-    function __init__()
-        add_setting(:SHOULD_PREPEND_LOAD_PATH, false, (:should_prepend_load_path, :prepend, :prepend_load_path))
-    end
+    add_setting(:SHOULD_PREPEND_LOAD_PATH, false, (:should_prepend_load_path, :prepend, :prepend_load_path))
 end

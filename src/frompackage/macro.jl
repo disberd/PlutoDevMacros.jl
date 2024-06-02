@@ -58,6 +58,8 @@ function frompackage(ex, target_file, caller, caller_module; macroname)
 		dict = get_package_data(target_file)
 		# We try to extract eventual lines to skip
 		process_skiplines!(ex, dict)
+        # We extract and process custom settings
+		process_settings!(ex, dict)
 		load_module_in_caller(dict, caller_module)
 	else
 		error("Multiple Calls: The $macroname is already present in cell with id $(macro_cell[]), you can only have one call-site per notebook")

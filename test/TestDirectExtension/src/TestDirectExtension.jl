@@ -1,5 +1,7 @@
 module TestDirectExtension
 
+using PlotlyExtensionsHelper
+
 export to_extend, plot_this
 
 to_extend(x) = "Generic Method"

@@ -65,17 +65,20 @@ end
     proj_file = FromPackage.default_ecg() |> get_active |> get_project_file
     # Remove the custom envs from the load path
     filter!(LOAD_PATH) do proj
-        startswith(proj, joinpath(tempdir(), "frompackage_"))
+        !startswith(proj |> dirname |> basename, "frompackage_")
     end
+    @info LOAD_PATH
     l = length(LOAD_PATH)
     @test proj_file ∉ LOAD_PATH
     add_loadpath(proj_file; should_prepend = false)
     @test length(LOAD_PATH) == l+1
     add_loadpath(proj_file; should_prepend = false)
     @test length(LOAD_PATH) == l+1
-    @test pop!(LOAD_PATH) == proj_file
-    
+    @test LOAD_PATH[end] == proj_file
+    LOAD_PATH[end] == proj_file && pop!(LOAD_PATH)
+
     # Prepend
     add_loadpath(proj_file; should_prepend = true)
-    @test popfirst!(LOAD_PATH) == proj_file
+    @test LOAD_PATH[1] == proj_file
+    LOAD_PATH[1] == proj_file && popfirst!(LOAD_PATH)
 end

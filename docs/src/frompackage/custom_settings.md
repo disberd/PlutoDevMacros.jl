@@ -20,4 +20,8 @@ end
 Only assignments are supported inside the `@settings` block and only primitive values can be used as `val`, i.e. anything that is parsed as an `Expr` as macro argument is not a valid `val`.
 
 These are the supported settings:
-- `SHOULD_PREPEND_LOAD_PATH::Bool`: Defaults to `false`. This specifies whether the active environment added to the `LOAD_PATH` by the macro should go to the end or to the front of the `LOAD_PATH`. In some cases it can be useful to have the custom environment at the beginning of the LOAD_PATH for the purpose of locating packages.
+
+## `SHOULD_PREPEND_LOAD_PATH`
+`Bool` value that **defaults to `false`**. 
+
+This specifies whether the active environment added to the `LOAD_PATH` by the macro should go to the end or to the front of the `LOAD_PATH`. In some cases it can be useful to have the custom environment at the beginning of the LOAD_PATH for the purpose of locating packages.

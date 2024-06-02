@@ -81,7 +81,7 @@ function should_skip(loc, lines_to_skip)
     skip = any(lines_to_skip) do lr
         _inrange(loc, lr)
     end
-    # skip && @info "Skipping $loc"
+    skip && should_log() && @info "Skipping $loc"
     skip
 end
 

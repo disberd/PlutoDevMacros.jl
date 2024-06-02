@@ -80,7 +80,8 @@ function eval_module_expr(parent_module, ex, dict)
     is_target_module = mod_name === Symbol(dict["name"])
 	block = ex.args[3]
 	# We create or overwrite the current module in the parent, and we redirect stderr to avoid the replace warning
-	new_module = redirect_stderr(Pipe()) do # Apparently giving devnull as stream is not enough to suprress the warning, but Pipe works
+    redirect_f = should_log() ? (f, args...) -> f() : Base.redirect_stderr 
+	new_module = redirect_f(Pipe()) do # Apparently giving devnull as stream is not enough to suprress the warning, but Pipe works
 		Core.eval(parent_module, :(module $mod_name end))
 	end
 	# If the block is empty, we just skip this block

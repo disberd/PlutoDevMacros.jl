@@ -294,6 +294,7 @@ function try_load_extensions(package_dict::Dict)
     proj_file = package_dict["project"]
     id = Base.PkgId(m)
     ext_ids = get_extensions_ids(m, id)
+    redirect_f = should_log() ? (f, args...) -> f() : Base.redirect_stderr 
     @lock Base.require_lock begin
         # We try to clean up the eventual extensions (with target as parent) that we loaded with the previous version
         for id in ext_ids
@@ -301,7 +302,7 @@ function try_load_extensions(package_dict::Dict)
             haskey(Base.loaded_modules, id) && delete!(Base.loaded_modules, id)
         end
         Base.insert_extension_triggers(proj_file, id)
-        Base.redirect_stderr(Base.DevNull()) do
+        redirect_f(Base.DevNull()) do
             Base.run_extension_callbacks(id)
         end
     end
@@ -338,3 +339,5 @@ function empty_module!(M::Module)
     end
 end
 empty_module!(::Nothing) = nothing
+
+should_log() = !HIDE_OUTPUT[]

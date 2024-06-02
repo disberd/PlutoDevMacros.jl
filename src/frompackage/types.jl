@@ -6,6 +6,7 @@ const fromparent_module = Ref{Module}()
 const macro_cell = Ref("undefined")
 const manifest_names = ("JuliaManifest.toml", "Manifest.toml")
 
+const HIDE_OUTPUT = Ref(true)
 const TARGET_MODULE = Ref{Module}()
 
 struct PkgInfo 

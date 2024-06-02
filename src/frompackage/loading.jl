@@ -130,7 +130,7 @@ end
 
 function maybe_create_module(m::Module)
 	if !isassigned(fromparent_module) 
-		fromparent_m = Core.eval(m, :(module $(gensym(:frompackage)) 
+		fromparent_m = Core.eval(Core.eval(m, :Main), :(module $(gensym(:frompackage)) 
 		end))
         # We create the dummy module where all the direct dependencies will be loaded
 		Core.eval(fromparent_m, :(module _DirectDeps_ end))

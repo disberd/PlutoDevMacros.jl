@@ -63,6 +63,10 @@ end
 
 @testset "SHOULD_PREPEND_LOAD_PATH" begin
     proj_file = FromPackage.default_ecg() |> get_active |> get_project_file
+    # Remove the custom envs from the load path
+    filter!(LOAD_PATH) do proj
+        startswith(proj, joinpath(tempdir(), "frompackage_"))
+    end
     l = length(LOAD_PATH)
     @test proj_file ∉ LOAD_PATH
     add_loadpath(proj_file; should_prepend = false)

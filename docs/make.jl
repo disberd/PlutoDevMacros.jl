@@ -22,6 +22,7 @@ makedocs(;
             "Skipping Package Parts" => "frompackage/skipping_parts.md",
             "Use with PlutoPkg" => "frompackage/use_with_plutopkg.md",
             "Package Extensions" => "frompackage/package_extensions.md",
+            "Custom Settings" => "frompackage/custom_settings.md",
         ],
         "Other Exports" => "other_functions.md",
         # "PlutoHTLCombine" => "htl_combine.md",

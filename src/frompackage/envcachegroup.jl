@@ -87,9 +87,11 @@ function update_active_from_target!(ecg::EnvCacheGroup; context = default_contex
     target_project = get_project(target)
     # We create a deep copy of the project and manifest
     project = active.project = let p = target_project
-        out = Project() # Initialize empty project
+        # We create a generator to copy the parts of the raw dict we are interested in, see https://github.com/disberd/PlutoDevMacros.jl/issues/57
+        raw = (k => p.other[k] for k in ("deps", "weakdeps", "compat") if haskey(p.other,k)) |> Dict
+        out = Project(raw) # Initialize empty project
         # Try to copy deps, compat, weakdeps and extensions from the target
-        for key in (:deps, :compat, :weakdeps, :exts)
+        for key in (:deps, :weakdeps, :compat)
             target_val = getproperty(p, key)
             isempty(target_val) && continue
             setproperty!(out, key, deepcopy(target_val))

@@ -1,23 +1,57 @@
-# This funtion tries to look within the expression fed to @frompackage to look for calls to @skiplines
-function process_skiplines!(ex, dict)
+function detect_custom_macro!(ex, macro_name::Symbol)
 	block = if Meta.isexpr(ex, :block)
 		ex
 	else
-		Expr(:block, ex)
+        # We don't support custom macros for single statements
+        return nothing
 	end
-	skipline_arg = 0
+    idx = 0
 	for i ∈ eachindex(block.args)
 		arg = block.args[i]	
-		if Meta.isexpr(arg, :macrocall) && arg.args[1] === Symbol("@skiplines")
-			skipline_arg = i
+		if Meta.isexpr(arg, :macrocall) && arg.args[1] === macro_name
+			idx = i
 			break
 		end
 	end
-	skipline_arg != 0 || return ex
+	idx != 0 || return nothing
+    # We extract the arg and delete it from the expr
+    arg = block.args[idx]
+    deleteat!(block.args, idx)
+    return arg
+end
+
+# This function checks for settings and eventually stores them in the package_dict
+function process_settings!(ex, dict)
+    settings_arg = detect_custom_macro!(ex, Symbol("@settings"))
+    !isnothing(settings_arg) || return ex
+    parse_settings(settings_arg, dict)
+    return ex
+end
+
+function parse_settings(ex, dict)
+    maybe_block_arg = ex.args[3]
+    setting_args = if Meta.isexpr(maybe_block_arg, :block)
+        maybe_block_arg.args
+    else
+        ex.args[3:end]
+    end
+    for arg in setting_args
+        arg isa LineNumberNode && continue
+        @assert Meta.isexpr(arg, :(=)) && length(arg.args) == 2 "Only `var = value` statements are allowed within the `@settings` block"
+        custom_settings = get!(Dict{Symbol, Any}, dict, "Custom Settings")
+        k,v = arg.args
+        @assert !(v isa Expr) "Only primitive values are allowed as values in the `@settings` block"
+        custom_settings[k] = v
+    end
+end
+
+# This funtion tries to look within the expression fed to @frompackage to look for calls to @skiplines
+function process_skiplines!(ex, dict)
+    skiplines_arg = detect_custom_macro!(ex, Symbol("@skiplines"))
+    !isnothing(skiplines_arg) || return ex
 	# We initialize the Vector of LineRanges to skip
 	dict["Lines to Skip"] = LineNumberRange[]
-	parse_skiplines(block.args[skipline_arg], dict)
-	deleteat!(ex.args, skipline_arg)
+	parse_skiplines(skiplines_arg, dict)
 	return ex
 end
 

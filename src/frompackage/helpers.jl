@@ -54,11 +54,16 @@ end
 =#
 
 # Functions to add and remove from the LOAD_PATH
-function add_loadpath(entry::String)
-	entry ∈ LOAD_PATH || push!(LOAD_PATH, entry)
-	return nothing
+function add_loadpath(entry::String; should_prepend)
+    idx = findfirst(==(entry), LOAD_PATH)
+    if isnothing(idx)
+        f! = should_prepend ? pushfirst! : push!
+        # We add
+        f!(LOAD_PATH, entry)
+    end
+    return nothing
 end
-add_loadpath(ecg::EnvCacheGroup) = add_loadpath(ecg |> get_active |> get_project_file)
+add_loadpath(ecg::EnvCacheGroup; kwargs...) = add_loadpath(ecg |> get_active |> get_project_file; kwargs...)
 
 ## execute only in notebook
 # We have to create our own simple check to only execute some stuff inside the notebook where they are defined. We have stuff in basics.jl but we don't want to include that in this notebook

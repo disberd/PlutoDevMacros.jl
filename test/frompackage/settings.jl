@@ -8,7 +8,21 @@ target = TestPackage_path
 # We test that the prefix is there in the temp env
 @test startswith(FromPackage.default_ecg() |> get_active |> get_project_file |> dirname |> basename, "frompackage_")
 
-@test_throws "is not a valid setting" get_setting(:asdfasdf)
+@testset "Get Setting" begin
+    @test_throws "is not a valid setting" get_setting(:asdfasdf)
+    key = :SHOULD_PREPEND_LOAD_PATH
+    current = getproperty(FromPackage, key)[]
+    @test get_setting(key) === current
+
+    getproperty(FromPackage, key)[] = !current
+    @test get_setting(key) === !current
+
+    getproperty(FromPackage, key)[] = current
+    @test get_setting(key) === current
+    # Test with dict
+    d = Dict("Custom Settings" => Dict(key => !current))
+    @test get_setting(d, key) === !current
+end
 
 @testset "Parsing" begin
     ex = :(@settings a = 1)

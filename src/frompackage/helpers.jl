@@ -120,7 +120,7 @@ getfirst(itr) = getfirst(x -> true, itr)
 
 ## filterednames
 function filterednames(m::Module, caller_module=nothing; all=true, imported=true, explicit_names=nothing, package_dict=nothing)
-    excluded = (:eval, :include, :_fromparent_dict_, Symbol("@bind"))
+    excluded = (:eval, :include, :_frompackage_dict_, Symbol("@bind"))
     mod_names = names(m; all, imported)
     filter_args = if explicit_names isa Set{Symbol}
         for name in mod_names
@@ -140,7 +140,7 @@ function filterednames_filter_func(m; excluded, caller_module, package_dict)
             Base.isgensym(s) && return false
             s in excluded && return false
             if caller_module isa Module
-                previous_target_module = get_stored_module(package_dict)
+                previous_target_module = get_stored_module()
                 # We check and avoid putting in scope symbols which are already in the caller module
                 isdefined(caller_module, s) || return true
                 # Here we have to extract the symbols to compare them
@@ -257,7 +257,7 @@ end
 extract_raw_str(s::AbstractString) = String(s), true
 
 function get_extensions_ids(old_module::Module, parent::Base.PkgId)
-    package_dict = old_module._fromparent_dict_
+    package_dict = old_module._frompackage_dict_
     out = Base.PkgId[]
     if has_extensions(package_dict)
         for ext in keys(package_dict["extensions"])
@@ -271,7 +271,6 @@ end
 # This function will register the target module for `dict` as a root module.
 # This relies on Base internals (and even the C API) but will allow make the loaded module behave more like if we simply did `using TargetPackage` in the REPL
 function register_target_module_as_root(package_dict)
-    name_str = package_dict["name"]
     m = get_target_module(package_dict)
     id = get_target_pkgid(package_dict)
     uuid = id.uuid
@@ -327,8 +326,9 @@ update_stored_module(d::Dict) = update_stored_module(get_target_module(d))
 
 # Function to clear a module, inspired by https://discourse.julialang.org/t/delete-a-module/62226/2
 function empty_module!(M::Module)
-    if isdefined(M, :_fromparent_dict_)
-        empty!(M._fromparent_dict_)
+    if isdefined(M, :_frompackage_dict_)
+        d = M._frompackage_dict_
+        d isa Dict && empty!(M._frompackage_dict_)
     end
     for name ∈ names(M, all=true)
         if isconst(M, name)

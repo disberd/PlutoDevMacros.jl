@@ -54,11 +54,11 @@ function frompackage(ex, target_file, caller, caller_module; macroname)
 	id_name = _id_name(cell_id)
 	ex isa Expr || error("You have to call this macro with an import statement or a begin-end block of import statements")
 	# Try to load the module of the target package in the calling workspace and return the dict with extracted paramteres
-	package_dict = if is_call_unique(cell_id, caller_module)
+	target_module, package_dict, just_loaded = if is_call_unique(cell_id, caller_module)
 		dict = get_package_data(target_file)
 		# We try to extract eventual lines to skip
 		process_skiplines!(ex, dict)
-		load_module_in_caller(dict, caller_module)
+		maybe_load_module_in_caller(dict, caller_module)
 	else
 		error("Multiple Calls: The $macroname is already present in cell with id $(macro_cell[]), you can only have one call-site per notebook")
 	end
@@ -79,10 +79,12 @@ function frompackage(ex, target_file, caller, caller_module; macroname)
 		arg isa LineNumberNode && continue
 		push!(args, parseinput(arg, package_dict; caller_module))
 	end
-    # We update th stored root module
-    update_stored_module(package_dict)
-    # We call at runtime the function to trigger extensions loading
-    push!(args, :($try_load_extensions($package_dict)))
+    if just_loaded
+        # We update th stored root module
+        update_stored_module(package_dict)
+        # We call at runtime the function to trigger extensions loading
+        push!(args, :($try_load_extensions($package_dict)))
+    end
 	# We wrap the import expressions inside a try-catch, as those also correctly work from there.
 	# This also allow us to be able to catch the error in case something happens during loading and be able to gracefully clean the work space
 	text = "Reload $macroname"

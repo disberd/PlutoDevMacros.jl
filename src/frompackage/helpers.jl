@@ -325,8 +325,10 @@ function update_stored_module(package_dict::Dict)
     update_stored_module(m)
 end
 
-function overwrite_imported_symbols(package_dict)
+overwrite_imported_symbols(package_dict::Dict) = overwrite_imported_symbols(get(Set{Symbol}, package_dict, "Imported Symbols"))
+# This overwrites the PREVIOUSLY_IMPORTED_SYMBOLS with the contents of new_symbols
+function overwrite_imported_symbols(new_symbols)
     empty!(PREVIOUSLY_IMPORTED_NAMES)
-    union!(PREVIOUSLY_IMPORTED_NAMES, package_dict["Imported Symbols"])
+    union!(PREVIOUSLY_IMPORTED_NAMES, new_symbols)
     nothing
 end

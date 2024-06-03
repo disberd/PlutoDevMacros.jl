@@ -124,17 +124,16 @@ function eval_module_expr(parent_module, ex, dict)
 	return out isa StopEval ? out : nothing
 end
 
-function maybe_create_module(m::Module)
-	if !isassigned(fromparent_module) 
-		fromparent_m = Core.eval(m, :(module $(gensym(:frompackage)) 
-		end))
-        # We create the dummy module where all the direct dependencies will be loaded
-		Core.eval(fromparent_m, :(module _DirectDeps_ end))
-		# We also set a reference to LoadedModules for access from the notebook
-		Core.eval(fromparent_m, :(const _LoadedModules_ = $LoadedModules))
-		fromparent_module[] = fromparent_m
-	end
-	return fromparent_module[]
+function maybe_create_module()
+    m = get_temp_module()
+    isnothing(m) || return m
+    fromparent_m = Core.eval(Main, :(module $TEMP_MODULE_NAME 
+    end))
+    # We create the dummy module where all the direct dependencies will be loaded
+    Core.eval(fromparent_m, :(module _DirectDeps_ end))
+    # We also set a reference to LoadedModules for access from the notebook
+    Core.eval(fromparent_m, :(const _LoadedModules_ = $LoadedModules))
+    return fromparent_m
 end
 
 # This will explicitly import each direct dependency of the package inside the LoadedModules module. Loading all of the direct dependencies will help make every dependency available even if not directly loaded in the target source code.
@@ -168,9 +167,15 @@ function load_module_in_caller(mod_exp::Expr, package_dict::Dict, caller_module)
 	target_file = package_dict["target"]
 	ecg = default_ecg()
 	# If the module Reference inside fromparent_module is not assigned, we create the module in the calling workspace and assign it
-	_MODULE_ = maybe_create_module(caller_module)
+	_MODULE_ = maybe_create_module()
 	# We reset the module path in case it was not cleaned
 	mod_name = mod_exp.args[2]
+    # We reset the list of symbols if we loaded a different module
+    stored_module = get_stored_module()
+    if !isnothing(stored_module) && nameof(stored_module) !== mod_name
+        # We reset the list of previous symbols
+        empty!(PREVIOUSLY_IMPORTED_NAMES)
+    end
 	# We inject the project in the LOAD_PATH if it is not present already
 	add_loadpath(ecg; should_prepend = Settings.get_setting(package_dict, :SHOULD_PREPEND_LOAD_PATH))
     # We start by loading each of the direct dependencies in the LoadedModules submodule
@@ -184,7 +189,9 @@ function load_module_in_caller(mod_exp::Expr, package_dict::Dict, caller_module)
 		rethrow(e)
 	end
 	# Get the moduleof the parent package
-	__module = getfield(_MODULE_, mod_name)
+	__module = getproperty(_MODULE_, mod_name)::Module
+    # We put the module in the dict
+    package_dict["Created Module"] = __module
 	# We put the dict inside the loaded module
 	Core.eval(__module, :(_fromparent_dict_ = $package_dict))
     # Register this module as root module. 

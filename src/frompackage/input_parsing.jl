@@ -259,12 +259,12 @@ function process_imported_nameargs!(args, dict)
 end
 ## Per-type versions
 function process_imported_nameargs!(args, dict, t::FromPackageImport)
-	name_init = modname_path(fromparent_module[])
+	name_init = modname_path(get_temp_module())
 	args[1] = t.mod_name
 	prepend!(args, name_init)
 end
 function process_imported_nameargs!(args, dict, t::Union{FromParentImport, RelativeImport})
-	name_init = modname_path(fromparent_module[])
+	name_init = modname_path(get_temp_module())
 	# Here transform the relative module name to the one based on the full loaded module path
 	target_path = get(dict, "Target Path", []) |> reverse
 	isempty(target_path) && error("The current file was not found included in the loaded module $(t.mod_name), so you can't use relative path imports")
@@ -285,7 +285,7 @@ function process_imported_nameargs!(args, dict, t::FromDepsImport)
     maybe_add_loaded_module(t.id)
     deps_module_name = :_LoadedModules_
 	args[1] = deps_module_name # We replace `>` with _LoadedModules_
-	name_init = modname_path(fromparent_module[])
+	name_init = modname_path(get_temp_module())
 	prepend!(args, name_init)
     return nothing
 end
@@ -317,7 +317,7 @@ function should_include_using_names!(ex)
 end
 
 ## parseinput
-function parseinput(ex, package_dict; caller_module = nothing)
+function parseinput(ex, package_dict; caller_module)
     include_using = should_include_using_names!(ex)
 	# We get the module
 	modname_expr, importednames_exprs = extract_import_args(ex)
@@ -346,10 +346,11 @@ function parseinput(ex, package_dict; caller_module = nothing)
     explicit_names = if include_using
         package_dict["Using Names"].explicit_names
     else
-        nothing
+        Set{Symbol}()
     end
-	# We extract the imported names either due to catchall or due to the standard using
-	imported_names = filterednames(_mod, caller_module; all = catchall, imported = catchall, explicit_names, package_dict)
+	imported_names = filterednames(_mod; all = catchall, imported = catchall, explicit_names, caller_module)
+    # We add the imported names to the set for tracking names imported by this macrocall
+    union!(get!(Set{Symbol}, package_dict, "Imported Symbols"), imported_names)
 	# At this point we have all the names and we just have to create the final expression
 	importednames_exprs = map(n -> Expr(:., n), imported_names)
 	return reconstruct_import_expr(modname_expr, importednames_exprs)

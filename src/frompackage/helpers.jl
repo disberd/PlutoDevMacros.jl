@@ -1,13 +1,12 @@
 import ..PlutoDevMacros: hide_this_log
 
 function get_temp_module() 
-    @assert isassigned(fromparent_module) "You have to assing the parent module by calling `maybe_create_module` with a Pluto workspace module as input before you can use `get_temp_module`"
-    fromparent_module[]
+    isdefined(Main, TEMP_MODULE_NAME) || return nothing
+    return getproperty(Main, TEMP_MODULE_NAME)::Module
 end
 
 # Extract the module that is the target in dict
-get_target_module(dict) = get_target_module(Symbol(dict["name"]))
-get_target_module(mod_name::Symbol) = getfield(get_temp_module(), mod_name)
+get_target_module(dict) = dict["Created Module"]
 
 function get_target_uuid(dict) 
     uuid = get(dict, "uuid", nothing)
@@ -118,7 +117,7 @@ function get_package_data(packagepath::AbstractString)
 	return package_data
 end
 
-## getfirst
+# Get the first element in itr that satisfies predicate p, or nothing if itr is empty or no elements satisfy p
 function getfirst(p, itr)
     for el in itr
         p(el) && return el
@@ -127,45 +126,46 @@ function getfirst(p, itr)
 end
 getfirst(itr) = getfirst(x -> true, itr)
 
-## filterednames
-function filterednames(m::Module, caller_module = nothing; all = true, imported = true, explicit_names = nothing, package_dict = nothing)
+## Similar to names but allows to exclude names and add explicit ones. It also filter names based on whether they are defined already in the caller module
+function filterednames(m::Module; all = true, imported = true, explicit_names = Set{Symbol}(), caller_module::Module)
 	excluded = (:eval, :include, :_fromparent_dict_, Symbol("@bind"))
-    mod_names = names(m;all, imported)
-    filter_args = if explicit_names isa Set{Symbol}
-        for name in mod_names
-            push!(explicit_names, name)
-        end
-        collect(explicit_names)
-    else
-        mod_names
-    end
-    filter_func = filterednames_filter_func(m; excluded, caller_module, package_dict)
+    mod_names = names(m; all, imported)
+    filter_args = union(mod_names, explicit_names)
+    filter_func = filterednames_filter_func(;excluded, caller_module)
 	filter(filter_func, filter_args)
 end
 
-function filterednames_filter_func(m; excluded, caller_module, package_dict)
-    f(s) = let excluded = excluded, caller_module = caller_module, package_dict = package_dict
+function has_ancestor_module(target::Module, ancestor_name::Symbol; previous = nothing)
+    has_ancestor_module(target, (ancestor_name,); previous)
+end
+function has_ancestor_module(target::Module, ancestor_names; previous = nothing)
+    nm = nameof(target)
+    nm in ancestor_names && return true # Ancestor found
+    nm === previous && return false # The target is the same as previous, so we reached a top-level module
+    return has_ancestor_module(parentmodule(target), ancestor_names; previous = nm)
+end
+
+# This returns two flags: whether the name can be included and whether a warning should be generated
+function can_import_in_caller(name::Symbol, caller::Module)
+    isdefined(caller, name) || return true, false # If is not defined we can surely import it
+    owner = which(caller, name)
+    # Skip (and do not warn) for things defined in Base or Core
+    has_ancestor_module(owner, (:Base, :Core, :Markdown, :InteractiveUtils)) && return false, false
+    # We check if the name is inside the list of symbols imported by the previous module
+    in_previous = name in PREVIOUSLY_IMPORTED_NAMES
+    return in_previous, !in_previous
+end
+
+function filterednames_filter_func(;excluded, caller_module)
+    f(s) = let excluded = excluded, caller = caller_module
         Base.isgensym(s) && return false
         s in excluded && return false
-        if caller_module isa Module
-            previous_target_module = get_stored_module(package_dict)
-            # We check and avoid putting in scope symbols which are already in the caller module
-            isdefined(caller_module, s) || return true
-            # Here we have to extract the symbols to compare them
-            mod_val = getfield(m, s)
-            caller_val = getfield(caller_module, s)
-            if caller_val !== mod_val 
-                if isdefined(previous_target_module, s) && caller_val === getfield(previous_target_module, s)
-                    # We are just replacing the previous implementation of this call's target package, so we want to overwrite
-                    return true
-                else
-                    @warn "Symbol `:$s`, is already defined in the caller module and points to a different object. Skipping"
-                end
-            end
-            return false
-        else # We don't check for names clashes with a caller module
-            return true
+        should_include, should_warn = can_import_in_caller(s, caller)
+        if should_warn 
+            owner = which(caller, s)
+            @warn "The name `$s`, defined in $owner, is already present in the caller module and will not be imported."
         end
+        return should_include
     end
     return f
 end
@@ -280,7 +280,7 @@ end
 # This relies on Base internals (and even the C API) but will allow make the loaded module behave more like if we simply did `using TargetPackage` in the REPL
 function register_target_module_as_root(package_dict)
     name_str = package_dict["name"]
-    m = get_target_module(Symbol(name_str))
+    m = get_target_module(package_dict)
     id = get_target_pkgid(package_dict)
     uuid = id.uuid
     entry_point = package_dict["file"]
@@ -317,12 +317,16 @@ function try_load_extensions(package_dict::Dict)
 end
 
 # This function will get the module stored in the created_modules dict based on the entry point
-get_stored_module(package_dict) = get_stored_module(package_dict["uuid"])
-get_stored_module(key::String) = get(created_modules, key, nothing)
+get_stored_module() = STORED_MODULE[]
 # This will store in it
-update_stored_module(key::String, m::Module) = created_modules[key] = m
+update_stored_module(m::Module) = STORED_MODULE[] = m
 function update_stored_module(package_dict::Dict)
-    uuid = package_dict["uuid"]
     m = get_target_module(package_dict)
-    update_stored_module(uuid, m)
+    update_stored_module(m)
+end
+
+function overwrite_imported_symbols(package_dict)
+    empty!(PREVIOUSLY_IMPORTED_NAMES)
+    union!(PREVIOUSLY_IMPORTED_NAMES, package_dict["Imported Symbols"])
+    nothing
 end

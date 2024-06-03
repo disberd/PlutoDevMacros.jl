@@ -83,6 +83,8 @@ function frompackage(ex, target_file, caller, caller_module; macroname)
 	end
     # We update th stored root module
     update_stored_module(package_dict)
+    # We put the included names in PREVIOUSLY_IMPORTED_NAMES
+    overwrite_imported_symbols(package_dict)
     # We call at runtime the function to trigger extensions loading
     push!(args, :($try_load_extensions($package_dict)))
 	# We wrap the import expressions inside a try-catch, as those also correctly work from there.

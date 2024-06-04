@@ -1,4 +1,4 @@
-import PlutoDevMacros.FromPackage: process_outside_pluto!, load_module_in_caller, temp_module_path, parseinput, get_package_data, @fromparent, _combined, process_skiplines!, get_temp_module, LineNumberRange, parse_skipline, extract_module_expression, _inrange, filterednames, reconstruct_import_expr, extract_import_args, extract_raw_str, @frompackage, update_stored_module, get_target_module, frompackage, FromPackage, can_import_in_caller, overwrite_imported_symbols
+import PlutoDevMacros.FromPackage: process_outside_pluto!, load_module_in_caller, temp_module_path, parseinput, get_package_data, @fromparent, _combined, process_skiplines!, get_temp_module, LineNumberRange, parse_skipline, extract_module_expression, _inrange, filterednames, reconstruct_import_expr, extract_import_args, extract_raw_str, @frompackage, update_stored_module, get_target_module, frompackage, FromPackage, can_import_in_caller, overwrite_imported_symbols, has_ancestor_module
 using Test
 
 import Pkg
@@ -424,4 +424,17 @@ mktempdir() do tmpdir
         m = get_target_module(dict)
         @test isdefined(m, :a)
     end
+end
+
+# We test has_ancestor_module
+@testset "has_ancestor_module" begin
+    m = Main
+    for path_name in (:Test1, :Test2, :Test3)
+        m = Core.eval(m, :(module $path_name end))
+    end
+    @test has_ancestor_module(m, :Test1) # It has an ancestor called :Test1
+    @test !has_ancestor_module(m, :Test1; only_rootmodule = true) # It has an ancestor called :Test1, but it's not the root module (the one which is the parent of itself, i.e. Main in this example)
+    @test has_ancestor_module(m, :Main; only_rootmodule = true) # It has an ancestor Main which is the root
+    @test has_ancestor_module(m, (:Test2, :Test4)) # it works with either of the elements provided
+    @test !has_ancestor_module(m, (:Test5, :Test4)) # it works with either of the elements provided
 end

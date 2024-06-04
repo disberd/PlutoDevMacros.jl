@@ -108,9 +108,21 @@ srcdir = joinpath(@__DIR__, "../TestUsingNames/src/")
     for filename in ["test_notebook1.jl", "test_notebook2.jl"]
         path = abspath(srcdir, "..", filename)
         nb = SessionActions.open(ss, path; run_async=false)
+        # We test that no errors are present
         for cell in nb.cells
             @test noerror(cell)
         end
+        # We extract the rand_variable value
+        first_value = eval_in_nb((ss, nb), :rand_variable)
+        # We rerun the second cell, containing the `@fromparent` call
+        update_run!(ss, nb, nb.cells[2])
+        # We check again that no errors arose
+        for cell in nb.cells
+            @test noerror(cell)
+        end
+        # We check that the rand_variable value changed
+        second_value = eval_in_nb((ss, nb), :rand_variable)
+        @test first_value != second_value
         SessionActions.shutdown(ss, nb)
     end
 end

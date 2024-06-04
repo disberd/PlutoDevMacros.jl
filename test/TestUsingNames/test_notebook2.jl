@@ -49,8 +49,14 @@ isdefined(@__MODULE__, :base64encode) || error("base64encode from Base64 should 
 clash_name === 0 || error("The clashed name was not handled correctly")
   ╠═╡ =#
 
+# ╔═╡ 4492d516-2b23-45b7-bf76-7458e7352fea
+#=╠═╡
+rand_variable # This should change at every re-run
+  ╠═╡ =#
+
 # ╔═╡ Cell order:
 # ╠═4f8def86-f90b-4f74-ac47-93fe6e437cee
 # ╠═ac3d261a-86c9-453f-9d86-23a8f30ca583
 # ╠═dd3f662f-e2ce-422d-a91a-487a4da359cc
 # ╠═c72f2544-eb2e-4ed6-a89b-495ead20b5f6
+# ╠═4492d516-2b23-45b7-bf76-7458e7352fea

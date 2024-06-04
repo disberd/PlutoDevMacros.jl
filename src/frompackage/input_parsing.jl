@@ -145,20 +145,8 @@ function import_type(args, dict)
 	error("The provided import expression is not supported, please look at @frompackage documentation to see the supported imports")
 end
 
-# Get the full path of the module as array of Symbols starting from Main
-function modname_path(m::Module)
-	args = [nameof(m)]
-	m_old = m
-	_m = parentmodule(m)
-	while _m !== m_old && _m !== Main
-		m_old = _m
-		pushfirst!(args, nameof(_m))
-		_m = parentmodule(_m)
-	end
-	_m === Main || error("modname_path did not reach Main, this is not expected")
-	pushfirst!(args, nameof(_m))
-	return args
-end
+# This is the path of the temp module which will be prepended to the package name
+temp_module_path() = (:Main, TEMP_MODULE_NAME)
 
 ## process outside pluto
 # We parse all the expressions in the block provided as input to @fromparent
@@ -259,12 +247,12 @@ function process_imported_nameargs!(args, dict)
 end
 ## Per-type versions
 function process_imported_nameargs!(args, dict, t::FromPackageImport)
-	name_init = modname_path(get_temp_module())
+	name_init = temp_module_path()
 	args[1] = t.mod_name
 	prepend!(args, name_init)
 end
 function process_imported_nameargs!(args, dict, t::Union{FromParentImport, RelativeImport})
-	name_init = modname_path(get_temp_module())
+	name_init = temp_module_path()
 	# Here transform the relative module name to the one based on the full loaded module path
 	target_path = get(dict, "Target Path", []) |> reverse
 	isempty(target_path) && error("The current file was not found included in the loaded module $(t.mod_name), so you can't use relative path imports")
@@ -285,7 +273,7 @@ function process_imported_nameargs!(args, dict, t::FromDepsImport)
     maybe_add_loaded_module(t.id)
     deps_module_name = :_LoadedModules_
 	args[1] = deps_module_name # We replace `>` with _LoadedModules_
-	name_init = modname_path(get_temp_module())
+	name_init = temp_module_path()
 	prepend!(args, name_init)
     return nothing
 end

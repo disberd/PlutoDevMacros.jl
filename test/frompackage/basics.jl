@@ -1,4 +1,4 @@
-import PlutoDevMacros.FromPackage: process_outside_pluto!, load_module_in_caller, modname_path, parseinput, get_package_data, @fromparent, _combined, process_skiplines!, get_temp_module, LineNumberRange, parse_skipline, extract_module_expression, _inrange, filterednames, reconstruct_import_expr, extract_import_args, extract_raw_str, @frompackage, update_stored_module, get_target_module, frompackage, FromPackage, can_import_in_caller, overwrite_imported_symbols
+import PlutoDevMacros.FromPackage: process_outside_pluto!, load_module_in_caller, temp_module_path, parseinput, get_package_data, @fromparent, _combined, process_skiplines!, get_temp_module, LineNumberRange, parse_skipline, extract_module_expression, _inrange, filterednames, reconstruct_import_expr, extract_import_args, extract_raw_str, @frompackage, update_stored_module, get_target_module, frompackage, FromPackage, can_import_in_caller, overwrite_imported_symbols
 using Test
 
 import Pkg
@@ -194,7 +194,7 @@ end
             f(ex) = parseinput(deepcopy(ex), dict; caller_module)
 
 
-            parent_path = modname_path(get_temp_module())
+            parent_path = temp_module_path()
             # FromDeps imports
             ex = :(using >.BenchmarkTools)
 
@@ -264,7 +264,7 @@ end
             caller_module = Module(gensym())
             dict = load_module_in_caller(inpluto_caller, caller_module)
             f(ex) = parseinput(deepcopy(ex), dict; caller_module)
-            parent_path = modname_path(get_temp_module())
+            parent_path = temp_module_path()
 
             ex = :(import PackageModule.Issue2)
             expected = :(import $(parent_path...).TestPackage.Issue2)

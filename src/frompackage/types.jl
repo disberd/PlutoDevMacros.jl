@@ -4,7 +4,7 @@ const default_pkg_io = Ref{IO}(devnull)
 
 const TEMP_MODULE_NAME = :_FromPackage_TempModule_
 const STORED_MODULE = Ref{Union{Module, Nothing}}(nothing)
-const PREVIOUSLY_IMPORTED_NAMES = Set{Symbol}()
+const PREVIOUS_CATCHALL_NAMES = Set{Symbol}()
 const macro_cell = Ref("undefined")
 const manifest_names = ("JuliaManifest.toml", "Manifest.toml")
 

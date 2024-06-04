@@ -174,7 +174,7 @@ function load_module_in_caller(mod_exp::Expr, package_dict::Dict, caller_module)
     stored_module = get_stored_module()
     if !isnothing(stored_module) && nameof(stored_module) !== mod_name
         # We reset the list of previous symbols
-        empty!(PREVIOUSLY_IMPORTED_NAMES)
+        empty!(PREVIOUS_CATCHALL_NAMES)
     end
 	# We inject the project in the LOAD_PATH if it is not present already
 	add_loadpath(ecg; should_prepend = Settings.get_setting(package_dict, :SHOULD_PREPEND_LOAD_PATH))

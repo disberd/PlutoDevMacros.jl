@@ -338,7 +338,7 @@ function parseinput(ex, package_dict; caller_module)
     end
 	imported_names = filterednames(_mod; all = catchall, imported = catchall, explicit_names, caller_module)
     # We add the imported names to the set for tracking names imported by this macrocall
-    union!(get!(Set{Symbol}, package_dict, "Imported Symbols"), imported_names)
+    union!(get!(Set{Symbol}, package_dict, "Catchall Imported Symbols"), imported_names)
 	# At this point we have all the names and we just have to create the final expression
 	importednames_exprs = map(n -> Expr(:., n), imported_names)
 	return reconstruct_import_expr(modname_expr, importednames_exprs)

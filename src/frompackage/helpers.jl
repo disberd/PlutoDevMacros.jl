@@ -135,14 +135,15 @@ function filterednames(m::Module; all = true, imported = true, explicit_names = 
 	filter(filter_func, filter_args)
 end
 
-function has_ancestor_module(target::Module, ancestor_name::Symbol; previous = nothing)
-    has_ancestor_module(target, (ancestor_name,); previous)
+function has_ancestor_module(target::Module, ancestor_name::Symbol; previous = nothing, only_rootmodule = false)
+    has_ancestor_module(target, (ancestor_name,); previous, only_rootmodule)
 end
-function has_ancestor_module(target::Module, ancestor_names; previous = nothing)
+function has_ancestor_module(target::Module, ancestor_names; previous = nothing, only_rootmodule = false)
     nm = nameof(target)
-    nm in ancestor_names && return true # Ancestor found
-    nm === previous && return false # The target is the same as previous, so we reached a top-level module
-    return has_ancestor_module(parentmodule(target), ancestor_names; previous = nm)
+    ancestor_found = nm in ancestor_names 
+    !only_rootmodule && ancestor_found && return true # Ancestor found, and no check on only_rootmodule
+    nm === previous && return ancestor_found # The target is the same as previous, so we reached a top-level module. We return whether the ancestor was found and is a parent of itself
+    return has_ancestor_module(parentmodule(target), ancestor_names; previous = nm, only_rootmodule)
 end
 
 # This returns two flags: whether the name can be included and whether a warning should be generated
@@ -150,9 +151,10 @@ function can_import_in_caller(name::Symbol, caller::Module)
     isdefined(caller, name) || return true, false # If is not defined we can surely import it
     owner = which(caller, name)
     # Skip (and do not warn) for things defined in Base or Core
-    has_ancestor_module(owner, (:Base, :Core, :Markdown, :InteractiveUtils)) && return false, false
+    invalid_ancestor = has_ancestor_module(owner, (:Base, :Core, :Markdown, :InteractiveUtils))
+    invalid_ancestor && return false, false
     # We check if the name is inside the list of symbols imported by the previous module
-    in_previous = name in PREVIOUSLY_IMPORTED_NAMES
+    in_previous = name in PREVIOUS_CATCHALL_NAMES
     return in_previous, !in_previous
 end
 
@@ -325,10 +327,10 @@ function update_stored_module(package_dict::Dict)
     update_stored_module(m)
 end
 
-overwrite_imported_symbols(package_dict::Dict) = overwrite_imported_symbols(get(Set{Symbol}, package_dict, "Imported Symbols"))
+overwrite_imported_symbols(package_dict::Dict) = overwrite_imported_symbols(get(Set{Symbol}, package_dict, "Catchall Imported Symbols"))
 # This overwrites the PREVIOUSLY_IMPORTED_SYMBOLS with the contents of new_symbols
 function overwrite_imported_symbols(new_symbols)
-    empty!(PREVIOUSLY_IMPORTED_NAMES)
-    union!(PREVIOUSLY_IMPORTED_NAMES, new_symbols)
+    empty!(PREVIOUS_CATCHALL_NAMES)
+    union!(PREVIOUS_CATCHALL_NAMES, new_symbols)
     nothing
 end

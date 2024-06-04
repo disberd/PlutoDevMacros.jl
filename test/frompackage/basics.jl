@@ -194,7 +194,7 @@ end
             f(ex) = parseinput(deepcopy(ex), dict; caller_module)
 
 
-            parent_path = temp_module_path()
+            parent_path = temp_module_path() |> collect
             # FromDeps imports
             ex = :(using >.BenchmarkTools)
 
@@ -264,7 +264,7 @@ end
             caller_module = Module(gensym())
             dict = load_module_in_caller(inpluto_caller, caller_module)
             f(ex) = parseinput(deepcopy(ex), dict; caller_module)
-            parent_path = temp_module_path()
+            parent_path = temp_module_path() |> collect
 
             ex = :(import PackageModule.Issue2)
             expected = :(import $(parent_path...).TestPackage.Issue2)

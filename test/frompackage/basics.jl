@@ -1,4 +1,4 @@
-import PlutoDevMacros.FromPackage: process_outside_pluto!, load_module_in_caller, modname_path, fromparent_module, parseinput, get_package_data, @fromparent, _combined, process_skiplines!, get_temp_module, LineNumberRange, parse_skipline, extract_module_expression, _inrange, filterednames, reconstruct_import_expr, extract_import_args, extract_raw_str, @frompackage, update_stored_module, get_target_module, frompackage, FromPackage
+import PlutoDevMacros.FromPackage: process_outside_pluto!, load_module_in_caller, temp_module_path, parseinput, get_package_data, @fromparent, _combined, process_skiplines!, get_temp_module, LineNumberRange, parse_skipline, extract_module_expression, _inrange, filterednames, reconstruct_import_expr, extract_import_args, extract_raw_str, @frompackage, update_stored_module, get_target_module, frompackage, FromPackage, can_import_in_caller, overwrite_imported_symbols, has_ancestor_module
 using Test
 
 import Pkg
@@ -102,11 +102,12 @@ end
 
 @testset "Include using names" begin
     target_dir = abspath(@__DIR__, "../TestUsingNames/")
+    caller_module = Core.eval(Main, :(module $(gensym(:TestUsingNames)) end))
     function f(target)
         target_file = joinpath(target_dir, target * "#==#00000000-0000-0000-0000-000000000000")
         dict = get_package_data(target_file)
         # Load the module
-        load_module_in_caller(dict, Main)
+        load_module_in_caller(dict, caller_module)
         return dict
     end
     function has_symbol(symbol, ex::Expr)
@@ -122,30 +123,30 @@ end
     dict = f(target)
     invalid(ex) = nothing === process_outside_pluto!(deepcopy(ex), dict)
     # Test that this only works with catchall
-    @test_throws "You can only use @exclude_using" parseinput(:(@exclude_using import Downloads), dict)
+    @test_throws "You can only use @exclude_using" parseinput(:(@exclude_using import Downloads), dict; caller_module)
     # Test that it throws with ill-formed expression
-    @test_throws "You can only use @exclude_using" parseinput(:(@exclude_using), dict)
+    @test_throws "You can only use @exclude_using" parseinput(:(@exclude_using), dict; caller_module)
     # Test the deprecation warning
-    @test_logs (:warn, r"Use `@exclude_using`") parseinput(:(@include_using import *), dict)
+    @test_logs (:warn, r"Use `@exclude_using`") parseinput(:(@include_using import *), dict; caller_module)
     # Test unsupported expression
-    @test_throws "The provided input expression is not supported" parseinput(:(@asd import *), dict)
+    @test_throws "The provided input expression is not supported" parseinput(:(@asd import *), dict; caller_module)
 
     # Test that even with the @exclude_using macro in front the expression is filtered out outside Pluo
     @test invalid(:(@exclude_using import *))
     # Test that the names are extracted correctly
-    ex = parseinput(:(import *), dict)
+    ex = parseinput(:(import *), dict; caller_module)
     @test has_symbol(:domath, ex)
-    ex = parseinput(:(@exclude_using import *), dict)
+    ex = parseinput(:(@exclude_using import *), dict; caller_module)
     @test !has_symbol(:domath, ex)
 
     # Test2 - test2.jl
     target = "src/test2.jl"
     dict = f(target)
     # Test that the names are extracted correctly
-    ex = parseinput(:(import *), dict)
+    ex = parseinput(:(import *), dict; caller_module)
     @test has_symbol(:test1, ex) # test1 is exported by Module Test1
     @test has_symbol(:base64encode, ex) # test1 is exported by Module Base64
-    ex = parseinput(:(@exclude_using import *), dict)
+    ex = parseinput(:(@exclude_using import *), dict; caller_module)
     @test !has_symbol(:test1, ex)
     @test !has_symbol(:base64encode, ex)
 
@@ -153,18 +154,18 @@ end
     target = "src/test3.jl"
     dict = f(target)
     # Test that the names are extracted correctly, :top_level_func is exported by TestUsingNames
-    ex = parseinput(:(import *), dict)
+    ex = parseinput(:(import *), dict; caller_module)
     @test has_symbol(:top_level_func, ex)
-    ex = parseinput(:(@exclude_using import *), dict)
+    ex = parseinput(:(@exclude_using import *), dict; caller_module)
     @test !has_symbol(:top_level_func, ex)
 
     # Test from a file outside the package
     target = ""
     dict = f(target)
     # Test that the names are extracted correctly, :base64encode is exported by Base64
-    ex = parseinput(:(import *), dict)
+    ex = parseinput(:(import *), dict; caller_module)
     @test has_symbol(:base64encode, ex)
-    ex = parseinput(:(@exclude_using import *), dict)
+    ex = parseinput(:(@exclude_using import *), dict; caller_module)
     @test !has_symbol(:base64encode, ex)
 
     # We test the new skipping capabilities of `filterednames`
@@ -172,26 +173,28 @@ end
     target_mod = update_stored_module(dict)
     m = Module(gensym())
     m.top_level_func = target_mod.top_level_func
-    @test :top_level_func ∉ filterednames(target_mod, m; package_dict=dict)
-    # We now overwrite the module to mimic reloading the macro
-    package_dict = f(target)
-    new_mod = get_target_module(package_dict)
-    @test :top_level_func ∈ filterednames(new_mod, m; package_dict)
+    @test :top_level_func ∉ filterednames(target_mod; caller_module =  m)
+    # We test that it will be imported in a new module without clash
+    @test :top_level_func ∈ filterednames(target_mod; caller_module =  Module(gensym()))
+    # We test that it will also be imported with clash if the name was explicitly imported before. It will still throw as there is already a variable with that name defined in the caller but the filterins should not exclude it
+    overwrite_imported_symbols([:top_level_func])
+    @test :top_level_func ∈ filterednames(target_mod; caller_module = m)
+
     # We test the warning if we are trying to overwrite something we didn't put
-    Core.eval(m, :(voila() = 5))
-    Core.eval(new_mod, :(voila() = 6))
-    @test_logs (:warn, r"is already defined in the caller module") filterednames(new_mod, m; package_dict, explicit_names=Set([:voila]))
+    overwrite_imported_symbols([])
+    @test_logs (:warn, r"is already present in the caller module") filterednames(target_mod; caller_module = m)
 end
 
 
 @testset "Inside Pluto" begin
     @testset "Input Parsing" begin
         @testset "target included in Package" begin
-            dict = load_module_in_caller(inpackage_target, Main)
-            f(ex) = parseinput(deepcopy(ex), dict)
+            caller_module = Module(gensym())
+            dict = load_module_in_caller(inpackage_target, caller_module)
+            f(ex) = parseinput(deepcopy(ex), dict; caller_module)
 
 
-            parent_path = modname_path(fromparent_module[])
+            parent_path = temp_module_path() |> collect
             # FromDeps imports
             ex = :(using >.BenchmarkTools)
 
@@ -213,12 +216,12 @@ end
             # Test indirect import
             indirect_id = Base.PkgId(Base.UUID("682c06a0-de6a-54ab-a142-c8b1cf79cde6"), "JSON")
             # This will load Tricks inside _DepsImports_
-            _ex = parseinput(:(using >.JSON), dict)
+            _ex = f(:(using >.JSON))
             # We now test that Tricks is loaded in DepsImports
             @test LoadedModules.JSON === Base.maybe_root_module(indirect_id)
 
             # We test that trying to load a package that is not a dependency throws an error saying so
-            @test_throws "The package DataFrames was not" parseinput(:(using >.DataFrames), dict)
+            @test_throws "The package DataFrames was not" f(:(using >.DataFrames))
 
             # FromPackage imports
             ex = :(import TestPackage)
@@ -258,17 +261,18 @@ end
             @test expected == f(ex)
         end
         @testset "target not included in Package" begin
-            dict = load_module_in_caller(inpluto_caller, Main)
-            f(ex) = parseinput(deepcopy(ex), dict)
-            parent_path = modname_path(fromparent_module[])
+            caller_module = Module(gensym())
+            dict = load_module_in_caller(inpluto_caller, caller_module)
+            f(ex) = parseinput(deepcopy(ex), dict; caller_module)
+            parent_path = temp_module_path() |> collect
 
             ex = :(import PackageModule.Issue2)
             expected = :(import $(parent_path...).TestPackage.Issue2)
             @test expected == f(ex)
 
             ex = :(@exclude_using import *)
-            expected = let _mod = fromparent_module[].TestPackage
-                imported_names = filterednames(_mod; all=true, imported=true)
+            expected = let _mod = get_temp_module().TestPackage
+                imported_names = filterednames(_mod; all=true, imported=true, caller_module)
                 importednames_exprs = map(n -> Expr(:., n), imported_names)
                 modname_expr = Expr(:., vcat(parent_path, :TestPackage)...)
                 reconstruct_import_expr(modname_expr, importednames_exprs)
@@ -420,4 +424,17 @@ mktempdir() do tmpdir
         m = get_target_module(dict)
         @test isdefined(m, :a)
     end
+end
+
+# We test has_ancestor_module
+@testset "has_ancestor_module" begin
+    m = Main
+    for path_name in (:Test1, :Test2, :Test3)
+        m = Core.eval(m, :(module $path_name end))
+    end
+    @test has_ancestor_module(m, :Test1) # It has an ancestor called :Test1
+    @test !has_ancestor_module(m, :Test1; only_rootmodule = true) # It has an ancestor called :Test1, but it's not the root module (the one which is the parent of itself, i.e. Main in this example)
+    @test has_ancestor_module(m, :Main; only_rootmodule = true) # It has an ancestor Main which is the root
+    @test has_ancestor_module(m, (:Test2, :Test4)) # it works with either of the elements provided
+    @test !has_ancestor_module(m, (:Test5, :Test4)) # it works with either of the elements provided
 end

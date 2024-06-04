@@ -2,7 +2,9 @@ const _stdlibs = first.(values(Pkg.Types.stdlibs()))
 
 const default_pkg_io = Ref{IO}(devnull)
 
-const fromparent_module = Ref{Module}()
+const TEMP_MODULE_NAME = :_FromPackage_TempModule_
+const STORED_MODULE = Ref{Union{Module, Nothing}}(nothing)
+const PREVIOUS_CATCHALL_NAMES = Set{Symbol}()
 const macro_cell = Ref("undefined")
 const manifest_names = ("JuliaManifest.toml", "Manifest.toml")
 

@@ -194,7 +194,5 @@ function load_module_in_caller(mod_exp::Expr, package_dict::Dict, caller_module)
     package_dict["Created Module"] = __module
 	# We put the dict inside the loaded module
 	Core.eval(__module, :(_fromparent_dict_ = $package_dict))
-    # Register this module as root module. 
-    register_target_module_as_root(package_dict)
 	return package_dict
 end

@@ -278,46 +278,6 @@ function get_extensions_ids(old_module::Module, parent::Base.PkgId)
     return out
 end
 
-# This function will register the target module for `dict` as a root module.
-# This relies on Base internals (and even the C API) but will allow make the loaded module behave more like if we simply did `using TargetPackage` in the REPL
-function register_target_module_as_root(package_dict)
-    name_str = package_dict["name"]
-    m = get_target_module(package_dict)
-    id = get_target_pkgid(package_dict)
-    uuid = id.uuid
-    entry_point = package_dict["file"]
-    @lock Base.require_lock begin
-        # Set the uuid of this module with the C API. This is required to get the correct UUID just from the module within `register_root_module`
-        ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), m, uuid)
-        # Register this module as root
-        Base.with_logger(Base.NullLogger()) do
-            Base.register_root_module(m)
-        end
-        # Set the path of the module to the actual package
-        Base.set_pkgorigin_version_path(id, entry_point)
-    end
-end
-
-function try_load_extensions(package_dict::Dict)
-    has_extensions(package_dict) || return
-    m = get_target_module(package_dict)
-    proj_file = package_dict["project"]
-    id = Base.PkgId(m)
-    ext_ids = get_extensions_ids(m, id)
-    @lock Base.require_lock begin
-        # We try to clean up the eventual extensions (with target as parent) that we loaded with the previous version
-        for id in ext_ids
-            haskey(Base.EXT_PRIMED, id) && delete!(Base.EXT_PRIMED, id)
-            haskey(Base.loaded_modules, id) && delete!(Base.loaded_modules, id)
-        end
-        Base.insert_extension_triggers(proj_file, id)
-        Base.redirect_stderr(Base.DevNull()) do
-            Base.run_extension_callbacks(id)
-        end
-    end
-    return
-end
-
 # This function will get the module stored in the created_modules dict based on the entry point
 get_stored_module() = STORED_MODULE[]
 # This will store in it

@@ -85,8 +85,6 @@ function frompackage(ex, target_file, caller, caller_module; macroname)
     update_stored_module(package_dict)
     # We put the included names in PREVIOUS_CATCHALL_NAMES
     overwrite_imported_symbols(package_dict)
-    # We call at runtime the function to trigger extensions loading
-    push!(args, :($try_load_extensions($package_dict)))
 	# We wrap the import expressions inside a try-catch, as those also correctly work from there.
 	# This also allow us to be able to catch the error in case something happens during loading and be able to gracefully clean the work space
 	text = "Reload $macroname"

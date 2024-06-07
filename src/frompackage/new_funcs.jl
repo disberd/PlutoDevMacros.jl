@@ -9,11 +9,26 @@ CURRENT_FROMPACKAGE_CONTROLLER = Ref{FromPackageController}()
 struct RemoveThisExpr end
 
 #### New approach stuff ####
-get_loaded_modules_mod() = getproperty(get_temp_module(), :_LoadedModules_)::Module
+get_loaded_modules_mod() = get_temp_module(:_LoadedModules_)::Module
+
+function load_module!(p::FromPackageController{name}; reset = true) where name
+    @nospecialize
+    if reset
+        Core.eval(get_temp_module(), :(module $name end))
+        populate_loaded_modules()
+    end
+    CURRENT_FROMPACKAGE_CONTROLLER[] = p
+    process_include_expr!(p, p.entry_point)
+    # Maybe call init
+    maybe_call_init(get_temp_module(p))
+    # Try loading extensions
+    try_load_extensions!(p)
+    return p
+end
 
 # This is a callback to add any new loaded package to the Main._FromPackage_TempModule_._LoadedModules_ module
 function mirror_package_callback(modkey::Base.PkgId)
-    target = get_loaded_modules_mod
+    target = get_loaded_modules_mod()
     name = Symbol(modkey)
     m = Base.root_module(modkey)
     Core.eval(target, :(const $name = $m))
@@ -21,11 +36,6 @@ function mirror_package_callback(modkey::Base.PkgId)
         try_load_extensions!(CURRENT_FROMPACKAGE_CONTROLLER[])
     end
     return
-end
-
-function get_package_module(p::FromPackageController{name}) where name
-    @nospecialize
-    getproperty(get_temp_module(), name)::Module
 end
 
 # This will try to see if the extensions of the target package can be loaded
@@ -41,10 +51,11 @@ function try_load_extensions!(p::FromPackageController)
             nactive += isdefined(loaded_modules, Symbol(id))
         end
         if nactive === length(triggers)
-            modexpr = custom_walk!(p)
             entry_path = Base.project_file_ext_path(p.project.file, name)
-            ex = :(include($modexpr, $entry_path))
-            Core.eval(get_package_module(p), ex)
+            # Set the module to the package module
+            p.current_module = get_temp_module(p)
+            process_include_expr!(p, entry_path)
+            push!(p.loaded_extensions, name)
         end
     end
 end
@@ -86,7 +97,7 @@ function get_dep_from_loaded_modules(id::Base.PkgId)
 end
 function get_dep_from_loaded_modules(p::FromPackageController{name}, base_name; allow_manifest = false, allow_stdlibs = true)::Module where name
     @nospecialize
-    base_name === name && return get_package_module(p)
+    base_name === name && return get_temp_module(p)
     package_name = string(base_name)
     if allow_stdlibs
         uuid = get(STDLIBS_DATA, package_name, nothing)
@@ -212,7 +223,7 @@ function custom_walk!(p::AbstractEvalController, ex)
         return new_ex
     end
 end
-custom_walk!(p::AbstractEvalController, ex::Expr, ::Val) = (@nospecialize; Expr(ex.head, map(custom_walk!(p), ex.args)...))
+custom_walk!(p::AbstractEvalController, ex::Expr, ::Val) = (@nospecialize; Expr(ex.head, map(p.custom_walk, ex.args)...))
 
 function valid_blockarg(this_arg, next_arg)
     @nospecialize
@@ -227,10 +238,22 @@ end
 
 valparam(::Val{T}) where T = (@nospecialize; T)
 
+function process_exprsplitter_item!(p::AbstractEvalController, ex, process_func::Function = p.custom_walk)
+    @assert Meta.isexpr(ex, :block) "The expression is not a quote end, so it is not coming from ExprSplitter"
+    # We update the current line under evaluation
+    p.current_line = lnn = ex.args[1]
+    new_ex = process_func(ex)
+    # @info "Change" ex new_ex
+    if !isa(new_ex, RemoveThisExpr) && !p.target_reached
+        Core.eval(p.current_module, new_ex)
+    end
+    return
+end
+
 # This process each argument of the block, and then fitlers out elements which are not expressions and clean up eventual LineNumberNodes hanging from removed expressions
-function custom_walk!(p::AbstractEvalController, ex::Expr, val::Union{Val{:block}, Val{:toplevel}})
+function custom_walk!(p::AbstractEvalController, ex::Expr, ::Val{:block})
     @nospecialize
-    f = custom_walk!(p)
+    f = p.custom_walk
     args = map(f, ex.args)
     # We now go in reverse args order, and remove all the RemoveThisExpr (and corresponding LineNumberNodes)
     valids = trues(length(args))
@@ -240,14 +263,15 @@ function custom_walk!(p::AbstractEvalController, ex::Expr, val::Union{Val{:block
         valids[i] = valid_blockarg(this_arg, next_arg)
         next_arg = this_arg
     end
-    return Expr(valparam(val), args[valids]...)
+    any(valids) || return RemoveThisExpr()
+    return Expr(:block, args[valids]...)
 end
 # This handles removing PLUTO expressions
 function custom_walk!(p::AbstractEvalController, ex::Expr, ::Val{:(=)})
     if ex.args[1] in (:PLUTO_PROJECT_TOML_CONTENTS, :PLUTO_MANIFEST_TOML_CONTENTS) && ex.args[2] isa String
         return RemoveThisExpr()
     else
-        return Expr(:(=), map(custom_walk!(p), ex.args)...)
+        return Expr(:(=), map(p.custom_walk, ex.args)...)
     end
 end
 
@@ -270,81 +294,89 @@ function modify_extensions_imports!(p::FromPackageController, ex::Expr)
         (package_path, imported_names, full_names)
     end
     new_ex = reconstruct_import_statement(ex.head, out)
-    return new_ex
+    Expr(:toplevel, p.current_line, new_ex)
 end
 # This will add calls below the `using` to track imported names
 function custom_walk!(p::AbstractEvalController, ex::Expr, ::Val{:using})
-    current_module_name = p.current_module |> nameof |> string
-    haskey(p.project.extensions, current_module_name) && return modify_extensions_imports!(p, ex)
-    # We wrap the using statement in a begin block to be able to add expressions after it
-    new_ex = Expr(:block, ex)
-    for (package_path, imported_names, _) in extract_import_names(ex)
-        push!(new_ex.args, :($add_using_names!($p, $package_path, $imported_names)))
-    end
-    return new_ex
+    return process_using_expr!(p, ex)
 end
+
+function process_using_expr!(p::FromPackageController, ex)
+    current_module_name = p.current_module |> nameof |> string
+    new_ex = if haskey(p.project.extensions, current_module_name)
+        modify_extensions_imports!(p, ex)
+    else
+        new_ex = quote
+            $ex
+        end
+        for (package_path, imported_names, _) in extract_import_names(ex)
+            push!(new_ex.args, :($add_using_names!($p, $package_path, $imported_names)))
+        end
+        new_ex
+    end
+    split_and_execute!(p, new_ex, identity)
+    # We just executed the statements so we skip this one
+    return RemoveThisExpr()
+end
+
 function custom_walk!(p::AbstractEvalController, ex::Expr, ::Val{:import})
     current_module_name = p.current_module |> nameof |> string
     haskey(p.project.extensions, current_module_name) && return modify_extensions_imports!(p, ex)
     return ex
 end
 
-# This handles include calls, by adding custom_walk!(p) as the modexpr
+# This handles include calls, by adding p.custom_walk as the modexpr
 function custom_walk!(p::AbstractEvalController, ex::Expr, ::Val{:call})
-    f = custom_walk!(p)
+    f = p.custom_walk
     # We just process this expression if it's not an `include` call
     first(ex.args) === :include || return Expr(:call, map(f, ex.args)...)
-    nargs = length(ex.args)
-    filepath = last(ex.args)
-    controller_name = gensym(:controller)
-    old_path_name = gensym(:old_path)
-    new_path_name = gensym(:new_path)
-    f_name = gensym(:f)
-    modexpr = if nargs === 2
-        # Simple 1-arg include, we just push our function as modexpr
-        f
-    else
-        original_modexpr_name = args[2]
-        :($f ∘ $original_modexpr_name)
-    end
-    new_ex = quote
-        $controller_name = $p
-        $f_name = $modexpr
-        $old_path_name = $controller_name.current_file
-        $new_path_name = $controller_name.current_file = $get_filepath($controller_name, $filepath)
-        $(Expr(:call, :include, f_name, new_path_name))
-        $controller_name.current_file = $old_path_name
-    end
+    new_ex = :($process_include_expr!($p))
+    append!(new_ex.args, ex.args[2:end])
     return new_ex
 end
 
 function get_filepath(p::FromPackageController, path::AbstractString)
     @nospecialize
-    filepath = abspath(dirname(p.current_file), path)
+    base_dir = p.current_line.file |> string |> dirname
+    return abspath(base_dir, path)
 end
 
-function check_included_target!(p::FromPackageController, path)
+function split_and_execute!(p::FromPackageController, ast, f = p.custom_walk)
     @nospecialize
-    @info path
-    if issamepath(p.target_path, path)
-        p.target_reached = true
+    top_mod = prev_mod = p.current_module
+    for (mod, ex) in ExprSplitter(top_mod, ast)
+        # Update the current module
+        p.current_module = mod
+        # @info "include" mod ex
+        process_exprsplitter_item!(p, ex, f)
+        if prev_mod !== top_mod && mod !== prev_mod
+            maybe_call_init(prev_mod) # We try calling init in the last module after switching
+        end
+        prev_mod = mod
     end
-    return nothing
 end
 
-# This handles modules, by storing the current module in the controller at the beginning of the module and restoring it to the parent module before exiting. It also ensure the __init__ function is executed just before restoring the module
-function custom_walk!(p::AbstractEvalController, ex::Expr, ::Val{:module})
-    # We first process the block
-    block = ex.args[3] |> custom_walk!(p)
-    args = block.args
-    # Change the current module of the controller to this module
-    pushfirst!(args, :($p.current_module = @__MODULE__))
-    # Call init function if present
-    push!(args, :($maybe_call_init(@__MODULE__)))
-    # We change back the current module to the parentmodule
-    push!(args, :($p.current_module = parentmodule(@__MODULE__)))
-    ex.args[3] = block
-    return ex
+function process_include_expr!(p::FromPackageController, path::AbstractString)
+    @nospecialize
+    process_include_expr!(p, identity, path)
+end
+function process_include_expr!(p::FromPackageController, modexpr::Function, path::AbstractString)
+    @nospecialize
+    filepath = get_filepath(p, path)
+    if issamepath(p.target_path, filepath) 
+        p.target_reached = true
+        return nothing
+    end
+    _f = p.custom_walk
+    f = if modexpr isa ComposedFunction{typeof(_f), <:Any}
+        modexpr # We just use that directly
+    else
+        # We compose
+        _f ∘ modexpr
+    end
+    ast = extract_file_ast(filepath)
+    split_and_execute!(p, ast, f)
+    return nothing
 end
 
 function maybe_call_init(m::Module)
@@ -355,7 +387,7 @@ function maybe_call_init(m::Module)
     f = getproperty(m, :__init__)
     # Verify that is a function
     f isa Function || return nothing
-    f() # execute it
+    Core.eval(m, :(__init__()))
     return nothing
 end
 

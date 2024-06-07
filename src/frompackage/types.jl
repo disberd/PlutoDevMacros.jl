@@ -108,7 +108,7 @@ abstract type AbstractEvalController end
     "The current module where code evaluation is happening"
     current_module::Module = maybe_create_module()
     "The current file being evaluated"
-    current_file::String = entry_point
+    current_line::LineNumberNode = LineNumberNode(1, :Not_Initialized)
     "The dict of manifest deps"
     manifest_deps::Dict{Base.UUID, PackageEntry} = Dict{Base.UUID, PackageEntry}()
     "The tracked names imported into the current module by `using` statements"
@@ -117,6 +117,10 @@ abstract type AbstractEvalController end
     imported_catchall_names::Set{Symbol} = Set{Symbol}()
     "Specifies wheter the target was reached while including the module"
     target_reached::Bool = false
+    "Custom walk function"
+    custom_walk::Function = identity
+    "Loaded Extensions"
+    loaded_extensions::Set{String} = Set{String}()
 end
 
 # Default constructor
@@ -136,5 +140,7 @@ function FromPackageController(target_path::String, caller_module::Module)
     project = ProjectData(project_file)
     entry_point = get_entrypoint(target_env)
     name = project.name
-    FromPackageController{Symbol(name)}(;entry_point, manifest_deps, target_path, project, caller_module)
+    p = FromPackageController{Symbol(name)}(;entry_point, manifest_deps, target_path, project, caller_module)
+    p.custom_walk = custom_walk!(p)
+    return p
 end

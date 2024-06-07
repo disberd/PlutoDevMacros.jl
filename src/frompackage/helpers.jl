@@ -4,6 +4,18 @@ function get_temp_module()
     isdefined(Main, TEMP_MODULE_NAME) || return nothing
     return getproperty(Main, TEMP_MODULE_NAME)::Module
 end
+get_temp_module(s::Symbol) = getproperty(get_temp_module(), s)
+function get_temp_module(names::Vector{Symbol})
+    out = get_temp_module()
+    for name in names
+        getproperty(out, name)
+    end
+    return out
+end
+function get_temp_module(p::FromPackageController{name}) where name
+    @nospecialize
+    get_temp_module(name)::Module
+end
 
 # Extract the module that is the target in dict
 get_target_module(dict) = dict["Created Module"]

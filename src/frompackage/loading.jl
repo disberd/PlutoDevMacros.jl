@@ -132,13 +132,14 @@ function maybe_create_module()
     # We create the dummy module where all the direct dependencies will be loaded
     Core.eval(fromparent_m, :(module _DirectDeps_ end))
     # We also set a reference to LoadedModules for access from the notebook
-    Core.eval(fromparent_m, :(const _LoadedModules_ = $LoadedModules))
+    Core.eval(fromparent_m, :(module _LoadedModules_ end))
+    populate_loaded_modules()
     return fromparent_m
 end
 
 # This will explicitly import each direct dependency of the package inside the LoadedModules module. Loading all of the direct dependencies will help make every dependency available even if not directly loaded in the target source code.
 function load_direct_deps(package_dict, fromparent_module)
-    DepsModule = fromparent_module._DirectDeps_
+    DepsModule = fromparent_module._DirectDeps_::Module
 	(;direct) = package_dict["PkgInfo"]
     for pkg in values(direct)
         package_name_symbol = Symbol(pkg.name)

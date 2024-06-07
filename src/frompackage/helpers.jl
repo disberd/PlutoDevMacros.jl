@@ -1,6 +1,6 @@
 import ..PlutoDevMacros: hide_this_log
 
-function get_temp_module() 
+function get_temp_module()
     isdefined(Main, TEMP_MODULE_NAME) || return nothing
     return getproperty(Main, TEMP_MODULE_NAME)::Module
 end
@@ -8,7 +8,7 @@ end
 # Extract the module that is the target in dict
 get_target_module(dict) = dict["Created Module"]
 
-function get_target_uuid(dict) 
+function get_target_uuid(dict)
     uuid = get(dict, "uuid", nothing)
     if !isnothing(uuid)
         uuid = Base.UUID(uuid)
@@ -67,54 +67,54 @@ add_loadpath(ecg::EnvCacheGroup; kwargs...) = add_loadpath(ecg |> get_active |> 
 ## execute only in notebook
 # We have to create our own simple check to only execute some stuff inside the notebook where they are defined. We have stuff in basics.jl but we don't want to include that in this notebook
 function is_notebook_local(calling_file::String)
-	name_cell = split(calling_file, "#==#")
-	return length(name_cell) == 2 && length(name_cell[2]) == 36
+    name_cell = split(calling_file, "#==#")
+    return length(name_cell) == 2 && length(name_cell[2]) == 36
 end
 
 ## package extensions helpers
 has_extensions(package_data) = haskey(package_data, "extensions") && haskey(package_data, "weakdeps")
 
 function maybe_add_loaded_module(id::Base.PkgId)
-	symname = id.name |> Symbol
-	# We just returns if the module is already loaded
-	isdefined(LoadedModules, symname) && return nothing
+    symname = id.name |> Symbol
+    # We just returns if the module is already loaded
+    isdefined(LoadedModules, symname) && return nothing
     loaded_module = Base.maybe_root_module(id)
-	isnothing(loaded_module) && error("The package $id does not seem to be loaded")
-	Core.eval(LoadedModules, :(const $(symname) = $(loaded_module)))
-	return nothing
+    isnothing(loaded_module) && error("The package $id does not seem to be loaded")
+    Core.eval(LoadedModules, :(const $(symname) = $(loaded_module)))
+    return nothing
 end
 
 ## get parent data
 function get_package_data(packagepath::AbstractString)
-	project_file = Base.current_project(packagepath)
-	project_file isa Nothing && error("No project was found starting from $packagepath")
-	project_file = abspath(project_file)
+    project_file = Base.current_project(packagepath)
+    project_file isa Nothing && error("No project was found starting from $packagepath")
+    project_file = abspath(project_file)
 
-	ecg = default_ecg()
+    ecg = default_ecg()
 
-	maybe_update_envcache(project_file, ecg; notebook = false)
-	target = get_target(ecg)
-	# We update the notebook and active envcaches to be up to date
-	update_ecg!(ecg)
+    maybe_update_envcache(project_file, ecg; notebook=false)
+    target = get_target(ecg)
+    # We update the notebook and active envcaches to be up to date
+    update_ecg!(ecg)
 
-	# Check that the package file actually exists
-	package_file = get_entrypoint(target)
-	package_dir = dirname(package_file) |> abspath
+    # Check that the package file actually exists
+    package_file = get_entrypoint(target)
+    package_dir = dirname(package_file) |> abspath
 
-	isfile(package_file) || error("The package package main file was not found at path $package_file")
+    isfile(package_file) || error("The package package main file was not found at path $package_file")
 
-	package_data = deepcopy(target.project.other)
+    package_data = deepcopy(target.project.other)
     package_data["project"] = project_file
-	package_data["dir"] = package_dir
-	package_data["file"] = package_file
-	package_data["target"] = packagepath
-	package_data["ecg"] = ecg
+    package_data["dir"] = package_dir
+    package_data["file"] = package_file
+    package_data["target"] = packagepath
+    package_data["ecg"] = ecg
 
-	# We extract the PkgInfo for all packages in this environment
-	d,i = target_dependencies(target)
-	package_data["PkgInfo"] = (;direct = d, indirect = i)
-	
-	return package_data
+    # We extract the PkgInfo for all packages in this environment
+    d, i = target_dependencies(target)
+    package_data["PkgInfo"] = (; direct=d, indirect=i)
+
+    return package_data
 end
 
 # Get the first element in itr that satisfies predicate p, or nothing if itr is empty or no elements satisfy p
@@ -127,23 +127,23 @@ end
 getfirst(itr) = getfirst(x -> true, itr)
 
 ## Similar to names but allows to exclude names and add explicit ones. It also filter names based on whether they are defined already in the caller module
-function filterednames(m::Module; all = true, imported = true, explicit_names = Set{Symbol}(), caller_module::Module)
-	excluded = (:eval, :include, :_fromparent_dict_, Symbol("@bind"))
+function filterednames(m::Module; all=true, imported=true, explicit_names=Set{Symbol}(), caller_module::Module)
+    excluded = (:eval, :include, :_fromparent_dict_, Symbol("@bind"))
     mod_names = names(m; all, imported)
     filter_args = union(mod_names, explicit_names)
-    filter_func = filterednames_filter_func(;excluded, caller_module)
-	filter(filter_func, filter_args)
+    filter_func = filterednames_filter_func(; excluded, caller_module)
+    filter(filter_func, filter_args)
 end
 
-function has_ancestor_module(target::Module, ancestor_name::Symbol; previous = nothing, only_rootmodule = false)
+function has_ancestor_module(target::Module, ancestor_name::Symbol; previous=nothing, only_rootmodule=false)
     has_ancestor_module(target, (ancestor_name,); previous, only_rootmodule)
 end
-function has_ancestor_module(target::Module, ancestor_names; previous = nothing, only_rootmodule = false)
+function has_ancestor_module(target::Module, ancestor_names; previous=nothing, only_rootmodule=false)
     nm = nameof(target)
-    ancestor_found = nm in ancestor_names 
+    ancestor_found = nm in ancestor_names
     !only_rootmodule && ancestor_found && return true # Ancestor found, and no check on only_rootmodule
     nm === previous && return ancestor_found # The target is the same as previous, so we reached a top-level module. We return whether the ancestor was found and is a parent of itself
-    return has_ancestor_module(parentmodule(target), ancestor_names; previous = nm, only_rootmodule)
+    return has_ancestor_module(parentmodule(target), ancestor_names; previous=nm, only_rootmodule)
 end
 
 # This returns two flags: whether the name can be included and whether a warning should be generated
@@ -158,17 +158,18 @@ function can_import_in_caller(name::Symbol, caller::Module)
     return in_previous, !in_previous
 end
 
-function filterednames_filter_func(;excluded, caller_module)
-    f(s) = let excluded = excluded, caller = caller_module
-        Base.isgensym(s) && return false
-        s in excluded && return false
-        should_include, should_warn = can_import_in_caller(s, caller)
-        if should_warn 
-            owner = which(caller, s)
-            @warn "The name `$s`, defined in $owner, is already present in the caller module and will not be imported."
+function filterednames_filter_func(; excluded, caller_module)
+    f(s) =
+        let excluded = excluded, caller = caller_module
+            Base.isgensym(s) && return false
+            s in excluded && return false
+            should_include, should_warn = can_import_in_caller(s, caller)
+            if should_warn
+                owner = which(caller, s)
+                @warn "The name `$s`, defined in $owner, is already present in the caller module and will not be imported."
+            end
+            return should_include
         end
-        return should_include
-    end
     return f
 end
 
@@ -207,32 +208,32 @@ _popup_style(id) = """
 	}
 """
 
-function html_reload_button(cell_id; text = "Reload @frompackage", err = false)
-	id = string(cell_id)
+function html_reload_button(cell_id; text="Reload @frompackage", err=false)
+    id = string(cell_id)
     style_content = _popup_style(id)
-	html_content = """
-	<script>
-			const container = document.querySelector('fromparent-container') ?? document.body.appendChild(html`<fromparent-container>`)
-			container.innerHTML = '$text'
-			// We set the errored state
-			container.classList.toggle('errored', $err)
-			const style = container.querySelector('style') ?? container.appendChild(html`<style>`)
-			style.innerHTML = `$(style_content)`
-			const cell = document.getElementById('$id')
-			const actions = cell._internal_pluto_actions
-			container.onclick = (e) => {
-				if (e.ctrlKey) {
-					history.pushState({},'')			
-					cell.scrollIntoView({
-						behavior: 'auto',
-						block: 'center',				
-					})
-				} else {
-					actions.set_and_run_multiple(['$id'])
-				}
-			}
-	</script>
-	"""
+    html_content = """
+    <script>
+    		const container = document.querySelector('fromparent-container') ?? document.body.appendChild(html`<fromparent-container>`)
+    		container.innerHTML = '$text'
+    		// We set the errored state
+    		container.classList.toggle('errored', $err)
+    		const style = container.querySelector('style') ?? container.appendChild(html`<style>`)
+    		style.innerHTML = `$(style_content)`
+    		const cell = document.getElementById('$id')
+    		const actions = cell._internal_pluto_actions
+    		container.onclick = (e) => {
+    			if (e.ctrlKey) {
+    				history.pushState({},'')			
+    				cell.scrollIntoView({
+    					behavior: 'auto',
+    					block: 'center',				
+    				})
+    			} else {
+    				actions.set_and_run_multiple(['$id'])
+    			}
+    		}
+    </script>
+    """
     # We make an HTML object combining this content and the hide_this_log functionality
     return hide_this_log(html_content)
 end
@@ -241,14 +242,14 @@ end
 cleanpath(path::String) = first(split(path, "#==#")) |> abspath
 # Check if two paths are equal, ignoring case on the drive letter on windows.
 function issamepath(path1::String, path2::String)
-	path1 = abspath(path1)
-	path2 = abspath(path2)
-	if Sys.iswindows()
-		uppercase(path1[1]) == uppercase(path2[1]) || return false
-		path1[2:end] == path2[2:end] && return true
-	else
-		path1 == path2 && return true
-	end
+    path1 = abspath(path1)
+    path2 = abspath(path2)
+    if Sys.iswindows()
+        uppercase(path1[1]) == uppercase(path2[1]) || return false
+        path1[2:end] == path2[2:end] && return true
+    else
+        path1 == path2 && return true
+    end
 end
 issamepath(path1::Symbol, path2::Symbol) = issamepath(String(path1), String(path2))
 
@@ -293,4 +294,25 @@ function overwrite_imported_symbols(new_symbols)
     empty!(PREVIOUS_CATCHALL_NAMES)
     union!(PREVIOUS_CATCHALL_NAMES, new_symbols)
     nothing
+end
+
+function beautify_package_path()
+    html"""
+    <script>
+    	const cell_id = "a360000b-d9bb-4e12-a64b-276bff027591"
+    	const cell = document.getElementById(cell_id)
+    	const output = cell.querySelector('pluto-output')
+    	const regex = /Main\._FromPackage_TempModule_\.(PlutoDevMacros)?/g
+    	const replacement = "PlutoDevMacros"
+    	const content = output.lastChild
+    	function replaceTextInNode(node, pattern, replacement) {
+          if (node.nodeType === Node.TEXT_NODE) {
+            node.textContent = node.textContent.replace(pattern, replacement);
+          } else {
+            node.childNodes.forEach(child => replaceTextInNode(child, pattern, replacement));
+          }
+        }
+    	replaceTextInNode(content, regex, replacement);
+    </script>
+    """
 end

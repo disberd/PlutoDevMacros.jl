@@ -61,6 +61,38 @@ function FromDepsImport(mod_name, pkginfo::PkgInfo, direct::Bool)
     FromDepsImport(mod_name, id, direct)
 end
 
+struct ProjectData
+    file::String
+    deps::Dict{String, Base.UUID}
+    weakdeps::Dict{String, Base.UUID}
+    extensions::Dict{String, Vector{String}}
+    name::Union{Nothing, String}
+    uuid::Union{Nothing, Base.UUID}
+    version::Union{Nothing, VersionNumber}
+    function ProjectData(file::AbstractString)
+        raw = TOML.parsefile(file)
+        deps = Dict{String, Base.UUID}()
+        for (name, uuid) in get(raw, "deps", ())
+            deps[name] = Base.UUID(uuid)
+        end
+        weakdeps = Dict{String, Base.UUID}()
+        for (name, uuid) in get(raw, "weakdeps", ())
+            weakdeps[name] = Base.UUID(uuid)
+        end
+        extensions = Dict{String, Vector{String}}()
+        for (name, deps) in get(raw, "extensions", ())
+            deps = deps isa String ? [deps] : deps
+            extensions[name] = deps
+        end
+        name = get(raw, "name", nothing)
+        uuid = get(raw, "uuid", nothing)
+        isnothing(uuid) || (uuid = Base.UUID(uuid))
+        version = get(raw, "version", nothing)
+        isnothing(version) || (version = VersionNumber(version))
+        new(file, deps, weakdeps, extensions, name, uuid, version)
+    end
+end
+
 abstract type AbstractEvalController end
 
 # We do not store the ECG directly inside as 
@@ -69,22 +101,14 @@ abstract type AbstractEvalController end
     entry_point::String
     "The path that was provided to the macro call"
     target_path::String
-    "The path of the project file of the package"
-    project_file::String
-    "The name of the target package"
-    name::String
+    "The data of the project at of the target"
+    project::ProjectData
     "The module where the macro was called"
     caller_module::Module
     "The current module where code evaluation is happening"
     current_module::Module = maybe_create_module()
-    "The UUID of the target package"
-    uuid::Base.UUID
-    "The direct dependencies"
-    proj_deps::Dict{String, Base.UUID}
     "The dict of manifest deps"
     manifest_deps::Dict{Base.UUID, PackageEntry} = Dict{Base.UUID, PackageEntry}()
-    "The eventual lines to skip"
-    lines_to_skip::Vector{LineNumberRange} = LineNumberRange[]
     "The tracked names imported into the current module by `using` statements"
     using_names::Dict{Vector{Symbol}, Set{Symbol}} = Dict{Symbol, Set{Symbol}}()
     "The catchall names being imported by this package into the caller module"
@@ -104,10 +128,8 @@ function FromPackageController(target_path::String, caller_module::Module)
     # We set the target env, based on the identified proj file
     maybe_update_envcache(project_file, ecg; notebook = false)
     target_env = get_target(ecg)
-    project = get_project(target_env)
-    proj_deps = project.deps
-    uuid = project.uuid
-    name = project.name
+    project = ProjectData(project_file)
     entry_point = get_entrypoint(target_env)
-    FromPackageController{Symbol(name)}(;entry_point, target_path, project_file, name, caller_module, uuid, proj_deps)
+    name = project.name
+    FromPackageController{Symbol(name)}(;entry_point, target_path, project, caller_module)
 end

@@ -1,5 +1,3 @@
-using Pkg.Types: EnvCache, write_project, Context, read_project, read_manifest, write_manifest,  Manifest, Project, PackageEntry
-
 @kwdef mutable struct EnvCacheGroup
     "This is the EnvCache of the environment added by @fromparent to the LOAD_PATH"
     active::EnvCache = EnvCache(mktempdir(;prefix = "frompackage_"))
@@ -143,4 +141,9 @@ function target_dependencies(target::EnvCache)
 		d[name] = PkgInfo(name, uuid, version)
 	end
 	direct, indirect
+end
+
+function direct_deps_names(target::EnvCache)
+	proj_deps = target.project.deps
+	map(Symbol, keys(proj_deps) |> collect)
 end

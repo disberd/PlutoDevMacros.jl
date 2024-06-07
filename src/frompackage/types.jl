@@ -60,3 +60,54 @@ function FromDepsImport(mod_name, pkginfo::PkgInfo, direct::Bool)
     id = to_pkgid(pkginfo)
     FromDepsImport(mod_name, id, direct)
 end
+
+abstract type AbstractEvalController end
+
+# We do not store the ECG directly inside as 
+@kwdef mutable struct FromPackageController{package_name} <: AbstractEvalController
+    "The entry point of the package"
+    entry_point::String
+    "The path that was provided to the macro call"
+    target_path::String
+    "The path of the project file of the package"
+    project_file::String
+    "The name of the target package"
+    name::String
+    "The module where the macro was called"
+    caller_module::Module
+    "The current module where code evaluation is happening"
+    current_module::Module = maybe_create_module()
+    "The UUID of the target package"
+    uuid::Base.UUID
+    "The direct dependencies"
+    proj_deps::Dict{String, Base.UUID}
+    "The dict of manifest deps"
+    manifest_deps::Dict{Base.UUID, PackageEntry} = Dict{Base.UUID, PackageEntry}()
+    "The eventual lines to skip"
+    lines_to_skip::Vector{LineNumberRange} = LineNumberRange[]
+    "The tracked names imported into the current module by `using` statements"
+    using_names::Dict{Vector{Symbol}, Set{Symbol}} = Dict{Symbol, Set{Symbol}}()
+    "The catchall names being imported by this package into the caller module"
+    imported_catchall_names::Set{Symbol} = Set{Symbol}()
+end
+
+# Default constructor
+function FromPackageController(target_path::String, caller_module::Module)
+    @assert isabspath(target_path) "You can only construct the FromPackageController with an absolute path"
+    # Find the project
+    project_file = Base.current_project(target_path) 
+    project_file isa Nothing && error("No project was found starting from $target_path")
+    # Take the ecg to 
+    ecg = default_ecg()
+    # We set the notebook env, assuming it's the active environment
+    maybe_update_envcache(Base.active_project(), ecg; notebook = true)
+    # We set the target env, based on the identified proj file
+    maybe_update_envcache(project_file, ecg; notebook = false)
+    target_env = get_target(ecg)
+    project = get_project(target_env)
+    proj_deps = project.deps
+    uuid = project.uuid
+    name = project.name
+    entry_point = get_entrypoint(target_env)
+    FromPackageController{Symbol(name)}(;entry_point, target_path, project_file, name, caller_module, uuid, proj_deps)
+end

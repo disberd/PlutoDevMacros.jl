@@ -107,12 +107,16 @@ abstract type AbstractEvalController end
     caller_module::Module
     "The current module where code evaluation is happening"
     current_module::Module = maybe_create_module()
+    "The current file being evaluated"
+    current_file::String = entry_point
     "The dict of manifest deps"
     manifest_deps::Dict{Base.UUID, PackageEntry} = Dict{Base.UUID, PackageEntry}()
     "The tracked names imported into the current module by `using` statements"
     using_names::Dict{Vector{Symbol}, Set{Symbol}} = Dict{Symbol, Set{Symbol}}()
     "The catchall names being imported by this package into the caller module"
     imported_catchall_names::Set{Symbol} = Set{Symbol}()
+    "Specifies wheter the target was reached while including the module"
+    target_reached::Bool = false
 end
 
 # Default constructor
@@ -128,8 +132,9 @@ function FromPackageController(target_path::String, caller_module::Module)
     # We set the target env, based on the identified proj file
     maybe_update_envcache(project_file, ecg; notebook = false)
     target_env = get_target(ecg)
+    manifest_deps = target_env.manifest.deps
     project = ProjectData(project_file)
     entry_point = get_entrypoint(target_env)
     name = project.name
-    FromPackageController{Symbol(name)}(;entry_point, target_path, project, caller_module)
+    FromPackageController{Symbol(name)}(;entry_point, manifest_deps, target_path, project, caller_module)
 end

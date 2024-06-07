@@ -65,25 +65,43 @@ function populate_loaded_modules()
     end
 end
 
-function get_loaded_module(id::Base.PkgId)
+function get_dep_from_manifest(p::FromPackageController, base_name)
+    @nospecialize
+    (;manifest_deps) = p
+    name_str = string(base_name)
+    for (uuid, pe) in manifest_deps
+        if pe.name === name_str
+            id = Base.PkgId(uuid, pe.name)
+            return get_dep_from_loaded_modules(id)
+        end
+    end
+    return nothing
+end
+function get_dep_from_loaded_modules(id::Base.PkgId)
     loaded_modules = get_loaded_modules_mod()
+    key = Symbol(id)
+    isdefined(loaded_modules, key) || error("The module $key can not be found in the loaded modules.")
     m = getproperty(loaded_modules, Symbol(id))::Module
     return m
 end
-function get_loaded_module(p::FromPackageController{name}, base_name) where name
+function get_dep_from_loaded_modules(p::FromPackageController{name}, base_name; allow_manifest = false, allow_stdlibs = true)::Module where name
     @nospecialize
     base_name === name && return get_package_module(p)
     package_name = string(base_name)
+    if allow_stdlibs
+        uuid = get(STDLIBS_DATA, package_name, nothing)
+        uuid !== nothing && return get_dep_from_loaded_modules(Base.PkgId(uuid, package_name))
+    end
     proj = p.project
     uuid = get(proj.deps, package_name) do
         get(proj.weakdeps, package_name) do 
-            get(STDLIBS_DATA, package_name) do
-                error("The package with name $package_name could not be found as deps or weakdeps of the target project, or as standard library")
-            end
+            out = allow_manifest ? get_dep_from_manifest(p, base_name) : nothing
+            isnothing(out) && error("The package with name $package_name could not be found as deps or weakdeps of the target project, as indirect dep of the manifest, or as standard library")
+            return out
         end
     end
     id = Base.PkgId(uuid, package_name)
-    return get_loaded_module(id)
+    return get_dep_from_loaded_modules(id)
 end
 
 # This function will return, for each package of the expression, two outputs which represent the modname path of the package being used, and the list of imported names
@@ -153,7 +171,7 @@ function add_using_names!(p::FromPackageController, modname_path::Vector{Symbol}
         # We are loading a normal package not located within the loaded module
         path = copy(modname_path)
         base_name = popfirst!(path)
-        m = get_loaded_module(p, base_name)
+        m = get_dep_from_loaded_modules(p, base_name)
         for name in path
             m = getproperty(m, name)::Module
         end
@@ -184,8 +202,16 @@ function custom_walk!(p::AbstractEvalController)
     end
     return modexpr
 end
-custom_walk!(p::AbstractEvalController, ex) = (@nospecialize; ex) # pass-through for non exprs
-custom_walk!(p::AbstractEvalController, ex::Expr) = (@nospecialize; custom_walk!(p, ex, Val{ex.head}()))
+function custom_walk!(p::AbstractEvalController, ex)    
+    @nospecialize
+    if p.target_reached
+        return RemoveThisExpr()
+    else
+        # We pass through all non Expr, and process the Exprs
+        new_ex = ex isa Expr ? custom_walk!(p, ex, Val{ex.head}()) : ex
+        return new_ex
+    end
+end
 custom_walk!(p::AbstractEvalController, ex::Expr, ::Val) = (@nospecialize; Expr(ex.head, map(custom_walk!(p), ex.args)...))
 
 function valid_blockarg(this_arg, next_arg)
@@ -269,6 +295,11 @@ function custom_walk!(p::AbstractEvalController, ex::Expr, ::Val{:call})
     # We just process this expression if it's not an `include` call
     first(ex.args) === :include || return Expr(:call, map(f, ex.args)...)
     nargs = length(ex.args)
+    filepath = last(ex.args)
+    controller_name = gensym(:controller)
+    old_path_name = gensym(:old_path)
+    new_path_name = gensym(:new_path)
+    f_name = gensym(:f)
     modexpr = if nargs === 2
         # Simple 1-arg include, we just push our function as modexpr
         f
@@ -276,7 +307,29 @@ function custom_walk!(p::AbstractEvalController, ex::Expr, ::Val{:call})
         original_modexpr_name = args[2]
         :($f ∘ $original_modexpr_name)
     end
-    return Expr(:call, :include, modexpr, last(ex.args))
+    new_ex = quote
+        $controller_name = $p
+        $f_name = $modexpr
+        $old_path_name = $controller_name.current_file
+        $new_path_name = $controller_name.current_file = $get_filepath($controller_name, $filepath)
+        $(Expr(:call, :include, f_name, new_path_name))
+        $controller_name.current_file = $old_path_name
+    end
+    return new_ex
+end
+
+function get_filepath(p::FromPackageController, path::AbstractString)
+    @nospecialize
+    filepath = abspath(dirname(p.current_file), path)
+end
+
+function check_included_target!(p::FromPackageController, path)
+    @nospecialize
+    @info path
+    if issamepath(p.target_path, path)
+        p.target_reached = true
+    end
+    return nothing
 end
 
 # This handles modules, by storing the current module in the controller at the beginning of the module and restoring it to the parent module before exiting. It also ensure the __init__ function is executed just before restoring the module
@@ -315,4 +368,15 @@ function nested_getproperty_expr(names_path::Symbol...)
     first_arg = length(others) === 1 ? first(others) : nested_getproperty_expr(others...)
     ex = isempty(others) ? arg : Expr(:., first_arg, last_arg)
     return ex
+end
+
+### Input Parsing
+function parseinput!(p::FromPackageController, ex)
+    include_using = should_include_using_names!(ex)
+	# Check if we have a catchall
+	catchall = include_using || contains_catchall(ex)
+	# Check if the statement is a using or an import, this is used to check
+	# which names to eventually import, but all statements are converted into
+	# `import` if they are not of type FromDepsImport
+	is_using = ex.head === :using 
 end

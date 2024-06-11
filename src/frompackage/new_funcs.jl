@@ -14,11 +14,20 @@ get_loaded_modules_mod() = get_temp_module(:_LoadedModules_)::Module
 function load_module!(p::FromPackageController{name}; reset = true) where name
     @nospecialize
     if reset
-        Core.eval(get_temp_module(), :(module $name end))
+        m = Base.redirect_stderr(EMPTY_PIPE) do
+            Core.eval(get_temp_module(), :(module $name end))
+        end
         populate_loaded_modules()
+        # We put the controller inside the module
+        setproperty!(m, variable_name(p), p)
     end
     CURRENT_FROMPACKAGE_CONTROLLER[] = p
-    process_include_expr!(p, p.entry_point)
+    try
+        Core.eval(p.current_module, process_include_expr!(p, p.entry_point))
+    finally
+        # We set the target reached to false to avoid skipping expression when loading extensions
+        p.target_reached = false
+    end
     # Maybe call init
     maybe_call_init(get_temp_module(p))
     # Try loading extensions
@@ -26,8 +35,15 @@ function load_module!(p::FromPackageController{name}; reset = true) where name
     return p
 end
 
+# This function separate the LNN and expression that are contained in the :block expressions returned by iteration with ExprSplitter. It is based on the assumption that each `ex` obtained while iterating with `ExprSplitter` are :block expressions with exactly two arguments, the first being a LNN and the second being the relevant expression
+function destructure_expr(ex::Expr)
+    @assert Meta.isexpr(ex, :block) && length(ex.args) === 2
+    lnn, ex = ex.args
+end
+
 # This is a callback to add any new loaded package to the Main._FromPackage_TempModule_._LoadedModules_ module
 function mirror_package_callback(modkey::Base.PkgId)
+    # @info "mirror"
     target = get_loaded_modules_mod()
     name = Symbol(modkey)
     m = Base.root_module(modkey)
@@ -40,10 +56,12 @@ end
 
 # This will try to see if the extensions of the target package can be loaded
 function try_load_extensions!(p::FromPackageController)
+    # @info "Try Loading Extension"
     @nospecialize
     loaded_modules = get_loaded_modules_mod()
     (; extensions, deps, weakdeps) = p.project
     for (name, triggers) in extensions
+        name in p.loaded_extensions && continue
         nactive = 0
         for trigger_name in triggers
             trigger_uuid = weakdeps[trigger_name]
@@ -54,7 +72,7 @@ function try_load_extensions!(p::FromPackageController)
             entry_path = Base.project_file_ext_path(p.project.file, name)
             # Set the module to the package module
             p.current_module = get_temp_module(p)
-            process_include_expr!(p, entry_path)
+            Core.eval(p.current_module, process_include_expr!(p, entry_path))
             push!(p.loaded_extensions, name)
         end
     end
@@ -241,7 +259,8 @@ valparam(::Val{T}) where T = (@nospecialize; T)
 function process_exprsplitter_item!(p::AbstractEvalController, ex, process_func::Function = p.custom_walk)
     @assert Meta.isexpr(ex, :block) "The expression is not a quote end, so it is not coming from ExprSplitter"
     # We update the current line under evaluation
-    p.current_line = lnn = ex.args[1]
+    lnn, ex = destructure_expr(ex)
+    p.current_line = lnn
     new_ex = process_func(ex)
     # @info "Change" ex new_ex
     if !isa(new_ex, RemoveThisExpr) && !p.target_reached
@@ -314,9 +333,8 @@ function process_using_expr!(p::FromPackageController, ex)
         end
         new_ex
     end
-    split_and_execute!(p, new_ex, identity)
-    # We just executed the statements so we skip this one
-    return RemoveThisExpr()
+    # We don't call split_and_execute directly as this would happen at compile time. To call it at runtime, we need to use `Meta.quot` to put the modified expression `new_ex` inside the return expression
+    return :($split_and_execute!($p, $(Meta.quot(new_ex)), $identity))
 end
 
 function custom_walk!(p::AbstractEvalController, ex::Expr, ::Val{:import})
@@ -337,11 +355,16 @@ end
 
 function get_filepath(p::FromPackageController, path::AbstractString)
     @nospecialize
-    base_dir = p.current_line.file |> string |> dirname
+    (;current_line) = p
+    base_dir = if isnothing(current_line)
+        pwd()
+    else
+        p.current_line.file |> string |> dirname
+    end
     return abspath(base_dir, path)
 end
 
-function split_and_execute!(p::FromPackageController, ast, f = p.custom_walk)
+function split_and_execute!(p::FromPackageController, ast::Expr, f = p.custom_walk)
     @nospecialize
     top_mod = prev_mod = p.current_module
     for (mod, ex) in ExprSplitter(top_mod, ast)
@@ -365,6 +388,7 @@ function process_include_expr!(p::FromPackageController, modexpr::Function, path
     filepath = get_filepath(p, path)
     if issamepath(p.target_path, filepath) 
         p.target_reached = true
+        p.target_location = p.current_line
         return nothing
     end
     _f = p.custom_walk
@@ -374,6 +398,7 @@ function process_include_expr!(p::FromPackageController, modexpr::Function, path
         # We compose
         _f ∘ modexpr
     end
+    # @info "Custom Including $(basename(filepath))"
     ast = extract_file_ast(filepath)
     split_and_execute!(p, ast, f)
     return nothing
@@ -411,4 +436,12 @@ function parseinput!(p::FromPackageController, ex)
 	# which names to eventually import, but all statements are converted into
 	# `import` if they are not of type FromDepsImport
 	is_using = ex.head === :using 
+end
+
+macro lolol(target::Symbol)
+    isdefined(__module__, target) || error("The symbol $target is not defined in the caller module")
+    path = Core.eval(__module__, target)
+    p = FromPackageController(path, __module__)
+    load_module!(p)
+    :(import Main._FromPackage_TempModule_.TestDirectExtension: TestDirectExtension, a)
 end

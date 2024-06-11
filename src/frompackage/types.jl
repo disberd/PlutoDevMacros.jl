@@ -107,8 +107,8 @@ abstract type AbstractEvalController end
     caller_module::Module
     "The current module where code evaluation is happening"
     current_module::Module = maybe_create_module()
-    "The current file being evaluated"
-    current_line::LineNumberNode = LineNumberNode(1, :Not_Initialized)
+    "The current line being evaluated"
+    current_line::Union{Nothing, LineNumberNode} = nothing
     "The dict of manifest deps"
     manifest_deps::Dict{Base.UUID, PackageEntry} = Dict{Base.UUID, PackageEntry}()
     "The tracked names imported into the current module by `using` statements"
@@ -116,6 +116,8 @@ abstract type AbstractEvalController end
     "The catchall names being imported by this package into the caller module"
     imported_catchall_names::Set{Symbol} = Set{Symbol}()
     "Specifies wheter the target was reached while including the module"
+    target_location::Union{Nothing,LineNumberNode} = nothing
+    "Flag that is set to true when the macro target is found in the code, to skip all the remaining expressions. It is set back to false after loading to allow extension handling."
     target_reached::Bool = false
     "Custom walk function"
     custom_walk::Function = identity

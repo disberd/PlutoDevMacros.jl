@@ -1,21 +1,5 @@
 import ..PlutoDevMacros: hide_this_log
 
-function get_temp_module()
-    isdefined(Main, TEMP_MODULE_NAME) || return nothing
-    return getproperty(Main, TEMP_MODULE_NAME)::Module
-end
-get_temp_module(s::Symbol) = getproperty(get_temp_module(), s)
-function get_temp_module(names::Vector{Symbol})
-    out = get_temp_module()
-    for name in names
-        getproperty(out, name)
-    end
-    return out
-end
-function get_temp_module(p::FromPackageController{name}) where name
-    @nospecialize
-    get_temp_module(name)::Module
-end
 
 # Extract the module that is the target in dict
 get_target_module(dict) = dict["Created Module"]
@@ -138,24 +122,10 @@ function getfirst(p, itr)
 end
 getfirst(itr) = getfirst(x -> true, itr)
 
-## Similar to names but allows to exclude names and add explicit ones. It also filter names based on whether they are defined already in the caller module
-function filterednames(m::Module; all=true, imported=true, explicit_names=Set{Symbol}(), caller_module::Module)
-    excluded = (:eval, :include, :_fromparent_dict_, Symbol("@bind"))
+## Similar to names but allows to exclude names by applying a filtering function to the output of `names`.
+function filterednames(m::Module, filter_func; all=true, imported=true)
     mod_names = names(m; all, imported)
-    filter_args = union(mod_names, explicit_names)
-    filter_func = filterednames_filter_func(; excluded, caller_module)
-    filter(filter_func, filter_args)
-end
-
-function has_ancestor_module(target::Module, ancestor_name::Symbol; previous=nothing, only_rootmodule=false)
-    has_ancestor_module(target, (ancestor_name,); previous, only_rootmodule)
-end
-function has_ancestor_module(target::Module, ancestor_names; previous=nothing, only_rootmodule=false)
-    nm = nameof(target)
-    ancestor_found = nm in ancestor_names
-    !only_rootmodule && ancestor_found && return true # Ancestor found, and no check on only_rootmodule
-    nm === previous && return ancestor_found # The target is the same as previous, so we reached a top-level module. We return whether the ancestor was found and is a parent of itself
-    return has_ancestor_module(parentmodule(target), ancestor_names; previous=nm, only_rootmodule)
+    filter(filter_func, mod_names)
 end
 
 # This returns two flags: whether the name can be included and whether a warning should be generated
@@ -308,13 +278,36 @@ function overwrite_imported_symbols(new_symbols)
     nothing
 end
 
-function beautify_package_path()
-    html"""
+function beautify_package_path(p::FromPackageController{name}) where name
+    @nospecialize
+    temp_name = join(fullname(get_temp_module()), raw"\.")
+"""
     <script>
+        // We have a mutationobserver for each cell:
+        const mut_observers = {
+            current: [],
+        }
+
+const createCellObservers = () => {
+	mut_observers.current.forEach((o) => o.disconnect())
+	mut_observers.current = Array.from(notebook.querySelectorAll("pluto-cell")).map(el => {
+		const o = new MutationObserver(updateCallback)
+		o.observe(el, {attributeFilter: ["class"]})
+		return o
+	})
+}
+createCellObservers()
+
+// And one for the notebook's child list, which updates our cell observers:
+const notebookObserver = new MutationObserver(() => {
+	updateCallback()
+	createCellObservers()
+})
+notebookObserver.observe(notebook, {childList: true})
     	const cell_id = "a360000b-d9bb-4e12-a64b-276bff027591"
     	const cell = document.getElementById(cell_id)
     	const output = cell.querySelector('pluto-output')
-    	const regex = /Main\._FromPackage_TempModule_\.(PlutoDevMacros)?/g
+    	const regex = /Main\\._FromPackage_TempModule_\\.(PlutoDevMacros)?/g
     	const replacement = "PlutoDevMacros"
     	const content = output.lastChild
     	function replaceTextInNode(node, pattern, replacement) {
@@ -326,5 +319,5 @@ function beautify_package_path()
         }
     	replaceTextInNode(content, regex, replacement);
     </script>
-    """
+"""
 end

@@ -42,25 +42,6 @@ function _inrange(ln::LineNumberNode, lnr::LineNumberRange)
 end
 _inrange(ln::LineNumberNode, ln2::LineNumberNode) = ln === ln2
 
-# We define here the types to identify the imports
-abstract type ImportType end
-for name in (:FromParentImport, :FromPackageImport, :RelativeImport)
-	expr = :(struct $name <: ImportType
-		mod_name::Symbol
-	end) 
-	eval(expr)
-end
-# We define the FromDepsImport outside as it has custom fields
-struct FromDepsImport <: ImportType
-    mod_name::Symbol
-    id::Base.PkgId
-    direct::Bool
-end
-function FromDepsImport(mod_name, pkginfo::PkgInfo, direct::Bool)
-    id = to_pkgid(pkginfo)
-    FromDepsImport(mod_name, id, direct)
-end
-
 struct ProjectData
     file::String
     deps::Dict{String, Base.UUID}
@@ -106,17 +87,17 @@ abstract type AbstractEvalController end
     "The module where the macro was called"
     caller_module::Module
     "The current module where code evaluation is happening"
-    current_module::Module = maybe_create_module()
+    current_module::Module = get_temp_module()
     "The current line being evaluated"
     current_line::Union{Nothing, LineNumberNode} = nothing
     "The dict of manifest deps"
     manifest_deps::Dict{Base.UUID, PackageEntry} = Dict{Base.UUID, PackageEntry}()
     "The tracked names imported into the current module by `using` statements"
-    using_names::Dict{Vector{Symbol}, Set{Symbol}} = Dict{Symbol, Set{Symbol}}()
-    "The catchall names being imported by this package into the caller module"
-    imported_catchall_names::Set{Symbol} = Set{Symbol}()
+    using_expressions::Dict{Module, Set{Expr}} = Dict{Module, Set{Expr}}()
     "Specifies wheter the target was reached while including the module"
     target_location::Union{Nothing,LineNumberNode} = nothing
+    "Module of where the target is included if the target is found. Nothing otherwise"
+    target_module::Union{Nothing, Module} = nothing
     "Flag that is set to true when the macro target is found in the code, to skip all the remaining expressions. It is set back to false after loading to allow extension handling."
     target_reached::Bool = false
     "Custom walk function"

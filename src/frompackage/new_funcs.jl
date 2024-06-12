@@ -1,6 +1,6 @@
 const EMPTY_PIPE = Pipe()
 const MODEXPR = Ref{Function}(identity)
-const STDLIBS_DATA = Dict{String, Base.UUID}()
+const STDLIBS_DATA = Dict{String,Base.UUID}()
 for (uuid, (name, _)) in Pkg.Types.stdlibs()
     STDLIBS_DATA[name] = uuid
 end
@@ -9,15 +9,41 @@ CURRENT_FROMPACKAGE_CONTROLLER = Ref{FromPackageController}()
 struct RemoveThisExpr end
 
 #### New approach stuff ####
+function get_temp_module()
+    if isdefined(Main, TEMP_MODULE_NAME)
+        getproperty(Main, TEMP_MODULE_NAME)::Module
+    else
+        m = Core.eval(Main, :(module $TEMP_MODULE_NAME
+        module _LoadedModules_ end
+        end))::Module
+    end
+end
+get_temp_module(s::Symbol) = getproperty(get_temp_module(), s)
+function get_temp_module(names::Vector{Symbol})
+    out = get_temp_module()
+    for name in names
+        getproperty(out, name)
+    end
+    return out
+end
+function get_temp_module(p::FromPackageController{name}) where {name}
+    @nospecialize
+    get_temp_module(name)::Module
+end
+
 get_loaded_modules_mod() = get_temp_module(:_LoadedModules_)::Module
 
-function load_module!(p::FromPackageController{name}; reset = true) where name
+function load_module!(p::FromPackageController{name}; reset=true) where {name}
     @nospecialize
     if reset
-        m = Base.redirect_stderr(EMPTY_PIPE) do
-            Core.eval(get_temp_module(), :(module $name end))
+        # This reset is currently always true, it will be relevant mostly when trying to incorporate Revise
+        m = let
+            # We create the module holding the target package inside the calling pluto workspace. This is done to have Pluto automatically remove any binding the the previous module upon re-run of the cell containing the macro. Not doing so will cause some very weird inconsistencies as some functions will still refer to the previous version of the module which should not exist anymore from within the notebook
+            temp_mod = Core.eval(p.caller_module, :(module $(gensym(:TempModule)) end))
+            Core.eval(temp_mod, :(module $name end))
         end
-        populate_loaded_modules()
+        # We mirror the generated module inside the temp_module module, so we can alwyas access it without having to know the current workspace
+        setproperty!(get_temp_module(), name, m)
         # We put the controller inside the module
         setproperty!(m, variable_name(p), p)
     end
@@ -30,6 +56,8 @@ function load_module!(p::FromPackageController{name}; reset = true) where name
     end
     # Maybe call init
     maybe_call_init(get_temp_module(p))
+    # We populate the loaded modules
+    populate_loaded_modules()
     # Try loading extensions
     try_load_extensions!(p)
     return p
@@ -37,16 +65,17 @@ end
 
 # This function separate the LNN and expression that are contained in the :block expressions returned by iteration with ExprSplitter. It is based on the assumption that each `ex` obtained while iterating with `ExprSplitter` are :block expressions with exactly two arguments, the first being a LNN and the second being the relevant expression
 function destructure_expr(ex::Expr)
-    @assert Meta.isexpr(ex, :block) && length(ex.args) === 2
+    @assert Meta.isexpr(ex, :block) && length(ex.args) === 2 "The expression does not seem to be coming out of iterating an `ExprSplitter` object"
     lnn, ex = ex.args
 end
 
 # This is a callback to add any new loaded package to the Main._FromPackage_TempModule_._LoadedModules_ module
 function mirror_package_callback(modkey::Base.PkgId)
-    # @info "mirror"
+    @info "mirror" modkey
     target = get_loaded_modules_mod()
     name = Symbol(modkey)
     m = Base.root_module(modkey)
+    @info "Mirror later" target name m
     Core.eval(target, :(const $name = $m))
     if isassigned(CURRENT_FROMPACKAGE_CONTROLLER)
         try_load_extensions!(CURRENT_FROMPACKAGE_CONTROLLER[])
@@ -56,7 +85,6 @@ end
 
 # This will try to see if the extensions of the target package can be loaded
 function try_load_extensions!(p::FromPackageController)
-    # @info "Try Loading Extension"
     @nospecialize
     loaded_modules = get_loaded_modules_mod()
     (; extensions, deps, weakdeps) = p.project
@@ -66,13 +94,14 @@ function try_load_extensions!(p::FromPackageController)
         for trigger_name in triggers
             trigger_uuid = weakdeps[trigger_name]
             id = Base.PkgId(trigger_uuid, trigger_name)
-            nactive += isdefined(loaded_modules, Symbol(id))
+            is_loaded = isdefined(loaded_modules, Symbol(id))
+            nactive += is_loaded
         end
         if nactive === length(triggers)
             entry_path = Base.project_file_ext_path(p.project.file, name)
             # Set the module to the package module
             p.current_module = get_temp_module(p)
-            Core.eval(p.current_module, process_include_expr!(p, entry_path))
+            process_include_expr!(p, entry_path)
             push!(p.loaded_extensions, name)
         end
     end
@@ -96,7 +125,7 @@ end
 
 function get_dep_from_manifest(p::FromPackageController, base_name)
     @nospecialize
-    (;manifest_deps) = p
+    (; manifest_deps) = p
     name_str = string(base_name)
     for (uuid, pe) in manifest_deps
         if pe.name === name_str
@@ -113,7 +142,7 @@ function get_dep_from_loaded_modules(id::Base.PkgId)
     m = getproperty(loaded_modules, Symbol(id))::Module
     return m
 end
-function get_dep_from_loaded_modules(p::FromPackageController{name}, base_name; allow_manifest = false, allow_stdlibs = true)::Module where name
+function get_dep_from_loaded_modules(p::FromPackageController{name}, base_name; allow_manifest=false, allow_stdlibs=true)::Module where {name}
     @nospecialize
     base_name === name && return get_temp_module(p)
     package_name = string(base_name)
@@ -123,7 +152,7 @@ function get_dep_from_loaded_modules(p::FromPackageController{name}, base_name; 
     end
     proj = p.project
     uuid = get(proj.deps, package_name) do
-        get(proj.weakdeps, package_name) do 
+        get(proj.weakdeps, package_name) do
             out = allow_manifest ? get_dep_from_manifest(p, base_name) : nothing
             isnothing(out) && error("The package with name $package_name could not be found as deps or weakdeps of the target project, as indirect dep of the manifest, or as standard library")
             return out
@@ -131,6 +160,13 @@ function get_dep_from_loaded_modules(p::FromPackageController{name}, base_name; 
     end
     id = Base.PkgId(uuid, package_name)
     return get_dep_from_loaded_modules(id)
+end
+
+# This is basically `extract_import_names` that enforces a single package per statement. It is used for parsing the input statements.
+function extract_input_import_names(ex)
+    outs = extract_import_names(ex)
+    @assert length(outs) === 1 "For import statements in the input block fed to the macro, you can only deal with one module/package per statement.\nStatements of the type `using A, B` are not allowed."
+    return first(outs)
 end
 
 # This function will return, for each package of the expression, two outputs which represent the modname path of the package being used, and the list of imported names
@@ -158,7 +194,11 @@ function reconstruct_import_statement(package_path::Vector{Symbol}, full_names::
     pkg = Expr(:., package_path...)
     isempty(full_names) && return pkg
     names = map(full_names) do path
-        Expr(:., path...)
+        if path isa Symbol
+            Expr(:., path)
+        else
+            Expr(:., path...)
+        end
     end
     return Expr(:(:), pkg, names...)
 end
@@ -207,7 +247,8 @@ function add_using_names!(p::FromPackageController, modname_path::Vector{Symbol}
         # This is another package, we just use the modname_path as it is
         modname_path, m
     end
-    names_set = get!(Set{Symbol}, p.using_names, key)
+    module_dict = get!(USING_NAMES_SUBDICT, p.using_names, fullname(p.current_module) |> collect)
+    names_set = get!(Set{Symbol}, module_dict, key)
     # We check whether we explicitly imported or just did `using PkgName`
     to_add = isempty(imported_names) ? names(m) : imported_names
     union!(names_set, to_add)
@@ -215,7 +256,7 @@ function add_using_names!(p::FromPackageController, modname_path::Vector{Symbol}
 end
 
 # Extracts the name (as Symbol) of the loaded package
-function symbol_name(::FromPackageController{T})::Symbol where T
+function symbol_name(::FromPackageController{T})::Symbol where {T}
     @nospecialize
     return T
 end
@@ -223,7 +264,7 @@ end
 variable_name(p::FromPackageController) = (@nospecialize; :_frompackage_controller_)
 
 # This function is inspired by MacroTools.walk (and prewalk/postwalk). It allows to specify custom way of parsing the expressions of an included file/package. The first method is used to process the include statement as the `modexpr` in the two-argument `include` method (i.e. `include(modexpr, file)`)
-function custom_walk!(p::AbstractEvalController) 
+function custom_walk!(p::AbstractEvalController)
     @nospecialize
     function modexpr(ex)
         out = custom_walk!(p, ex)
@@ -231,7 +272,7 @@ function custom_walk!(p::AbstractEvalController)
     end
     return modexpr
 end
-function custom_walk!(p::AbstractEvalController, ex)    
+function custom_walk!(p::AbstractEvalController, ex)
     @nospecialize
     if p.target_reached
         return RemoveThisExpr()
@@ -254,10 +295,9 @@ function valid_blockarg(this_arg, next_arg)
     end
 end
 
-valparam(::Val{T}) where T = (@nospecialize; T)
+valparam(::Val{T}) where {T} = (@nospecialize; T)
 
-function process_exprsplitter_item!(p::AbstractEvalController, ex, process_func::Function = p.custom_walk)
-    @assert Meta.isexpr(ex, :block) "The expression is not a quote end, so it is not coming from ExprSplitter"
+function process_exprsplitter_item!(p::AbstractEvalController, ex, process_func::Function=p.custom_walk)
     # We update the current line under evaluation
     lnn, ex = destructure_expr(ex)
     p.current_line = lnn
@@ -285,14 +325,6 @@ function custom_walk!(p::AbstractEvalController, ex::Expr, ::Val{:block})
     any(valids) || return RemoveThisExpr()
     return Expr(:block, args[valids]...)
 end
-# This handles removing PLUTO expressions
-function custom_walk!(p::AbstractEvalController, ex::Expr, ::Val{:(=)})
-    if ex.args[1] in (:PLUTO_PROJECT_TOML_CONTENTS, :PLUTO_MANIFEST_TOML_CONTENTS) && ex.args[2] isa String
-        return RemoveThisExpr()
-    else
-        return Expr(:(=), map(p.custom_walk, ex.args)...)
-    end
-end
 
 # This will handle the import statements of extensions packages
 function modify_extensions_imports!(p::FromPackageController, ex::Expr)
@@ -317,27 +349,29 @@ function modify_extensions_imports!(p::FromPackageController, ex::Expr)
 end
 # This will add calls below the `using` to track imported names
 function custom_walk!(p::AbstractEvalController, ex::Expr, ::Val{:using})
-    return process_using_expr!(p, ex)
-end
-
-function process_using_expr!(p::FromPackageController, ex)
+    @nospecialize
     current_module_name = p.current_module |> nameof |> string
     new_ex = if haskey(p.project.extensions, current_module_name)
+        # We are inside an extension code, we do not need to track usings
         modify_extensions_imports!(p, ex)
-    else
-        new_ex = quote
-            $ex
-        end
-        for (package_path, imported_names, _) in extract_import_names(ex)
-            push!(new_ex.args, :($add_using_names!($p, $package_path, $imported_names)))
-        end
-        new_ex
+    else # Here we want to track the using expressions
+        # We add the expression to the set for the current module
+        expr_set = get!(Set{Expr}, p.using_expressions, p.current_module)
+        push!(expr_set, ex)
+        # We just leave the expression unchanged
+        ex
     end
-    # We don't call split_and_execute directly as this would happen at compile time. To call it at runtime, we need to use `Meta.quot` to put the modified expression `new_ex` inside the return expression
-    return :($split_and_execute!($p, $(Meta.quot(new_ex)), $identity))
+    return new_ex
+end
+
+# We need to do this because otherwise we mess with struct definitions
+function custom_walk!(p::AbstractEvalController, ex::Expr, ::Val{:struct})
+    @nospecialize
+    return ex
 end
 
 function custom_walk!(p::AbstractEvalController, ex::Expr, ::Val{:import})
+    @nospecialize
     current_module_name = p.current_module |> nameof |> string
     haskey(p.project.extensions, current_module_name) && return modify_extensions_imports!(p, ex)
     return ex
@@ -345,6 +379,7 @@ end
 
 # This handles include calls, by adding p.custom_walk as the modexpr
 function custom_walk!(p::AbstractEvalController, ex::Expr, ::Val{:call})
+    @nospecialize
     f = p.custom_walk
     # We just process this expression if it's not an `include` call
     first(ex.args) === :include || return Expr(:call, map(f, ex.args)...)
@@ -355,7 +390,7 @@ end
 
 function get_filepath(p::FromPackageController, path::AbstractString)
     @nospecialize
-    (;current_line) = p
+    (; current_line) = p
     base_dir = if isnothing(current_line)
         pwd()
     else
@@ -364,13 +399,12 @@ function get_filepath(p::FromPackageController, path::AbstractString)
     return abspath(base_dir, path)
 end
 
-function split_and_execute!(p::FromPackageController, ast::Expr, f = p.custom_walk)
+function split_and_execute!(p::FromPackageController, ast::Expr, f=p.custom_walk)
     @nospecialize
     top_mod = prev_mod = p.current_module
     for (mod, ex) in ExprSplitter(top_mod, ast)
         # Update the current module
         p.current_module = mod
-        # @info "include" mod ex
         process_exprsplitter_item!(p, ex, f)
         if prev_mod !== top_mod && mod !== prev_mod
             maybe_call_init(prev_mod) # We try calling init in the last module after switching
@@ -386,13 +420,14 @@ end
 function process_include_expr!(p::FromPackageController, modexpr::Function, path::AbstractString)
     @nospecialize
     filepath = get_filepath(p, path)
-    if issamepath(p.target_path, filepath) 
+    if issamepath(p.target_path, filepath)
         p.target_reached = true
         p.target_location = p.current_line
+        p.target_module = p.current_module
         return nothing
     end
     _f = p.custom_walk
-    f = if modexpr isa ComposedFunction{typeof(_f), <:Any}
+    f = if modexpr isa ComposedFunction{typeof(_f),<:Any}
         modexpr # We just use that directly
     else
         # We compose
@@ -428,20 +463,174 @@ function nested_getproperty_expr(names_path::Symbol...)
 end
 
 ### Input Parsing
-function parseinput!(p::FromPackageController, ex)
-    include_using = should_include_using_names!(ex)
-	# Check if we have a catchall
-	catchall = include_using || contains_catchall(ex)
-	# Check if the statement is a using or an import, this is used to check
-	# which names to eventually import, but all statements are converted into
-	# `import` if they are not of type FromDepsImport
-	is_using = ex.head === :using 
+function should_exclude_using_names!(ex::Expr)
+    Meta.isexpr(ex, :macrocall) || return false
+    macro_name = ex.args[1]
+    exclude_name = Symbol("@exclude_using")
+    @assert macro_name === exclude_name "The provided input expression is not supported.\nExpressions should be only import statements, at most prepended by the `@exclude_using` decorator."
+    # If we reach here, we have the include usings. We just extract the underlying expression
+    actual_ex = ex.args[end]
+    ex.head = actual_ex.head
+    ex.args = actual_ex.args
+    return true
 end
 
+# This function will parse the input expression and eventually
+function process_input_expr(p::FromPackageController, ex)
+    # Eventually remove `@exclude_using`
+    exclude_usings = should_exclude_using_names!(ex)
+    modname_first = get_modpath_root(ex)
+    process_func = if modname_first in (:ParentModule, :<, :.)
+        RelativeImport
+    elseif modname_first in (:PackageModule, :^)
+        PackageImport
+    elseif modname_first === :>
+        DepsImport
+    elseif modname_first === :*
+        isnothing(p.target_module) ? PackageImport : ParentImport
+    end
+    new_ex = process_func(p, modname_full, imported_names, full_imported_names; exclude_usings, head)
+    return new_ex
+end
+
+# This function will extract the first name of a module identifier from `import/using` statements
+function get_modpath_root(ex::Expr)
+    modname_full, imported_names, full_imported_names = extract_input_import_names(ex)
+    modname_first = first(modname_full)
+    return modname_first
+end
+
+# This function traverse a path to access a nested module from a `starting_module`. It is used to extract the corresponding module from `import/using` statements.
+function extract_nested_module(starting_module::Module, nested_path; first_dot_skipped=false)
+    m = starting_module
+    for name in nested_path
+        m = if name === :.
+            first_dot_skipped ? parentmodule(m) : m
+        else
+            getproperty(m, name)::Module
+        end
+        first_dot_skipped = true
+    end
+    return m
+end
+
+# This will construct the catchall import expression for the module `m`
+function catchall_import_expression(p::FromPackageController, m::Module; exclude_usings::Bool=false)
+    @nospecialize
+    modname_full = fullname(m) |> collect
+    imported_names = filterednames(p, m)
+    # We use `import` explicitly as Pluto does not deal well with `using` not directly handled by the PkgManager
+    ex = reconstruct_import_statement(:import, modname_full, imported_names)
+    # We simplty return this if we exclude usings
+    exclude_usings && return ex
+    # Otherwise, we have to add
+    block = quote
+        $ex
+    end
+    # We extract the using expression that were encountered while loading the specified module
+    using_expressions = get(Set{Expr}, p.using_expressions, m)
+    for ex in using_expressions
+        for out in extract_import_names(ex)
+            (_modname_full, imported_names, full_names) = out
+            root_name = first(_modname_full)
+            target_module, new_modname = if root_name === :.
+                _m = extract_nested_module(m, _modname_full)
+                _m, fullname(_m) |> collect
+            else
+                _m = get_dep_from_loaded_modules(p, root_name)
+                new_modname = Symbol[
+                    :Main, TEMP_MODULE_NAME, :_LoadedModules_,
+                    Symbol(Base.PkgId(_m)),
+                    _modname_full[2:end]...
+                ]
+                _m, new_modname
+            end
+            ex = if isempty(imported_names)
+                # We are just plain using, so we have to explicitly extract the exported names
+                nms = filter(names(target_module)) do name
+                    Base.isexported(target_module, name)
+                end
+                reconstruct_import_statement(:import, new_modname, nms)
+            else
+                # We have an explicit list of names, so we simply modify the using to import
+                reconstruct_import_statement(:import, new_modname, imported_names)
+            end
+            push!(block.args, ex)
+        end
+    end
+    return block
+end
+
+function process_import_statement(p::FromPackageController, ex::Expr, starting_module::Module; pop_first::Bool=true, exclude_usings::Bool=false)
+    @nospecialize
+    # We extract the arguments of the statement
+    modname_full, imported_names, full_imported_names = extract_input_import_names(ex)
+    # We remove the first dot as it's a relative import with potentially invalid first name
+    pop_first && popfirst!(modname_full)
+    import_module = extract_nested_module(starting_module, modname_full; first_dot_skipped=true) # We already skipped the first dot
+    modname_full = fullname(import_module) |> collect
+    catchall = length(imported_names) === 1 && first(imported_names) === :*
+    if catchall
+        catchall_import_expression(p, import_module; exclude_usings)
+    else
+        return reconstruct_import_statement(head, modname_full, full_imported_names)
+    end
+end
+
+function RelativeImport(p::FromPackageController, ex::Expr; exclude_usings::Bool)
+    @nospecialize
+    @assert !isnothing(p.target_module) "You can not use relative imports while calling the macro from a notebook that is not included in the package"
+    process_import_statement(p, ex, p.target_module; pop_first=true, exclude_usings)
+end
+
+function PackageImport(p::FromPackageController, ex::Expr; exclude_usings::Bool)
+    @nospecialize
+    process_import_statement(p, ex, get_temp_module(p); pop_first=true, exclude_usings)
+end
+
+function DepsImport(p::FromPackageController, ex::Expr; exclude_usings::Bool=false)
+    @nospecialize
+    (modname_full, imported_names, full_names) = extract_input_import_names(ex)
+    # We remove the :> as root name
+    popfirst!(modname_full)
+    root_name = first(modname_full)
+    m = get_dep_from_loaded_modules(p, root_name)
+    new_modname = Symbol[
+        :Main, TEMP_MODULE_NAME, :_LoadedModules_,
+        Symbol(Base.PkgId(m)),
+        modname_full[2:end]...
+    ]
+end
+
+# Macro
 macro lolol(target::Symbol)
     isdefined(__module__, target) || error("The symbol $target is not defined in the caller module")
+    @info "$(__module__)"
     path = Core.eval(__module__, target)
     p = FromPackageController(path, __module__)
     load_module!(p)
-    :(import Main._FromPackage_TempModule_.TestDirectExtension: TestDirectExtension, a)
+    ex = RelativeImport(p, :(using ..TestDirectExtension: *); exclude_usings=false)
+end
+
+function excluded_names(p::FromPackageController)
+    @nospecialize
+    excluded = (:eval, :include, variable_name(p), Symbol("@bind"), :PLUTO_PROJECT_TOML_CONTENTS, :PLUTO_MANIFEST_TOML_CONTENTS, :__init__)
+    return excluded
+end
+
+function filterednames_filter_func(p::FromPackageController)
+    @nospecialize
+    f(s) =
+        let excluded = excluded_names(p)
+            Base.isgensym(s) && return false
+            s in excluded && return false
+            return true
+        end
+    return f
+end
+
+function filterednames(p::FromPackageController, m::Module; kwargs...)
+    @nospecialize
+    filter_func = filterednames_filter_func(p)
+    return filterednames(m, filter_func; kwargs...)
 end

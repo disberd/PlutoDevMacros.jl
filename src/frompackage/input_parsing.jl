@@ -46,124 +46,7 @@ function parse_settings(ex, dict)
     end
 end
 
-# This funtion tries to look within the expression fed to @frompackage to look for calls to @skiplines
-function process_skiplines!(ex, dict)
-    skiplines_arg = detect_custom_macro!(ex, Symbol("@skiplines"))
-    !isnothing(skiplines_arg) || return ex
-	# We initialize the Vector of LineRanges to skip
-	dict["Lines to Skip"] = LineNumberRange[]
-	parse_skiplines(skiplines_arg, dict)
-	return ex
-end
-
-function isdoc(ex)
-	Meta.isexpr(ex, :macrocall) || return false
-	arg = ex.args[1]
-	arg isa GlobalRef || return false
-	arg.mod === Core && arg.name === Symbol("@doc")
-end
-
-maybe_expand_docs(ex) = isdoc(ex) ? (ex.args[3], ex.args[4]) : (ex,)
-
-function parse_skiplines(ex, dict)
-	@assert length(ex.args) == 3 "The @skipline call only accept a single String or a begin end block of strings as only argument"
-	temp = ex.args[3]
-	skiplines_vector = dict["Lines to Skip"]
-	mainfile = dict["file"]
-	if temp isa String 
-		push!(skiplines_vector, parse_skipline(temp, mainfile))
-		return
-	end
-	# Here instead we have a block of arguments
-	for arg in temp.args
-		arg isa LineNumberNode && continue
-		for str in maybe_expand_docs(arg)
-			push!(skiplines_vector, parse_skipline(str, mainfile))
-		end
-	end
-end
-
-function parse_skipline(str, mainfile)
-	srcpath = dirname(mainfile)
-	@assert str isa String "The @skipline call only accept a single String or a begin end block of strings as only argument"
-	out = split(str, ":::")
-	errmsg = """Unuspported format in string `$str`
-	The following formats are supported when specifying lines to skip:
-	- `filepath:::firstline-lastline` # Skip a range of lines in given file
-	- `filepath:::line` # Skip a single line in given file
-	- `filepath` # skip the full given file
-	- `line` # Skip a single line in the package main file
-	- `firstline-lastline` # Skip a range of lines in the package main file
-	"""
-	@assert length(out) ∈ (1,2) errmsg
- 	path, lines = if length(out) == 1
-		t = out[1]
-		if endswith(t, ".jl")
-			# It's a path
-			t, "1-1000000"
-		else
-			# It's a line or line range
-			mainfile, t
-		end
-	else
-		out
-	end
-
-	full_path = isabspath(path) ? path : abspath(srcpath, path)
-	@assert isfile(full_path) "No file was found at $full_path"
-	range = split(lines, '-')
-	firstline, lastline = if length(range) == 1
-		n = parse(Int, range[1])
-		n,n
-	elseif length(range) == 2
-		parse(Int, range[1]), parse(Int, range[2])
-	else
-		error(errmsg)
-	end
-	return LineNumberRange(full_path, firstline, lastline)
-end
-
-## process outside pluto
-# We parse all the expressions in the block provided as input to @fromparent
-function process_outside_pluto!(ex, dict)
-	ex isa LineNumberNode && return ex
-	if Meta.isexpr(ex, :block)
-		args = ex.args
-		for (i,arg) ∈ enumerate(args)
-			args[i] = process_outside_pluto!(arg, dict)
-		end
-		return ex
-	else
-		# Single expression
-		return valid_outside_pluto!(ex, dict) ? ex : nothing
-	end
-end
-
-function valid_outside_pluto!(ex, dict)
-	ex isa Expr || return false
-	Meta.isexpr(ex, :macrocall) && return false
-	package_name = Symbol(dict["name"])
-	mod_name, imported_names = extract_import_args(ex)
-	first_name = mod_name.args[1]
-	first_name ∈ (:FromPackage, :FromParent, :*, package_name, :<, :^) && return false
-	contains_catchall(imported_names) && return false # We don't support the catchall outside import outside Pluto
-	first_name === :. && return true
-	# Now we try to check for direct dependencies
-	if first_name === :>
-		args = mod_name.args
-		# We remove the 
-		popfirst!(args)
-		s = String(args[1])
-		(;direct, indirect) = dict["PkgInfo"]
-		if s ∈ keys(direct)
-            return true
-        end
-	end
-	# s ∈ _stdlibs && return true
-	# s ∈ keys(indirect) && return true
-	return false
-end
-
+# New stuff
 
 function should_exclude_using_names!(ex::Expr)
     Meta.isexpr(ex, :macrocall) || return false
@@ -193,4 +76,202 @@ function process_input_expr(p::FromPackageController, ex)
     end
     new_ex = process_func(p, ex; exclude_usings)
     return new_ex
+end
+
+
+# This will construct the catchall import expression for the module `m`
+function catchall_import_expression(p::FromPackageController, m::Module; exclude_usings::Bool=false)
+    @nospecialize
+    modname_path = fullname(m) |> collect
+    imported_names = filterednames(p, m)
+    id = ImportStatementData(modname_path, imported_names)
+    # We use `import` explicitly as Pluto does not deal well with `using` not directly handled by the PkgManager
+    ex = reconstruct_import_statement(:import, id)
+    # We simplty return this if we exclude usings
+    exclude_usings && return ex
+    # Otherwise, we have to add
+    block = quote
+        $ex
+    end
+    # We extract the using expression that were encountered while loading the specified module
+    using_expressions = get(Set{Expr}, p.using_expressions, m)
+    for ex in using_expressions
+        for out in extract_import_names(ex)
+            ex = process_input_statement(p, out; is_import = false, allow_manifest = false, pop_first = false)
+            push!(block.args, ex)
+        end
+    end
+    return block
+end
+
+# This function will generate an importa statement by expanding the modname_path to the correct path based on the provided `starting_module`. It will also expand imported names if a catchall expression is found
+function generate_import_statement(p::FromPackageController, ex::Expr, starting_module::Module; pop_first::Bool=true, exclude_usings::Bool=false)
+    @nospecialize
+    # We extract the arguments of the statement
+    (; modname_path, imported_names) = id = extract_input_import_names(ex)
+    # We remove the first dot as it's a relative import with potentially invalid first name
+    pop_first && popfirst!(modname_path)
+    import_module = extract_nested_module(starting_module, modname_path; first_dot_skipped=true) # We already skipped the first dot
+    catchall = length(imported_names) === 1 && first(imported_names) === :*
+    if catchall
+        catchall_import_expression(p, import_module; exclude_usings)
+    else
+        # We have to update the modname_path
+        id.modname_path = fullname(import_module) |> collect
+        return reconstruct_import_statement(ex.head, id)
+    end
+end
+
+function RelativeImport(p::FromPackageController, ex::Expr; exclude_usings::Bool)
+    @nospecialize
+    @assert !isnothing(p.target_module) "You can not use relative imports while calling the macro from a notebook that is not included in the package"
+    new_ex = generate_import_statement(p, ex, p.target_module; pop_first=true, exclude_usings)
+    return new_ex
+end
+
+function PackageImport(p::FromPackageController, ex::Expr; exclude_usings::Bool)
+    @nospecialize
+    new_ex = generate_import_statement(p, ex, get_temp_module(p); pop_first=true, exclude_usings)
+    return new_ex
+end
+
+function CatchAllImport(p::FromPackageController, ex::Expr; exclude_usings::Bool)
+    @nospecialize
+    m = isnothing(p.target_module) ? get_temp_module(p) : p.target_module
+    new_ex = catchall_import_expression(p, m; exclude_usings)
+    return new_ex
+end
+
+# This will modify the input import statements by updating the modname_path and eventually extracting exported names from the module and explicitly import them. It will also always return an `import` statement because `using` are currently somehow broken in Pluto if not handled by the PkgManager
+function process_input_statement(p::FromPackageController, out::ImportStatementData; pop_first::Bool = false, allow_manifest = false, is_import::Bool = true)
+    (; modname_path, imported_names) = out
+    pop_first && popfirst!(modname_path)
+    root_name = first(modname_path)
+    target_module, new_modname = if root_name === :.
+        _m = extract_nested_module(m, modname_path)
+        _m, fullname(_m) |> collect
+    else
+        _m = get_dep_from_loaded_modules(p, root_name; allow_manifest)
+        new_modname = Symbol[
+            :Main, TEMP_MODULE_NAME, :_LoadedModules_,
+            Symbol(Base.PkgId(_m)),
+            modname_path[2:end]...
+        ]
+        _m, new_modname
+    end
+    ex = if isempty(imported_names)
+        # We are just plain using, so we have to explicitly extract the exported names
+        nms = if is_import 
+            [nameof(target_module)]
+        else 
+            filter(names(target_module)) do name
+                Base.isexported(target_module, name)
+            end
+        end
+        reconstruct_import_statement(:import, ImportStatementData(new_modname, nms))
+    else
+        # We have an explicit list of names, so we simply modify the using to import
+        reconstruct_import_statement(:import, ImportStatementData(new_modname, imported_names))
+    end
+    return ex
+end
+
+function DepsImport(p::FromPackageController, ex::Expr; exclude_usings::Bool=false)
+    @nospecialize
+    is_import = ex.head === :import
+    id = extract_input_import_names(ex)
+    new_ex = process_input_statement(p, id; pop_first=true, allow_manifest = true, is_import)
+    return new_ex
+end
+
+function excluded_names(p::FromPackageController)
+    @nospecialize
+    excluded = (:eval, :include, variable_name(p), Symbol("@bind"), :PLUTO_PROJECT_TOML_CONTENTS, :PLUTO_MANIFEST_TOML_CONTENTS, :__init__)
+    return excluded
+end
+
+function filterednames_filter_func(p::FromPackageController)
+    @nospecialize
+    f(s) =
+        let excluded = excluded_names(p)
+            Base.isgensym(s) && return false
+            s in excluded && return false
+            return true
+        end
+    return f
+end
+
+## Similar to names but allows to exclude names by applying a filtering function to the output of `names`.
+function filterednames(m::Module, filter_func; all=true, imported=true)
+    mod_names = names(m; all, imported)
+    filter(filter_func, mod_names)
+end
+function filterednames(p::FromPackageController, m::Module; kwargs...)
+    @nospecialize
+    filter_func = filterednames_filter_func(p)
+    return filterednames(m, filter_func; kwargs...)
+end
+
+# This is just for doing some check on the inputs and returning the list of expressions
+function extract_input_args(ex)
+    # Single import
+    Meta.isexpr(ex, (:import, :using)) && return [ex]
+    # Block of imports
+    Meta.isexpr(ex, :block) && return ex.args
+    # single statement preceded by @exclude_using
+    Meta.isexpr(ex, :macrocall) && ex.args[1] === Symbol("@exclude_using") && return [ex]
+    error("You have to call this macro with an import statement or a begin-end block of import statements")
+end
+
+
+# This is basically `extract_import_names` that enforces a single package per statement. It is used for parsing the input statements.
+function extract_input_import_names(ex)
+    outs = extract_import_names(ex)
+    @assert length(outs) === 1 "For import statements in the input block fed to the macro, you can only deal with one module/package per statement.\nStatements of the type `using A, B` are not allowed."
+    return first(outs)
+end
+
+# This function will return, for each package of the expression, two outputs which represent the modname path of the package being used, and the list of imported names
+function extract_import_names(ex::Expr)
+    @assert Meta.isexpr(ex, (:using, :import)) "The `extract_import_names` only accepts `using` or `import` statements as input"
+    out = map(ex.args) do arg
+        if Meta.isexpr(arg, :(:))
+            # This is the form `using PkgName: name1, name2, ...`
+            package_expr, names_expr... = arg.args
+            package_path = package_expr.args .|> Symbol
+            # We extract the last symbol as we can also do e.g. `import A: B.C`, which will bring C in scope
+            full_names = map(ex -> ex.args |> Vector{Symbol}, names_expr)
+            imported_names = map(x -> Symbol(last(x)), full_names)
+            return ImportStatementData(package_path, imported_names, full_names)
+        else
+            package_path = arg.args .|> Symbol
+            return ImportStatementData(package_path)
+        end
+    end
+    return out
+end
+
+function reconstruct_import_statement(id::ImportStatementData)
+    package_path = id.modname_path
+    full_names = id.imported_fullnames
+    pkg = Expr(:., package_path...)
+    isempty(full_names) && return pkg
+    names = map(full_names) do path
+        if path isa Symbol
+            Expr(:., path)
+        else
+            Expr(:., path...)
+        end
+    end
+    return Expr(:(:), pkg, names...)
+end
+function reconstruct_import_statement(outs::Vector{ImportStatementData})
+    map(outs) do id
+        reconstruct_import_statement(id)
+    end
+end
+function reconstruct_import_statement(head::Symbol, args...)
+    inner = reconstruct_import_statement(args...)
+    inner isa Vector || (inner = [inner])
+    return Expr(head, inner...)
 end

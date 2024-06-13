@@ -1,199 +1,120 @@
-struct StopEval 
-	reason::String
-	loc::LineNumberNode
-end
-StopEval(reason::String) = StopEval(reason, LineNumberNode(0))
-
-## general
-function eval_in_module(_mod, line_and_ex, dict)
-	loc, ex = line_and_ex.args
-	ex isa Expr || return nothing
-	lines_to_skip = get(dict,"Lines to Skip",())
-	should_skip(loc, lines_to_skip) && return nothing
-	Meta.isexpr(ex, :toplevel) && return eval_toplevel(_mod, ex.args,dict)
-	Meta.isexpr(ex, :module) && return eval_module_expr(_mod, ex,dict)
-	Meta.isexpr(ex, :call) && ex.args[1] === :include && return eval_include_expr(_mod, loc, ex, dict)
-	# If the processing return true, we can evaluate the processed expression
-	if process_expr!(ex, loc, dict, _mod)
-		Core.eval(_mod, line_and_ex) 
-	end
-	return nothing
+function maybe_call_init(m::Module)
+    # Check if it exists
+    isdefined(m, :__init__) || return nothing
+    # Check if it's owned by this module
+    which(m, :__init__) === m || return nothing
+    f = getproperty(m, :__init__)
+    # Verify that is a function
+    f isa Function || return nothing
+    Core.eval(m, :(__init__()))
+    return nothing
 end
 
-## include
-function eval_include_expr(_mod, loc, ex, dict)
-	# we have an include statement, but we only support the version with a single argument
-	length(ex.args) == 2 || error("The @frompackage macro currently does not support the 2-argument version of `include`.")
-	filename = ex.args[2]
-	filename_str = filename isa String ? filename : Core.eval(_mod, filename)
-	# We transform this to an absolute path, using the package directory as basis
-	filepath = if isabspath(filename_str)
-		filename_str
-	else
-		calling_dir = dirname(String(loc.file))
-		abspath(calling_dir, filename_str)
-	end
-	# We check whether the file to be included is the target put as input to the macro
-	if issamepath(filepath, cleanpath(dict["target"]))
-		# We have to store the Module path
-		package_name = Symbol(dict["name"])
-		current = _mod
-		dict["Target Path"] = namepath = [nameof(current)]
-		while nameof(current) ∉ (package_name, :Main)
-			current = parentmodule(current)
-			push!(namepath, nameof(current))
-		end
-		return StopEval("Target Found", loc)
-	end
-	ast = extract_file_ast(filepath)
-	eval_toplevel(_mod, ast.args, dict)
+## ExprSplitter stuff ##
+# This function separate the LNN and expression that are contained in the :block expressions returned by iteration with ExprSplitter. It is based on the assumption that each `ex` obtained while iterating with `ExprSplitter` are :block expressions with exactly two arguments, the first being a LNN and the second being the relevant expression
+function destructure_expr(ex::Expr)
+    @assert Meta.isexpr(ex, :block) && length(ex.args) === 2 "The expression does not seem to be coming out of iterating an `ExprSplitter` object"
+    lnn, ex = ex.args
 end
 
-## toplevel
-function eval_toplevel(_mod, args, dict)
-	# Taken/addapted from `include_string` in `base/loading.jl`
-	loc = LineNumberNode(1, nameof(_mod))
-	line_and_ex = Expr(:toplevel, loc, nothing)
-	for ex in args
-		if ex isa LineNumberNode
-			loc = ex
-			line_and_ex.args[1] = ex
-			continue
-		end
-		# Wrap things to be eval'd in a :toplevel expr to carry line
-		# information as part of the expr.
-		line_and_ex.args[2] = ex
-		out = eval_in_module(_mod, line_and_ex, dict)
-		if out isa StopEval 
-			return out
-		end
-	end
-	return nothing
-end
-
-# This will evaluate an expression which defines a new module or submodule. It will first create the module in the parent module and then evaluate each expression within this newly created module. It will also deal with processing/collecting of the names coming from `using PkgName` or `using PkgName: names...` as these can not be retrieved by simply calling `Base.names(module)`.
-function eval_module_expr(parent_module, ex, dict)
-	mod_name = ex.args[2]
-    is_target_module = mod_name === Symbol(dict["name"])
-	block = ex.args[3]
-	# We create or overwrite the current module in the parent, and we redirect stderr to avoid the replace warning
-	new_module = redirect_stderr(Pipe()) do # Apparently giving devnull as stream is not enough to suprress the warning, but Pipe works
-		Core.eval(parent_module, :(module $mod_name end))
-	end
-	# If the block is empty, we just skip this block
-	isempty(block.args) && return nothing
-	# We process the instructions within the module
-	args = if length(block.args) > 1 || !Meta.isexpr(block.args[1], :toplevel)
-		block.args
-	else
-		block.args[1].args
-	end
-    # We extract the using names currently collected for the parent module
-    empty_names_collector = (;
-        explicit_names = Set{Symbol}(), # Will contain names explicitly import, via `using A: a,b,c`
-        used_packages = Set{Symbol}(), # Will contain names of packages without explicit imports, like `using A`
-    )
-    parent_using_names = if is_target_module
-        dict["Using Names"] = empty_names_collector
-    else
-        # Save the parent names collector
-        parent_names = dict["Using Names"]
-        # Store a new empty collector for the module which will be generated
-        dict["Using Names"] = empty_names_collector
-        parent_names
-    end
-	out = eval_toplevel(new_module, args, dict)
-    if out isa StopEval || is_target_module
-        # We have to extract all of the exported names from the `used` Packages and put them in the explicit_names
-        (; explicit_names, used_packages) = empty_names_collector
-        for module_name in used_packages
-            _m = getfield(new_module, module_name)
-            for name in names(_m)
-                isdefined(new_module, name) && push!(explicit_names, name)
-            end
+# This function will use ExprSplitter from JuliaInterpreter to cycle through expression and execute them one by one
+function split_and_execute!(p::FromPackageController, ast::Expr, f=p.custom_walk)
+    @nospecialize
+    top_mod = prev_mod = p.current_module
+    for (mod, ex) in ExprSplitter(top_mod, ast)
+        # Update the current module
+        p.current_module = mod
+        process_exprsplitter_item!(p, ex, f)
+        if prev_mod !== top_mod && mod !== prev_mod
+            maybe_call_init(prev_mod) # We try calling init in the last module after switching
         end
-    else
-        # In case we didn't stop evaluating, we have to put back in "Using Names" the parent module collector
-        dict["Using Names"] = parent_using_names
+        prev_mod = mod
     end
-	# If the module has an __init__ function, we call it
-	if isdefined(new_module, :__init__) && new_module.__init__ isa Function
-		# We do Core.eval instead of just new_module.__init__() because of world age (it will error with new_module.__init__())
-		Core.eval(new_module, :(__init__()))
-	end
-	return out isa StopEval ? out : nothing
 end
 
-function maybe_create_module()
-    m = get_temp_module()
-    isnothing(m) || return m
-    fromparent_m = Core.eval(Main, :(module $TEMP_MODULE_NAME 
-    end))
-    # We create the dummy module where all the direct dependencies will be loaded
-    Core.eval(fromparent_m, :(module _DirectDeps_ end))
-    # We also set a reference to LoadedModules for access from the notebook
-    Core.eval(fromparent_m, :(module _LoadedModules_ end))
+function process_exprsplitter_item!(p::AbstractEvalController, ex, process_func::Function=p.custom_walk)
+    # We update the current line under evaluation
+    lnn, ex = destructure_expr(ex)
+    p.current_line = lnn
+    new_ex = process_func(ex)
+    # @info "Change" ex new_ex
+    if !isa(new_ex, RemoveThisExpr) && !p.target_reached
+        Core.eval(p.current_module, new_ex)
+    end
+    return
+end
+
+## Misc ##
+# Returns the name (as Symbol) of the variable where the controller will be stored within the generated module
+variable_name(p::FromPackageController) = (@nospecialize; :_frompackage_controller_)
+
+# This is a callback to add any new loaded package to the Main._FromPackage_TempModule_._LoadedModules_ module
+function mirror_package_callback(modkey::Base.PkgId)
+    @info "mirror" modkey
+    target = get_loaded_modules_mod()
+    name = Symbol(modkey)
+    m = Base.root_module(modkey)
+    @info "Mirror later" target name m
+    Core.eval(target, :(const $name = $m))
+    if isassigned(CURRENT_FROMPACKAGE_CONTROLLER)
+        try_load_extensions!(CURRENT_FROMPACKAGE_CONTROLLER[])
+    end
+    return
+end
+
+# This will try to see if the extensions of the target package can be loaded
+function try_load_extensions!(p::FromPackageController)
+    @nospecialize
+    loaded_modules = get_loaded_modules_mod()
+    (; extensions, deps, weakdeps) = p.project
+    for (name, triggers) in extensions
+        name in p.loaded_extensions && continue
+        nactive = 0
+        for trigger_name in triggers
+            trigger_uuid = weakdeps[trigger_name]
+            id = Base.PkgId(trigger_uuid, trigger_name)
+            is_loaded = isdefined(loaded_modules, Symbol(id))
+            nactive += is_loaded
+        end
+        if nactive === length(triggers)
+            entry_path = Base.project_file_ext_path(p.project.file, name)
+            # Set the module to the package module
+            p.current_module = get_temp_module(p)
+            process_include_expr!(p, entry_path)
+            push!(p.loaded_extensions, name)
+        end
+    end
+end
+
+### Load Module ###
+function load_module!(p::FromPackageController{name}; reset=true) where {name}
+    @nospecialize
+    # Add to LOAD_PATH if not present
+    update_loadpath(p)
+    if reset
+        # This reset is currently always true, it will be relevant mostly when trying to incorporate Revise
+        m = let
+            # We create the module holding the target package inside the calling pluto workspace. This is done to have Pluto automatically remove any binding the the previous module upon re-run of the cell containing the macro. Not doing so will cause some very weird inconsistencies as some functions will still refer to the previous version of the module which should not exist anymore from within the notebook
+            temp_mod = Core.eval(p.caller_module, :(module $(gensym(:TempModule)) end))
+            Core.eval(temp_mod, :(module $name end))
+        end
+        # We mirror the generated module inside the temp_module module, so we can alwyas access it without having to know the current workspace
+        setproperty!(get_temp_module(), name, m)
+        # We put the controller inside the module
+        setproperty!(m, variable_name(p), p)
+    end
+    CURRENT_FROMPACKAGE_CONTROLLER[] = p
+    try
+        Core.eval(p.current_module, process_include_expr!(p, p.entry_point))
+    finally
+        # We set the target reached to false to avoid skipping expression when loading extensions
+        p.target_reached = false
+    end
+    # Maybe call init
+    maybe_call_init(get_temp_module(p))
+    # We populate the loaded modules
     populate_loaded_modules()
-    return fromparent_m
-end
-
-# This will explicitly import each direct dependency of the package inside the LoadedModules module. Loading all of the direct dependencies will help make every dependency available even if not directly loaded in the target source code.
-function load_direct_deps(package_dict, fromparent_module)
-    DepsModule = fromparent_module._DirectDeps_::Module
-	(;direct) = package_dict["PkgInfo"]
-    for pkg in values(direct)
-        package_name_symbol = Symbol(pkg.name)
-        package_uuid_symbol = Symbol(pkg.uuid)
-        # If this is already loaded, we just skip
-        isdefined(DepsModule, package_uuid_symbol) && continue
-        # If not already defined, we import this. Note that this function will work correctly only if executed after the target environment has been added to the LOAD_PATH. In this DepsModule, we load packages with their UUID as name to potentially avoid clashes with two packages with same name.
-        Core.eval(DepsModule, :(import $(package_name_symbol) as $(package_uuid_symbol)))
-        # We also load this inside LoadedModules
-        maybe_add_loaded_module(to_pkgid(pkg))
-    end
-end
-
-
-## load module
-function load_module_in_caller(target_file::String, caller_module)
-	package_dict = get_package_data(target_file)
-	load_module_in_caller(package_dict, caller_module)
-end
-function load_module_in_caller(package_dict::Dict, caller_module)
-	package_file = package_dict["file"]
-	mod_exp = extract_module_expression(package_file)
-	load_module_in_caller(mod_exp, package_dict, caller_module)
-end
-function load_module_in_caller(mod_exp::Expr, package_dict::Dict, caller_module)
-	target_file = package_dict["target"]
-	ecg = default_ecg()
-	# If the module Reference inside fromparent_module is not assigned, we create the module in the calling workspace and assign it
-	_MODULE_ = maybe_create_module()
-	# We reset the module path in case it was not cleaned
-	mod_name = mod_exp.args[2]
-    # We reset the list of symbols if we loaded a different module
-    stored_module = get_stored_module()
-    if !isnothing(stored_module) && nameof(stored_module) !== mod_name
-        # We reset the list of previous symbols
-        empty!(PREVIOUS_CATCHALL_NAMES)
-    end
-	# We inject the project in the LOAD_PATH if it is not present already
-	add_loadpath(ecg; should_prepend = Settings.get_setting(package_dict, :SHOULD_PREPEND_LOAD_PATH))
-    # We start by loading each of the direct dependencies in the LoadedModules submodule
-    load_direct_deps(package_dict, _MODULE_)
-	# We try evaluating the expression within the custom module
-	stop_reason = try
-		reason = eval_in_module(_MODULE_,Expr(:toplevel, LineNumberNode(1, Symbol(target_file)), mod_exp), package_dict)
-		package_dict["Stopping Reason"] = reason isa Nothing ? StopEval("Loading Complete") : reason
-	catch e
-		package_dict["Stopping Reason"] = StopEval("Loading Error")
-		rethrow(e)
-	end
-	# Get the moduleof the parent package
-	__module = getproperty(_MODULE_, mod_name)::Module
-    # We put the module in the dict
-    package_dict["Created Module"] = __module
-	# We put the dict inside the loaded module
-	Core.eval(__module, :(_fromparent_dict_ = $package_dict))
-	return package_dict
+    # Try loading extensions
+    try_load_extensions!(p)
+    return p
 end

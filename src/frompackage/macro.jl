@@ -47,46 +47,16 @@ end
 ## @frompackage
 
 function frompackage(ex, target_file, caller, caller_module; macroname)
-	is_notebook_local(caller) || return process_outside_pluto!(ex, get_package_data(target_file))
+	is_notebook_local(caller) || return nothing
 	_, cell_id = _cell_data(caller)
-	maybe_update_envcache(Base.active_project(), default_ecg(); notebook = true)
-	proj_file = Base.current_project(target_file)
 	id_name = _id_name(cell_id)
-	ex isa Expr || error("You have to call this macro with an import statement or a begin-end block of import statements")
-	# Try to load the module of the target package in the calling workspace and return the dict with extracted paramteres
-	package_dict = if is_call_unique(cell_id, caller_module)
-		dict = get_package_data(target_file)
-		# We try to extract eventual lines to skip
-		process_skiplines!(ex, dict)
-        # We extract and process custom settings
-		process_settings!(ex, dict)
-		load_module_in_caller(dict, caller_module)
-	else
-		error("Multiple Calls: The $macroname is already present in cell with id $(macro_cell[]), you can only have one call-site per notebook")
-	end
-	args = []
-	# We extract the parse dict
-	ex_args = if Meta.isexpr(ex, [:import, :using])
-		[ex]
-	elseif Meta.isexpr(ex, :macrocall) && ex.args[1] in (Symbol("@include_using"), Symbol("@exclude_using"))
-        # This is @include_using
-        [ex]
-	elseif Meta.isexpr(ex, :block)
-		ex.args
-	else
-		error("You have to call this macro with an import statement or a begin-end block of import statements")
-	end
-	# We now process/parse all the import/using statements
-	for arg in ex_args
-		arg isa LineNumberNode && continue
-		push!(args, parseinput(arg, package_dict; caller_module))
-	end
-    # We update th stored root module
-    update_stored_module(package_dict)
-    # We put the included names in PREVIOUS_CATCHALL_NAMES
-    overwrite_imported_symbols(package_dict)
-	# We wrap the import expressions inside a try-catch, as those also correctly work from there.
-	# This also allow us to be able to catch the error in case something happens during loading and be able to gracefully clean the work space
+    p = FromPackageController(target_file, caller_module)
+    load_module!(p)
+    args = extract_input_args(ex)
+    for (i, arg) in enumerate(args)
+        arg isa Expr || continue
+        args[i] = process_input_expr(p, arg)
+    end
 	text = "Reload $macroname"
 	out = quote
 		# We put the cell id variable
@@ -105,12 +75,22 @@ function frompackage(ex, target_file, caller, caller_module; macroname)
 end
 
 function _combined(ex, target, calling_file, caller_module; macroname)
+    target_file = if target isa Symbol
+        @assert isdefined(caller_module, target) "The provided symbol does not seem to be defined inside the calling module"
+        target_file = Core.eval(caller_module, target)
+        ispath(target_file) || error("The provided variable $target does not seem to point to a valid path")
+        target_file
+    else
+        target_file, valid = extract_raw_str(target)
+        @assert valid "Only `AbstractStrings` or `Exprs` of type `raw\"...\"` are allowed as `target` in the `@frompackage` macro."
+        target_file
+    end
 	# Enforce absolute path to handle different OSs
-	target = abspath(target)
+	target_file = abspath(target_file)
 	calling_file = abspath(calling_file)
 	_, cell_id = _cell_data(calling_file)
 	out = try
-		frompackage(ex, target, calling_file, caller_module; macroname)
+		frompackage(ex, target_file, calling_file, caller_module; macroname)
 	catch e
 		# If we are outside of pluto we simply rethrow
 		is_notebook_local(calling_file) || rethrow()
@@ -164,11 +144,9 @@ See the package [documentation](https://disberd.github.io/PlutoDevMacros.jl/dev/
 
 See also: [`@fromparent`](@ref)
 """
-macro frompackage(target::Union{AbstractString, Expr}, ex)
-    target_file, valid = extract_raw_str(target)
-    @assert valid "Only `AbstractStrings` or `Exprs` of type `raw\"...\"` are allowed as `target` in the `@frompackage` macro."
+macro frompackage(target::Union{AbstractString, Expr, Symbol}, ex)
 	calling_file = String(__source__.file)
-	out = _combined(ex, target_file, calling_file, __module__; macroname = "@frompackage")
+	out = _combined(ex, target, calling_file, __module__; macroname = "@frompackage")
 	esc(out)
 end
 

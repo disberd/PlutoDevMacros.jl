@@ -9,37 +9,37 @@ for (uuid, (name, _)) in Pkg.Types.stdlibs()
 end
 
 struct RemoveThisExpr end
-struct PkgInfo 
-	name::Union{Nothing, String}
-	uuid::Base.UUID
-	version::Union{Nothing, VersionNumber}
-end
+# struct PkgInfo 
+# 	name::Union{Nothing, String}
+# 	uuid::Base.UUID
+# 	version::Union{Nothing, VersionNumber}
+# end
 
-# LineNumberRange. This are used for skipping parts of the target package
-struct LineNumberRange
-	first::LineNumberNode
-	last::LineNumberNode
-	function LineNumberRange(ln1::LineNumberNode, ln2::LineNumberNode)
-		@assert ln1.file === ln2.file "A range of LineNumbers can only be specified with LineNumbers from the same file"
-		first, last = ln1.line <= ln2.line ? (ln1, ln2) : (ln2, ln1)
-		new(first, last)
-	end
-end
-LineNumberRange(ln::LineNumberNode) = LineNumberRange(ln, ln)
-LineNumberRange(file::AbstractString, first::Int, last::Int) = LineNumberRange(
-	LineNumberNode(first, Symbol(file)),
-	LineNumberNode(last, Symbol(file))
-)
-## Inclusion in LinuNumberRange
-function _inrange(ln::LineNumberNode, lnr::LineNumberRange)
-	issamepath(ln.file, lnr.first.file) || return false # The file is not the same
-	if ln.line >= lnr.first.line && ln.line <= lnr.last.line
-		return true
-	else
-		return false
-	end
-end
-_inrange(ln::LineNumberNode, ln2::LineNumberNode) = ln === ln2
+# # LineNumberRange. This are used for skipping parts of the target package
+# struct LineNumberRange
+# 	first::LineNumberNode
+# 	last::LineNumberNode
+# 	function LineNumberRange(ln1::LineNumberNode, ln2::LineNumberNode)
+# 		@assert ln1.file === ln2.file "A range of LineNumbers can only be specified with LineNumbers from the same file"
+# 		first, last = ln1.line <= ln2.line ? (ln1, ln2) : (ln2, ln1)
+# 		new(first, last)
+# 	end
+# end
+# LineNumberRange(ln::LineNumberNode) = LineNumberRange(ln, ln)
+# LineNumberRange(file::AbstractString, first::Int, last::Int) = LineNumberRange(
+# 	LineNumberNode(first, Symbol(file)),
+# 	LineNumberNode(last, Symbol(file))
+# )
+# ## Inclusion in LinuNumberRange
+# function _inrange(ln::LineNumberNode, lnr::LineNumberRange)
+# 	issamepath(ln.file, lnr.first.file) || return false # The file is not the same
+# 	if ln.line >= lnr.first.line && ln.line <= lnr.last.line
+# 		return true
+# 	else
+# 		return false
+# 	end
+# end
+# _inrange(ln::LineNumberNode, ln2::LineNumberNode) = ln === ln2
 
 # This structure is used to manipulate import statements
 mutable struct ImportStatementData
@@ -103,7 +103,7 @@ abstract type AbstractEvalController end
     "The current line being evaluated"
     current_line::Union{Nothing, LineNumberNode} = nothing
     "The dict of manifest deps"
-    manifest_deps::Dict{Base.UUID, PackageEntry} = Dict{Base.UUID, PackageEntry}()
+    manifest_deps::Dict{Base.UUID, String} = Dict{Base.UUID, String}()
     "The tracked names imported into the current module by `using` statements"
     using_expressions::Dict{Module, Set{Expr}} = Dict{Module, Set{Expr}}()
     "Specifies wheter the target was reached while including the module"
@@ -125,17 +125,11 @@ function FromPackageController(target_path::String, caller_module::Module)
     # Find the project
     project_file = Base.current_project(target_path) 
     project_file isa Nothing && error("No project was found starting from $target_path")
-    # Take the ecg to 
-    ecg = default_ecg()
-    # We set the notebook env, assuming it's the active environment
-    maybe_update_envcache(Base.active_project(), ecg; notebook = true)
-    # We set the target env, based on the identified proj file
-    maybe_update_envcache(project_file, ecg; notebook = false)
-    target_env = get_target(ecg)
-    manifest_deps = target_env.manifest.deps
     project = ProjectData(project_file)
-    entry_point = get_entrypoint(target_env)
+    @assert project.name !== nothing "@frompackage can only be called with a Package as target.\nThe pointed project does not have `name` and `uuid` fields"
+    entry_point = joinpath(dirname(project_file), "src", project.name * ".jl")
     name = project.name
+    manifest_deps = generate_manifest_deps(project_file)
     p = FromPackageController{Symbol(name)}(;entry_point, manifest_deps, target_path, project, caller_module)
     p.custom_walk = custom_walk!(p)
     return p

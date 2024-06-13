@@ -50,11 +50,9 @@ variable_name(p::FromPackageController) = (@nospecialize; :_frompackage_controll
 
 # This is a callback to add any new loaded package to the Main._FromPackage_TempModule_._LoadedModules_ module
 function mirror_package_callback(modkey::Base.PkgId)
-    @info "mirror" modkey
     target = get_loaded_modules_mod()
     name = Symbol(modkey)
     m = Base.root_module(modkey)
-    @info "Mirror later" target name m
     Core.eval(target, :(const $name = $m))
     if isassigned(CURRENT_FROMPACKAGE_CONTROLLER)
         try_load_extensions!(CURRENT_FROMPACKAGE_CONTROLLER[])

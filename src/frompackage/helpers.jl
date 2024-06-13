@@ -1,23 +1,6 @@
 import ..PlutoDevMacros: hide_this_log
 
 
-# Extract the module that is the target in dict
-get_target_module(dict) = dict["Created Module"]
-
-function get_target_uuid(dict)
-    uuid = get(dict, "uuid", nothing)
-    if !isnothing(uuid)
-        uuid = Base.UUID(uuid)
-    end
-    return uuid
-end
-
-function get_target_pkgid(dict)
-    mod_name = dict["name"]
-    uuid = get_target_uuid(dict)
-    Base.PkgId(uuid, mod_name)
-end
-
 #=
 We don't use manual rerun so we just comment this till after we can use it
 ## simulate manual rerun
@@ -67,52 +50,6 @@ function is_notebook_local(calling_file::String)
     return length(name_cell) == 2 && length(name_cell[2]) == 36
 end
 
-## package extensions helpers
-has_extensions(package_data) = haskey(package_data, "extensions") && haskey(package_data, "weakdeps")
-
-function maybe_add_loaded_module(id::Base.PkgId)
-    symname = id.name |> Symbol
-    # We just returns if the module is already loaded
-    isdefined(LoadedModules, symname) && return nothing
-    loaded_module = Base.maybe_root_module(id)
-    isnothing(loaded_module) && error("The package $id does not seem to be loaded")
-    Core.eval(LoadedModules, :(const $(symname) = $(loaded_module)))
-    return nothing
-end
-
-## get parent data
-function get_package_data(packagepath::AbstractString)
-    project_file = Base.current_project(packagepath)
-    project_file isa Nothing && error("No project was found starting from $packagepath")
-    project_file = abspath(project_file)
-
-    ecg = default_ecg()
-
-    maybe_update_envcache(project_file, ecg; notebook=false)
-    target = get_target(ecg)
-    # We update the notebook and active envcaches to be up to date
-    update_ecg!(ecg)
-
-    # Check that the package file actually exists
-    package_file = get_entrypoint(target)
-    package_dir = dirname(package_file) |> abspath
-
-    isfile(package_file) || error("The package package main file was not found at path $package_file")
-
-    package_data = deepcopy(target.project.other)
-    package_data["project"] = project_file
-    package_data["dir"] = package_dir
-    package_data["file"] = package_file
-    package_data["target"] = packagepath
-    package_data["ecg"] = ecg
-
-    # We extract the PkgInfo for all packages in this environment
-    d, i = target_dependencies(target)
-    package_data["PkgInfo"] = (; direct=d, indirect=i)
-
-    return package_data
-end
-
 # Get the first element in itr that satisfies predicate p, or nothing if itr is empty or no elements satisfy p
 function getfirst(p, itr)
     for el in itr
@@ -121,39 +58,6 @@ function getfirst(p, itr)
     return nothing
 end
 getfirst(itr) = getfirst(x -> true, itr)
-
-## Similar to names but allows to exclude names by applying a filtering function to the output of `names`.
-function filterednames(m::Module, filter_func; all=true, imported=true)
-    mod_names = names(m; all, imported)
-    filter(filter_func, mod_names)
-end
-
-# This returns two flags: whether the name can be included and whether a warning should be generated
-function can_import_in_caller(name::Symbol, caller::Module)
-    isdefined(caller, name) || return true, false # If is not defined we can surely import it
-    owner = which(caller, name)
-    # Skip (and do not warn) for things defined in Base or Core
-    invalid_ancestor = has_ancestor_module(owner, (:Base, :Core, :Markdown, :InteractiveUtils))
-    invalid_ancestor && return false, false
-    # We check if the name is inside the list of symbols imported by the previous module
-    in_previous = name in PREVIOUS_CATCHALL_NAMES
-    return in_previous, !in_previous
-end
-
-function filterednames_filter_func(; excluded, caller_module)
-    f(s) =
-        let excluded = excluded, caller = caller_module
-            Base.isgensym(s) && return false
-            s in excluded && return false
-            should_include, should_warn = can_import_in_caller(s, caller)
-            if should_warn
-                owner = which(caller, s)
-                @warn "The name `$s`, defined in $owner, is already present in the caller module and will not be imported."
-            end
-            return should_include
-        end
-    return f
-end
 
 
 ## HTML Popup

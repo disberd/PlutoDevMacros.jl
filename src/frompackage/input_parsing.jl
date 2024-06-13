@@ -163,3 +163,34 @@ function valid_outside_pluto!(ex, dict)
 	# s ∈ keys(indirect) && return true
 	return false
 end
+
+
+function should_exclude_using_names!(ex::Expr)
+    Meta.isexpr(ex, :macrocall) || return false
+    macro_name = ex.args[1]
+    exclude_name = Symbol("@exclude_using")
+    @assert macro_name === exclude_name "The provided input expression is not supported.\nExpressions should be only import statements, at most prepended by the `@exclude_using` decorator."
+    # If we reach here, we have the include usings. We just extract the underlying expression
+    actual_ex = ex.args[end]
+    ex.head = actual_ex.head
+    ex.args = actual_ex.args
+    return true
+end
+
+# This function will parse the input expression and eventually
+function process_input_expr(p::FromPackageController, ex)
+    # Eventually remove `@exclude_using`
+    exclude_usings = should_exclude_using_names!(ex)
+    modname_first = get_modpath_root(ex)
+    process_func = if modname_first in (:ParentModule, :<, :.)
+        RelativeImport
+    elseif modname_first in (:PackageModule, :^)
+        PackageImport
+    elseif modname_first === :>
+        DepsImport
+    elseif modname_first === :*
+        CatchAllImport
+    end
+    new_ex = process_func(p, ex; exclude_usings)
+    return new_ex
+end

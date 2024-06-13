@@ -1,15 +1,14 @@
-const _stdlibs = first.(values(Pkg.Types.stdlibs()))
 
 const default_pkg_io = Ref{IO}(devnull)
 
 const TEMP_MODULE_NAME = :_FromPackage_TempModule_
-const STORED_MODULE = Ref{Union{Module, Nothing}}(nothing)
-const PREVIOUS_CATCHALL_NAMES = Set{Symbol}()
-const macro_cell = Ref("undefined")
-const manifest_names = ("JuliaManifest.toml", "Manifest.toml")
+const EMPTY_PIPE = Pipe()
+const STDLIBS_DATA = Dict{String,Base.UUID}()
+for (uuid, (name, _)) in Pkg.Types.stdlibs()
+    STDLIBS_DATA[name] = uuid
+end
 
-const created_modules = Dict{String, Module}()
-
+struct RemoveThisExpr end
 struct PkgInfo 
 	name::Union{Nothing, String}
 	uuid::Base.UUID
@@ -41,6 +40,19 @@ function _inrange(ln::LineNumberNode, lnr::LineNumberRange)
 	end
 end
 _inrange(ln::LineNumberNode, ln2::LineNumberNode) = ln === ln2
+
+# This structure is used to manipulate import statements
+mutable struct ImportStatementData
+    modname_path::Vector{Symbol}
+    imported_names::Vector{Symbol}
+    imported_fullnames::Vector{Vector{Symbol}}
+
+    function ImportStatementData(modname_path::Vector{Symbol}, imported_names::Vector{Symbol} = Symbol[], imported_fullnames::Vector{Vector{Symbol}} = map(x -> Symbol[x], imported_names))
+        new(modname_path, imported_names, imported_fullnames)
+    end
+end
+ImportStatementData(s::Symbol, args...) = ImportStatementData([s], args...)
+ImportStatementData(s::NTuple{<:Any, Symbol}, args...) = ImportStatementData(collect(s), args...)
 
 struct ProjectData
     file::String
@@ -105,6 +117,7 @@ abstract type AbstractEvalController end
     "Loaded Extensions"
     loaded_extensions::Set{String} = Set{String}()
 end
+const CURRENT_FROMPACKAGE_CONTROLLER = Ref{FromPackageController}()
 
 # Default constructor
 function FromPackageController(target_path::String, caller_module::Module)

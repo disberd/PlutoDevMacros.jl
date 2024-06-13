@@ -109,7 +109,6 @@ function _combined(ex, target, calling_file, caller_module; macroname)
 	target = abspath(target)
 	calling_file = abspath(calling_file)
 	_, cell_id = _cell_data(calling_file)
-	proj_file = Base.current_project(target)
 	out = try
 		frompackage(ex, target, calling_file, caller_module; macroname)
 	catch e

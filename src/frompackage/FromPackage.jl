@@ -10,7 +10,6 @@ module FromPackage
 
     include("types.jl")
     include("settings.jl")
-    # include("envcachegroup.jl")
     include("helpers.jl")
     include("code_parsing.jl")
     include("loading.jl")

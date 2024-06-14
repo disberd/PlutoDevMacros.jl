@@ -252,6 +252,7 @@ function get_temp_module()
     else
         m = Core.eval(Main, :(module $TEMP_MODULE_NAME
         module _LoadedModules_ end
+        module _DirectDeps_ end
         end))::Module
     end
 end

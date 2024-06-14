@@ -37,7 +37,7 @@ function process_exprsplitter_item!(p::AbstractEvalController, ex, process_func:
     lnn, ex = destructure_expr(ex)
     p.current_line = lnn
     new_ex = process_func(ex)
-    # @info "Change" ex new_ex
+    # @info "Change" ex new_ex p.current_module
     if !isa(new_ex, RemoveThisExpr) && !p.target_reached
         Core.eval(p.current_module, new_ex)
     end
@@ -85,6 +85,14 @@ function try_load_extensions!(p::FromPackageController)
 end
 
 ### Load Module ###
+function load_direct_deps(p::FromPackageController)
+    @nospecialize
+    deps_mod = get_temp_module(:_DirectDeps_)::Module
+    for (name, uuid) in p.project.deps
+        Core.eval(deps_mod, :(import $(Symbol(name))))
+    end
+end
+
 function load_module!(p::FromPackageController{name}; reset=true) where {name}
     @nospecialize
     # Add to LOAD_PATH if not present
@@ -101,8 +109,10 @@ function load_module!(p::FromPackageController{name}; reset=true) where {name}
         # We put the controller inside the module
         setproperty!(m, variable_name(p), p)
     end
+    # We put the controller in the Ref
     CURRENT_FROMPACKAGE_CONTROLLER[] = p
     try
+        load_direct_deps(p) # We load the direct dependencies
         Core.eval(p.current_module, process_include_expr!(p, p.entry_point))
     finally
         # We set the target reached to false to avoid skipping expression when loading extensions

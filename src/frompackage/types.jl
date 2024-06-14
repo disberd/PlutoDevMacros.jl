@@ -99,7 +99,7 @@ abstract type AbstractEvalController end
     "The module where the macro was called"
     caller_module::Module
     "The current module where code evaluation is happening"
-    current_module::Module = get_temp_module()
+    current_module::Union{Module, Nothing} = nothing
     "The current line being evaluated"
     current_line::Union{Nothing, LineNumberNode} = nothing
     "The dict of manifest deps"
@@ -120,7 +120,7 @@ end
 const CURRENT_FROMPACKAGE_CONTROLLER = Ref{FromPackageController}()
 
 # Default constructor
-function FromPackageController(target_path::String, caller_module::Module)
+function FromPackageController(target_path::AbstractString, caller_module::Module)
     @assert isabspath(target_path) "You can only construct the FromPackageController with an absolute path"
     # Find the project
     project_file = Base.current_project(target_path) 

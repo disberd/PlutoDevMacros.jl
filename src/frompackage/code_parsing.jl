@@ -85,6 +85,16 @@ function custom_walk!(p::AbstractEvalController, ex::Expr, ::Val{:call})
     return new_ex
 end
 
+# This handles include calls, by adding p.custom_walk as the modexpr
+function custom_walk!(p::AbstractEvalController, ex::Expr, ::Val{:macrocall})
+    @nospecialize
+    # We just process this expression if it's not an `include` call
+    first(ex.args) in (Symbol("@frompackage"), Symbol("@fromparent")) || return ex
+    # This will only process and returns the import block of the macro. We process it to exclude invalid statements outside pluto and eventualy track usings
+    new_ex = process_outside_pluto(p, ex.args[end])
+    return new_ex
+end
+
 ## custom_walk! Helpers ##
 function valid_blockarg(this_arg, next_arg)
     @nospecialize
@@ -115,6 +125,7 @@ end
 function process_include_expr!(p::FromPackageController, modexpr::Function, path::AbstractString)
     @nospecialize
     filepath = get_filepath(p, path)
+    # @info "Custom Including $(basename(filepath))"
     if issamepath(p.target_path, filepath)
         p.target_reached = true
         p.target_location = p.current_line

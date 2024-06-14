@@ -256,12 +256,10 @@ function get_temp_module()
         end))::Module
     end
 end
-get_temp_module(s::Symbol) = getproperty(get_temp_module(), s)
+get_temp_module(s::Symbol) = get_temp_module([s])
 function get_temp_module(names::Vector{Symbol})
-    out = get_temp_module()
-    for name in names
-        getproperty(out, name)
-    end
+    temp = get_temp_module()
+    out = extract_nested_module(temp, names)::Module
     return out
 end
 function get_temp_module(::FromPackageController{name}) where {name}
@@ -281,10 +279,18 @@ function populate_loaded_modules()
             Core.eval(loaded_modules, :(const $name = $m))
         end
     end
-    empty!(Base.package_callbacks) ### IMPORTANT, TO REMOVE ###
-    if mirror_package_callback ∉ Base.package_callbacks
+    callbacks = Base.package_callbacks
+    if mirror_package_callback ∉ callbacks
+        # We just make sure to delete previous instances of the package callbacks when relading this package itself
+        for i in reverse(eachindex(callbacks))
+            f = callbacks[i]
+            nameof(f) === :mirror_package_callback || continue
+            nameof(parentmodule(f)) === nameof(@__MODULE__) || continue
+            # We delete this as it's a previous version of the mirror_package_callback function
+            deleteat!(callbacks, i)
+        end
         # Add the package callback if not already present
-        push!(Base.package_callbacks, mirror_package_callback)
+        push!(callbacks, mirror_package_callback)
     end
 end
 

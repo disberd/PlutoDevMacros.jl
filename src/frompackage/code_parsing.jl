@@ -152,18 +152,22 @@ function modify_extensions_imports!(p::FromPackageController, ex::Expr)
     weakdeps = p.project.weakdeps
     target_name = p.project.name
     outs = map(extract_import_names(ex)) do import_data
-        (; modname_path, imported_names, imported_fullnames) = import_data
+        (; modname_path) = import_data
         base_name = first(modname_path) |> string
         if base_name === target_name
-            prepend!(modname_path, [:., :.])
+            prepend!(modname_path, fullname(get_temp_module()))
         elseif haskey(weakdeps, base_name)
             uuid = weakdeps[base_name]
             id = Base.PkgId(uuid, base_name)
             modname_path[1] = Symbol(id)
-            prepend!(modname_path, (:Main, :_FromPackage_TempModule_, :_LoadedModules_))
+            prepend!(modname_path, fullname(get_loaded_modules_mod()))
         end
-        import_data
+        m = extract_nested_module(Main, modname_path)
+        make_isd_explicit(m, import_data; is_import = ex.head === :import)
     end
-    new_ex = reconstruct_import_statement(ex.head, outs)
-    Expr(:toplevel, p.current_line, new_ex)
+    new_ex = quote end # We do this to create a linunmbernode pointing here
+    for out in outs
+        push!(new_ex.args, reconstruct_import_statement(:import, out))
+    end
+    return new_ex
 end

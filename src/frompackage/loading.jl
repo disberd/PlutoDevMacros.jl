@@ -37,7 +37,7 @@ function process_exprsplitter_item!(p::AbstractEvalController, ex, process_func:
     lnn, ex = destructure_expr(ex)
     p.current_line = lnn
     new_ex = process_func(ex)
-    # @info "Change" ex new_ex p.current_module
+    # @info "Change" ex new_ex
     if !isa(new_ex, RemoveThisExpr) && !p.target_reached
         Core.eval(p.current_module, new_ex)
     end
@@ -97,6 +97,8 @@ function load_module!(p::FromPackageController{name}; reset=true) where {name}
     @nospecialize
     # Add to LOAD_PATH if not present
     update_loadpath(p)
+    # Reinitialize the current module to the base one
+    p.current_module = get_temp_module()
     if reset
         # This reset is currently always true, it will be relevant mostly when trying to incorporate Revise
         m = let

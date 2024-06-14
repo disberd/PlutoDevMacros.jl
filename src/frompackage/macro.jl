@@ -47,11 +47,9 @@ end
 ## @frompackage
 
 function frompackage(ex, target_file, caller, caller_module; macroname)
-	file_path, cell_id = _cell_data(caller)
-    p = FromPackageController(file_path, caller_module)
+    p = FromPackageController(target_file, caller_module)
 	is_notebook_local(caller) || return process_outside_pluto(p, ex)
-    # We put the caller module as current module if we are inside pluto, we don't do this when constructing FromPackageController or it will create an error outside Pluto for problems with precompilation caused by creating temp modules in Main
-    p.current_module = get_temp_module()
+	_, cell_id = _cell_data(caller)
 	id_name = _id_name(cell_id)
     load_module!(p)
     args = extract_input_args(ex)

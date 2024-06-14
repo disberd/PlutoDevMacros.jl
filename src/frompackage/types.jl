@@ -121,6 +121,8 @@ const CURRENT_FROMPACKAGE_CONTROLLER = Ref{FromPackageController}()
 
 # Default constructor
 function FromPackageController(target_path::AbstractString, caller_module::Module)
+    # We remove pluto cell id in the name if present
+    target_path = cleanpath(target_path)
     @assert isabspath(target_path) "You can only construct the FromPackageController with an absolute path"
     # Find the project
     project_file = Base.current_project(target_path) 

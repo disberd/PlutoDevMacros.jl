@@ -3,6 +3,8 @@ import Pkg
 import Pkg.Types: Context, EnvCache, PackageSpec, GitRepo
 import Pluto: update_save_run!, update_run!, WorkspaceManager, ClientSession, ServerSession, Notebook, Cell, project_relative_path, SessionActions, load_notebook, Configuration
 
+include(joinpath(@__DIR__, "helpers.jl"))
+
 indirect_path = normpath(@__DIR__, "../TestIndirectExtension/")
 direct_path = normpath(@__DIR__, "../TestDirectExtension/")
 
@@ -28,6 +30,7 @@ end
 options = Configuration.from_flat_kwargs(; disable_writing_notebook_files=true, workspace_use_distributed_stdlib = true)
 eval_in_nb(sn, expr) = WorkspaceManager.eval_fetch_in_workspace(sn, expr)
 
+instantiate_from_path(indirect_path)
 @testset "Indirect Extension" begin
     ss = ServerSession(; options)
     path = joinpath(indirect_path, "test_extension.jl")
@@ -39,6 +42,7 @@ eval_in_nb(sn, expr) = WorkspaceManager.eval_fetch_in_workspace(sn, expr)
     SessionActions.shutdown(ss, nb)
 end
 
+instantiate_from_path(joinpath(direct_path, "notebook_env"))
 @testset "Direct Extensions" begin
     ss = ServerSession(; options)
     path = joinpath(direct_path, "test_extension.jl")

@@ -12,7 +12,6 @@ function noerror(cell; verbose=true)
     !cell.errored
 end
 
-
 options = Configuration.from_flat_kwargs(; disable_writing_notebook_files=true, workspace_use_distributed_stdlib = true)
 srcdir = joinpath(@__DIR__, "../TestPackage/src/")
 eval_in_nb(sn, expr) = WorkspaceManager.eval_fetch_in_workspace(sn, expr)
@@ -74,6 +73,7 @@ end
 
 # We test the ParseError (issue 30)
 srcdir = joinpath(@__DIR__, "../TestParseError/src/")
+instantiate_from_path(srcdir)
 @testset "test_parse_error.jl" begin
     ss = ServerSession(; options)
     path = abspath(srcdir, "../parseerror_notebook.jl")
@@ -91,6 +91,7 @@ end
 
 # We test dev dependencies with relative path (issue 30)
 srcdir = joinpath(@__DIR__, "../TestDevDependency/src/")
+instantiate_from_path(srcdir)
 @testset "test_dev_dependency.jl" begin
     ss = ServerSession(; options)
     path = abspath(srcdir, "../test_notebook.jl")
@@ -103,6 +104,7 @@ end
 
 # We test @exclude_using (issue 11)
 srcdir = joinpath(@__DIR__, "../TestUsingNames/src/")
+instantiate_from_path(srcdir)
 @testset "Using Names" begin
     ss = ServerSession(; options)
     for filename in ["test_notebook1.jl", "test_notebook2.jl"]

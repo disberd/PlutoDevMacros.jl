@@ -1,7 +1,10 @@
 using SafeTestsets
-using Aqua
-using PlutoDevMacros
-Aqua.test_all(PlutoDevMacros)
+
+@safetestset "Aqua" begin
+    using Aqua
+    using PlutoDevMacros
+    Aqua.test_all(PlutoDevMacros)
+end
 
 @safetestset "Basics" begin include("basics.jl") end
 # @safetestset "@frompackage: basics" begin include("frompackage/basics.jl") end

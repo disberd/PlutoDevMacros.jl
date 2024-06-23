@@ -8,38 +8,8 @@ for (uuid, (name, _)) in Pkg.Types.stdlibs()
     STDLIBS_DATA[name] = uuid
 end
 
+# This structure is just a placeholder that is put in place of expressions that are to be removed when parsing a file
 struct RemoveThisExpr end
-# struct PkgInfo 
-# 	name::Union{Nothing, String}
-# 	uuid::Base.UUID
-# 	version::Union{Nothing, VersionNumber}
-# end
-
-# # LineNumberRange. This are used for skipping parts of the target package
-# struct LineNumberRange
-# 	first::LineNumberNode
-# 	last::LineNumberNode
-# 	function LineNumberRange(ln1::LineNumberNode, ln2::LineNumberNode)
-# 		@assert ln1.file === ln2.file "A range of LineNumbers can only be specified with LineNumbers from the same file"
-# 		first, last = ln1.line <= ln2.line ? (ln1, ln2) : (ln2, ln1)
-# 		new(first, last)
-# 	end
-# end
-# LineNumberRange(ln::LineNumberNode) = LineNumberRange(ln, ln)
-# LineNumberRange(file::AbstractString, first::Int, last::Int) = LineNumberRange(
-# 	LineNumberNode(first, Symbol(file)),
-# 	LineNumberNode(last, Symbol(file))
-# )
-# ## Inclusion in LinuNumberRange
-# function _inrange(ln::LineNumberNode, lnr::LineNumberRange)
-# 	issamepath(ln.file, lnr.first.file) || return false # The file is not the same
-# 	if ln.line >= lnr.first.line && ln.line <= lnr.last.line
-# 		return true
-# 	else
-# 		return false
-# 	end
-# end
-# _inrange(ln::LineNumberNode, ln2::LineNumberNode) = ln === ln2
 
 # This structure is used to manipulate import statements
 mutable struct ImportStatementData

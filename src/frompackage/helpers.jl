@@ -212,17 +212,6 @@ function update_loadpath(p::FromPackageController)
     end
 end
 
-nested_getproperty_expr(name::Symbol) = QuoteNode(name)
-# This function creates the expression to access a nested property specified by a path. For example, if `path = [:Main, :ASD, :LOL]`, `nested_getproperty_expr(path...)` will return the expression equivalent to `Main.ASD.LOL`. This is not to be used within `import/using` statements as the synthax for accessing nested modules is different there.
-function nested_getproperty_expr(names_path::Symbol...)
-    @nospecialize
-    others..., tail = names_path
-    last_arg = nested_getproperty_expr(tail)
-    first_arg = length(others) === 1 ? first(others) : nested_getproperty_expr(others...)
-    ex = isempty(others) ? arg : Expr(:., first_arg, last_arg)
-    return ex
-end
-
 ### Input Parsing
 # This function will extract the first name of a module identifier from `import/using` statements
 function get_modpath_root(ex::Expr)

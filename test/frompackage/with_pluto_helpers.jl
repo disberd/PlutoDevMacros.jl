@@ -15,7 +15,6 @@ testpackage_path = joinpath(@__DIR__, "../TestPackage/")
 
 instantiate_from_path(indirect_path)
 instantiate_from_path(testpackage_path)
-instantiate_from_path(joinpath(direct_path, "notebook_env"))
 
 options = Configuration.from_flat_kwargs(; disable_writing_notebook_files=true, workspace_use_distributed_stdlib = true)
 

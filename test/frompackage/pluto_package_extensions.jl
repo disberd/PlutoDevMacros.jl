@@ -13,6 +13,9 @@ end
 @testitem "Direct Extensions" begin
     # Include the setup
     include(joinpath(@__DIR__, "with_pluto_helpers.jl"))
+    env_path = joinpath(direct_path, "notebook_env")
+    dev_package_in_proj(env_path)
+    instantiate_from_path(env_path)
     # Do the rest
     ss = ServerSession(; options)
     path = joinpath(direct_path, "test_extension.jl")

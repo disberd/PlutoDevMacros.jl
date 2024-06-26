@@ -3,6 +3,9 @@
     # Include the setup
     include(joinpath(@__DIR__, "with_pluto_helpers.jl"))
     srcdir = joinpath(@__DIR__, "../TestPackage/src/")
+    # We add PlutoDevMacros as dev dependency to TestPackage
+    dev_package_in_proj(srcdir)
+    instantiate_from_path(srcdir)
     eval_with_load_path(:(import TestPackage), testpackage_path)
     # Do the tests
     ss = ServerSession(; options)
@@ -22,6 +25,9 @@ end
     # Include the setup
     include(joinpath(@__DIR__, "with_pluto_helpers.jl"))
     srcdir = joinpath(@__DIR__, "../TestPackage/src/")
+    # We add PlutoDevMacros as dev dependency to TestPackage
+    dev_package_in_proj(srcdir)
+    instantiate_from_path(srcdir)
     # Do the tests
     ss = ServerSession(; options)
     path = joinpath(srcdir, "inner_notebook2.jl")
@@ -37,6 +43,9 @@ end
     # Include the setup
     include(joinpath(@__DIR__, "with_pluto_helpers.jl"))
     srcdir = joinpath(@__DIR__, "../TestPackage/src/")
+    # We add PlutoDevMacros as dev dependency to TestPackage
+    dev_package_in_proj(srcdir)
+    instantiate_from_path(srcdir)
     # Do the tests
     ss = ServerSession(; options)
     path = joinpath(srcdir, "test_macro2.jl")
@@ -61,6 +70,9 @@ end
     # Include the setup
     include(joinpath(@__DIR__, "with_pluto_helpers.jl"))
     srcdir = joinpath(@__DIR__, "../TestPackage/src/")
+    # We add PlutoDevMacros as dev dependency to TestPackage
+    dev_package_in_proj(srcdir)
+    instantiate_from_path(srcdir)
     # Do the tests
     ss = ServerSession(; options)
     path = abspath(srcdir, "../test_pkgmanager.jl")

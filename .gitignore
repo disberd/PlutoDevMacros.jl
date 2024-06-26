@@ -1,5 +1,4 @@
 Manifest.toml
-!test/TestPackage/Manifest.toml
 
 *.jlcov
 docs/build/

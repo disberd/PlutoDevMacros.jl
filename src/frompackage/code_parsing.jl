@@ -47,10 +47,9 @@ end
 # This will add calls below the `using` to track imported names
 function custom_walk!(p::AbstractEvalController, ex::Expr, ::Val{:using})
     @nospecialize
-    current_module_name = p.current_module |> nameof |> string
-    new_ex = if haskey(p.project.extensions, current_module_name)
+    new_ex = if inside_extension(p)
         # We are inside an extension code, we do not need to track usings
-        modify_extensions_imports!(p, ex)
+        handle_extensions_imports(p, ex)
     else # Here we want to track the using expressions
         # We add the expression to the set for the current module
         expr_set = get!(Set{Expr}, p.using_expressions, p.current_module)
@@ -61,16 +60,14 @@ function custom_walk!(p::AbstractEvalController, ex::Expr, ::Val{:using})
     return new_ex
 end
 
+function custom_walk!(p::AbstractEvalController, ex::Expr, ::Val{:import})
+    @nospecialize
+    return handle_extensions_imports(p, ex)
+end
+
 # We need to do this because otherwise we mess with struct definitions
 function custom_walk!(p::AbstractEvalController, ex::Expr, ::Val{:struct})
     @nospecialize
-    return ex
-end
-
-function custom_walk!(p::AbstractEvalController, ex::Expr, ::Val{:import})
-    @nospecialize
-    current_module_name = p.current_module |> nameof |> string
-    haskey(p.project.extensions, current_module_name) && return modify_extensions_imports!(p, ex)
     return ex
 end
 
@@ -145,29 +142,9 @@ function process_include_expr!(p::FromPackageController, modexpr::Function, path
     return nothing
 end
 
-# This will handle the import statements of extensions packages
-function modify_extensions_imports!(p::FromPackageController, ex::Expr)
+# This function will eventually modify using/import expressions inside extensions modules. Outside of extension modules, it will simply return the provided expression
+function handle_extensions_imports(p::FromPackageController, ex::Expr)
     @nospecialize
     @assert Meta.isexpr(ex, (:using, :import)) "You can only call this function with using or import expressions as second argument"
-    weakdeps = p.project.weakdeps
-    target_name = p.project.name
-    outs = map(extract_import_names(ex)) do import_data
-        (; modname_path) = import_data
-        base_name = first(modname_path) |> string
-        if base_name === target_name
-            prepend!(modname_path, fullname(get_temp_module()))
-        elseif haskey(weakdeps, base_name)
-            uuid = weakdeps[base_name]
-            id = Base.PkgId(uuid, base_name)
-            modname_path[1] = Symbol(id)
-            prepend!(modname_path, fullname(get_loaded_modules_mod()))
-        end
-        m = extract_nested_module(Main, modname_path)
-        make_isd_explicit(m, import_data; is_import = ex.head === :import)
-    end
-    new_ex = quote end # We do this to create a linunmbernode pointing here
-    for out in outs
-        push!(new_ex.args, reconstruct_import_statement(:import, out))
-    end
-    return new_ex
+    return inside_extension(p) ? process_import_statement(p, ex; inside_extension = true) : ex
 end

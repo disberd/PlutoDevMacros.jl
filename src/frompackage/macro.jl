@@ -1,21 +1,5 @@
 import Base: stacktrace, catch_backtrace
 
-_id_name(cell_id) = Symbol(:_fromparent_cell_id_, cell_id)
-
-function is_call_unique(cell_id, caller_module)
-	current_id = macro_cell[]
-	current_id == cell_id && return true
-	# If we get here we have a potential multiple call
-	id_name = _id_name(current_id)
-	return if isdefined(caller_module, id_name) 
-		false
-	else
-		# We have the update the cell reference
-		macro_cell[] = cell_id
-		true
-	end
-end
-
 function wrap_parse_error(e)
 	# Just return the error if we are not in 1.10 or is not a ParseError
 	VERSION >= v"1.10" && e isa Base.Meta.ParseError && hasproperty(e, :detail) || return e
@@ -46,11 +30,9 @@ end
 
 ## @frompackage
 
-function frompackage(ex, target_file, caller, caller_module; macroname)
-    p = FromPackageController(target_file, caller_module)
-	is_notebook_local(caller) || return process_outside_pluto(p, ex)
-	_, cell_id = _cell_data(caller)
-	id_name = _id_name(cell_id)
+function frompackage(ex, target_file, caller, caller_module; macroname, cell_id)
+    p = FromPackageController(target_file, caller_module; cell_id)
+	p.cell_id !== nothing || return process_outside_pluto(p, ex)
     load_module!(p)
     args = extract_input_args(ex)
     for (i, arg) in enumerate(args)
@@ -60,7 +42,7 @@ function frompackage(ex, target_file, caller, caller_module; macroname)
 	text = "Reload $macroname"
 	out = quote
 		# We put the cell id variable
-		$id_name = true
+		$PREV_CONTROLLER_NAME = $p
 		try
 			$(args...)
 			# We add the reload button as last expression so it's sent to the cell output
@@ -70,7 +52,7 @@ function frompackage(ex, target_file, caller, caller_module; macroname)
 			@info $html_reload_button($cell_id; text = $text)
 			rethrow()
 		end
-	end
+	end |> flatten
 	return out
 end
 
@@ -89,11 +71,12 @@ function _combined(ex, target, calling_file, caller_module; macroname)
 	target_file = abspath(target_file)
 	calling_file = abspath(calling_file)
 	_, cell_id = _cell_data(calling_file)
+    inside_notebook = !isempty(cell_id)
 	out = try
-		frompackage(ex, target_file, calling_file, caller_module; macroname)
+		frompackage(ex, target_file, calling_file, caller_module; macroname, cell_id)
 	catch e
 		# If we are outside of pluto we simply rethrow
-		is_notebook_local(calling_file) || rethrow()
+		inside_notebook || rethrow()
 		out = Expr(:block)
 		if !(e isa ErrorException && startswith(e.msg, "Multiple Calls: The"))
 			text = "Reload $macroname"

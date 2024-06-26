@@ -17,7 +17,7 @@ end
   ╠═╡ =#
 
 # ╔═╡ 9fd3e305-b493-46a5-8d4d-2d3712d9b23a
-using PlutoDevMacros.FromPackage
+using PlutoDevMacros
 
 # ╔═╡ 52ad0f6c-a01a-4c9d-a176-64d9872aa3c1
 @fromparent import *

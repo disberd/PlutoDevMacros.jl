@@ -1,28 +1,21 @@
 
 const default_pkg_io = Ref{IO}(devnull)
 
-const TEMP_MODULE_NAME = :_FromPackage_TempModule_
+const TEMP_MODULE_NAME = if first(fullname(@__MODULE__)) === :Main
+    # We are loading this module from PlutoDevMacros, so we use a dev name
+    :_FromPackage_TempModule_DEV_
+else
+    :_FromPackage_TempModule_
+end
 const EMPTY_PIPE = Pipe()
 const STDLIBS_DATA = Dict{String,Base.UUID}()
 for (uuid, (name, _)) in Pkg.Types.stdlibs()
     STDLIBS_DATA[name] = uuid
 end
+const PREV_CONTROLLER_NAME = :_Previous_Controller_
 
 # This structure is just a placeholder that is put in place of expressions that are to be removed when parsing a file
 struct RemoveThisExpr end
-
-# This structure is used to manipulate import statements
-mutable struct ImportStatementData
-    modname_path::Vector{Symbol}
-    imported_names::Vector{Symbol}
-    imported_fullnames::Vector{Vector{Symbol}}
-
-    function ImportStatementData(modname_path::Vector{Symbol}, imported_names::Vector{Symbol} = Symbol[], imported_fullnames::Vector{Vector{Symbol}} = map(x -> Symbol[x], imported_names))
-        new(modname_path, imported_names, imported_fullnames)
-    end
-end
-ImportStatementData(s::Symbol, args...) = ImportStatementData([s], args...)
-ImportStatementData(s::NTuple{<:Any, Symbol}, args...) = ImportStatementData(collect(s), args...)
 
 struct ProjectData
     file::String
@@ -86,11 +79,15 @@ abstract type AbstractEvalController end
     custom_walk::Function = identity
     "Loaded Extensions"
     loaded_extensions::Set{String} = Set{String}()
+    "Names imported by the macro"
+    imported_names::Set{Symbol} = Set{Symbol}()
+    "ID of the cell where the macro was called, nothing if not called from Pluto"
+    cell_id::Union{Nothing, Base.UUID} = nothing
 end
 const CURRENT_FROMPACKAGE_CONTROLLER = Ref{FromPackageController}()
 
 # Default constructor
-function FromPackageController(target_path::AbstractString, caller_module::Module)
+function FromPackageController(target_path::AbstractString, caller_module::Module; cell_id = nothing)
     # We remove pluto cell id in the name if present
     target_path = cleanpath(target_path)
     @assert isabspath(target_path) "You can only construct the FromPackageController with an absolute path"
@@ -102,7 +99,9 @@ function FromPackageController(target_path::AbstractString, caller_module::Modul
     entry_point = joinpath(dirname(project_file), "src", project.name * ".jl")
     name = project.name
     manifest_deps = generate_manifest_deps(project_file)
-    p = FromPackageController{Symbol(name)}(;entry_point, manifest_deps, target_path, project, caller_module)
+    # We parse the cell_id if string
+    cell_id = cell_id isa AbstractString ? (isempty(cell_id) ? nothing : Base.UUID(cell_id)) : cell_id
+    p = FromPackageController{Symbol(name)}(;entry_point, manifest_deps, target_path, project, caller_module, cell_id)
     p.custom_walk = custom_walk!(p)
     return p
 end

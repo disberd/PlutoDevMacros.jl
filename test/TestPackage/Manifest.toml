@@ -1,6 +1,6 @@
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.10.3"
+julia_version = "1.10.4"
 manifest_format = "2.0"
 project_hash = "312792d949ca909f2f223c32651672a933fb0970"
 
@@ -59,9 +59,9 @@ version = "0.21.4"
 
 [[deps.JuliaInterpreter]]
 deps = ["CodeTracking", "InteractiveUtils", "Random", "UUIDs"]
-git-tree-sha1 = "e9648d90370e2d0317f9518c9c6e0841db54a90b"
+git-tree-sha1 = "a6adc2dcfe4187c40dc7c2c9d2128e326360e90a"
 uuid = "aa1ae85d-cabe-5617-a682-6adf51b2e16a"
-version = "0.9.31"
+version = "0.9.32"
 
 [[deps.LibCURL]]
 deps = ["LibCURL_jll", "MozillaCACerts_jll"]
@@ -154,7 +154,7 @@ version = "1.10.0"
 deps = ["JuliaInterpreter", "MacroTools", "Pkg", "TOML"]
 path = "../.."
 uuid = "a0499f29-c39b-4c5c-807c-88074221b949"
-version = "0.8.1"
+version = "0.9.0-DEV"
 
 [[deps.PrecompileTools]]
 deps = ["Preferences"]

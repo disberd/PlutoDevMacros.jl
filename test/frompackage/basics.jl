@@ -1,7 +1,8 @@
-import PlutoDevMacros.FromPackage: process_outside_pluto!, load_module_in_caller, temp_module_path, parseinput, get_package_data, @fromparent, _combined, process_skiplines!, get_temp_module, LineNumberRange, parse_skipline, extract_module_expression, _inrange, filterednames, reconstruct_import_expr, extract_import_args, extract_raw_str, @frompackage, update_stored_module, get_target_module, frompackage, FromPackage, can_import_in_caller, overwrite_imported_symbols, has_ancestor_module
+import PlutoDevMacros.FromPackage: FromPackage, @fromparent, load_module!, FromPackageController, generate_manifest_deps, ProjectData, extract_raw_str, @frompackage
 using Test
 
-import Pkg
+import Pkg: Pkg, Types.EnvCache, Types.Context
+include(joinpath(@__DIR__, "helpers.jl"))
 
 # FromPackage.default_pkg_io[] = Pkg.stderr_f()
 
@@ -16,47 +17,44 @@ pop!(LOAD_PATH)
 # We point at the helpers file inside the TestPackage module, we stuff up to the first include
 outpackage_target = TestPackage_path
 inpackage_target = joinpath(outpackage_target, "src/inner_notebook2.jl")
-# We simulate a caller from a notebook by appending a fake cell-id
 outpluto_caller = joinpath(TestPackage_path, "src")
+# We simulate a caller from a notebook by appending a fake cell-id
 inpluto_caller = join([outpluto_caller, "#==#", "00000000-0000-0000-0000-000000000000"])
 
-current_project = Base.active_project()
-try
-    @testset "Errors" begin
-        @test_throws "No project" mktempdir() do tmpdir
-            get_package_data(tmpdir)
-        end
-        @test_throws "is not a package" mktempdir() do tmpdir
-            cd(tmpdir) do
-                Pkg.activate(".")
-                Pkg.add("TOML")
-                get_package_data(".")
-            end
-        end
+tmpdir = mktempdir()
+@testset "Project/Manifest" begin
+    # We test parsing the project of the test folder
+    test_proj = Base.current_project(@__DIR__)
+    pd = ProjectData(test_proj)
+    @test pd.uuid |> isnothing
+    @test pd.name |> isnothing
+    @test pd.version |> isnothing
 
-        mktemp() do path, io
-            open(path, "w") do io
-                write(
-                    io,
-                    """
-          module INCOMPLETE
-          a = 1
-          """
-                )
-            end
-            if VERSION < v"1.10"
-                @test_throws "did not generate a valid `module`" extract_module_expression(path)
-            else
-                @test_throws Base.Meta.ParseError extract_module_expression(path)
-            end
-        end
-    end
-finally
-    Pkg.activate(current_project)
+    @test "Revise" in keys(pd.deps)
+    @test "SafeTestsets" in keys(pd.deps)
+
+    # We test parsing of the Manifest
+    md = generate_manifest_deps(test_proj)
+
+    @test "Revise" in values(md)
+    @test "SafeTestsets" in values(md)
+    # Indirect Dependencies
+    @test "CodeTracking" in values(md)
+    @test "p7zip_jll" in values(md)
+
+    # We try to copy the proj to a temp dir
+    copied_proj = joinpath(tmpdir, basename(test_proj))
+    cp(test_proj, copied_proj)
+    # Without a manifest it will throw
+    @test_throws "A manifest could not be found" generate_manifest_deps(copied_proj)
+    instantiate_from_path(copied_proj)
+    # After instantiating, the manifest is correctly parsed and equivalent to the original one
+    md2 = generate_manifest_deps(copied_proj)
+    @test md2 == md
 end
 
 # Test the macroexpand part
-@test nothing === Core.eval(@__MODULE__, :(@macroexpand @frompackage $(inpackage_target) import *))
+@test Expr(:block) == Core.eval(@__MODULE__, :(@macroexpand @frompackage $(inpackage_target) import *))
 @test_throws "No project was found" Core.eval(@__MODULE__, :(@macroexpand @frompackage "/asd/lol" import TOML))
 @testset "raw_str" begin
     str, valid = extract_raw_str("asd")

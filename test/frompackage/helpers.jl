@@ -1,13 +1,12 @@
 import Pkg: Pkg, Types.Context, Types.EnvCache
 
-function instantiate_and_import(ex, path)
-    curr_proj = Base.active_project()
-    Pkg.activate(path)
-    Pkg.instantiate()
-    Pkg.activate(curr_proj)
+function eval_with_load_path(ex, path)
     push!(LOAD_PATH, path)
-    eval(ex)
-    pop!(LOAD_PATH)
+    try
+        eval(ex)
+    finally
+        pop!(LOAD_PATH)
+    end
 end
 
 function instantiate_from_path(path::AbstractString)

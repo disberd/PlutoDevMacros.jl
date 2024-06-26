@@ -1,5 +1,25 @@
 import ..PlutoDevMacros: hide_this_log
 
+# This function imitates Base.find_ext_path to get the path of the extension specified by name, from the project in p
+function find_ext_path(p::ProjectData, extname::String)
+    project_path = dirname(p.file)
+    extfiledir = joinpath(project_path, "ext", extname, extname * ".jl")
+    isfile(extfiledir) && return extfiledir
+    return joinpath(project_path, "ext", extname * ".jl")
+end
+
+function inside_extension(p::FromPackageController{name}) where name
+    @nospecialize
+    m = p.current_module
+    nm = nameof(m)
+    exts = keys(p.project.extensions)
+    while nm ∉ (:Main, name)
+        nm = nameof(m)
+        String(nm) in exts && return true
+        m = parentmodule(m)
+    end
+    return false
+end
 
 #=
 We don't use manual rerun so we just comment this till after we can use it
@@ -212,14 +232,6 @@ function update_loadpath(p::FromPackageController)
     end
 end
 
-### Input Parsing
-# This function will extract the first name of a module identifier from `import/using` statements
-function get_modpath_root(ex::Expr)
-    (;modname_path) = extract_input_import_names(ex)
-    modname_first = first(modname_path)
-    return modname_first
-end
-
 # This function traverse a path to access a nested module from a `starting_module`. It is used to extract the corresponding module from `import/using` statements.
 function extract_nested_module(starting_module::Module, nested_path; first_dot_skipped=false)
     m = starting_module
@@ -239,7 +251,7 @@ function get_temp_module()
     if isdefined(Main, TEMP_MODULE_NAME)
         getproperty(Main, TEMP_MODULE_NAME)::Module
     else
-        m = Core.eval(Main, :(module $TEMP_MODULE_NAME
+        Core.eval(Main, :(module $TEMP_MODULE_NAME
         module _LoadedModules_ end
         module _DirectDeps_ end
         end))::Module
@@ -257,7 +269,6 @@ function get_temp_module(::FromPackageController{name}) where {name}
 end
 
 get_loaded_modules_mod() = get_temp_module(:_LoadedModules_)::Module
-
 
 function populate_loaded_modules()
     loaded_modules = get_loaded_modules_mod()
@@ -283,18 +294,7 @@ function populate_loaded_modules()
     end
 end
 
-function get_dep_from_manifest(p::FromPackageController, base_name)
-    @nospecialize
-    (; manifest_deps) = p
-    name_str = string(base_name)
-    for (uuid, name) in manifest_deps
-        if name === name_str
-            id = Base.PkgId(uuid, name)
-            return get_dep_from_loaded_modules(id)
-        end
-    end
-    return nothing
-end
+# This function will extract a module from the _LoadedModules_ module which will be populated when each package is loaded in julia
 function get_dep_from_loaded_modules(id::Base.PkgId)
     loaded_modules = get_loaded_modules_mod()
     key = Symbol(id)
@@ -302,22 +302,45 @@ function get_dep_from_loaded_modules(id::Base.PkgId)
     m = getproperty(loaded_modules, Symbol(id))::Module
     return m
 end
-function get_dep_from_loaded_modules(p::FromPackageController{name}, base_name; allow_manifest=false, allow_stdlibs=true)::Module where {name}
+# This is internally calls the previous function, allowing to control which packages can be loaded (by default only direct dependencies and stdlibs are allowed)
+function get_dep_from_loaded_modules(p::FromPackageController{name}, base_name::Symbol; allow_manifest=false, allow_weakdeps = inside_extension(p), allow_stdlibs=true)::Module where {name}
     @nospecialize
     base_name === name && return get_temp_module(p)
     package_name = string(base_name)
+    # Construct the custom error message
+    error_msg = let 
+        msg = """The package with name $package_name could not be found as a dependency$(allow_weakdeps ? " (or weak dependency)" : "") of the target project"""
+        both = allow_manifest && allow_stdlibs
+        allow_manifest && (msg *= """$(both ? "," : " or") as indirect dependency from the manifest""")
+        allow_stdlibs && (msg *= """ or as standard library""")
+        msg *= "."
+    end
     if allow_stdlibs
         uuid = get(STDLIBS_DATA, package_name, nothing)
         uuid !== nothing && return get_dep_from_loaded_modules(Base.PkgId(uuid, package_name))
     end
     proj = p.project
     uuid = get(proj.deps, package_name) do
-        get(proj.weakdeps, package_name) do
-            out = allow_manifest ? get_dep_from_manifest(p, base_name) : nothing
-            isnothing(out) && error("The package with name $package_name could not be found as deps or weakdeps of the target project, as indirect dep of the manifest, or as standard library")
-            return out
+        # Throw error unless either of manifest/weakdeps is allowed
+        allow_weakdeps | allow_manifest || error(error_msg)
+        out = get(proj.weakdeps, package_name, nothing)
+        !isnothing(out) && return out
+        allow_manifest || error(error_msg)
+        for (uuid, dep_name) in p.manifest_deps
+            package_name === dep_name && return uuid
         end
+        error(error_msg)
     end
     id = Base.PkgId(uuid, package_name)
     return get_dep_from_loaded_modules(id)
+end
+
+# Basically Base.names but ignores names that are not defined in the module and allows to restrict to only exported names (since 1.11 added also public names as out of names). It also defaults `all` and `imported` to true (to be more precise, to the opposite of `only_exported`)
+function _names(m::Module; only_exported = false, all=!only_exported, imported=!only_exported, kwargs...)
+    mod_names = names(m; all, imported, kwargs...)
+    filter!(mod_names) do nm
+        isdefined(m, nm) || return false
+        only_exported && return Base.isexported(m, nm)
+        return true
+    end
 end

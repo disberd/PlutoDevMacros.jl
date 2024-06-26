@@ -1,22 +1,10 @@
-using Test
-import Pluto: update_save_run!, update_run!, WorkspaceManager, ClientSession, ServerSession, Notebook, Cell, project_relative_path, SessionActions, load_notebook, Configuration
 
-include(joinpath(@__DIR__, "helpers.jl"))
-
-instantiate_and_import(:(import TestPackage), normpath(@__DIR__, "../TestPackage"))
-
-function noerror(cell; verbose=true)
-    if cell.errored && verbose
-        @show cell.output.body
-    end
-    !cell.errored
-end
-
-options = Configuration.from_flat_kwargs(; disable_writing_notebook_files=true, workspace_use_distributed_stdlib = true)
-srcdir = joinpath(@__DIR__, "../TestPackage/src/")
-eval_in_nb(sn, expr) = WorkspaceManager.eval_fetch_in_workspace(sn, expr)
-
-@testset "notebook1.jl" begin
+@testitem "notebook1.jl" begin
+    # Include the setup
+    include(joinpath(@__DIR__, "with_pluto_helpers.jl"))
+    srcdir = joinpath(@__DIR__, "../TestPackage/src/")
+    eval_with_load_path(:(import TestPackage), testpackage_path)
+    # Do the tests
     ss = ServerSession(; options)
     path = joinpath(srcdir, "notebook1.jl")
     nb = SessionActions.open(ss, path; run_async=false)
@@ -30,7 +18,11 @@ eval_in_nb(sn, expr) = WorkspaceManager.eval_fetch_in_workspace(sn, expr)
     SessionActions.shutdown(ss, nb)
 end
 
-@testset "inner_notebook2.jl" begin
+@testitem "inner_notebook2.jl" begin
+    # Include the setup
+    include(joinpath(@__DIR__, "with_pluto_helpers.jl"))
+    srcdir = joinpath(@__DIR__, "../TestPackage/src/")
+    # Do the tests
     ss = ServerSession(; options)
     path = joinpath(srcdir, "inner_notebook2.jl")
     nb = SessionActions.open(ss, path; run_async=false)
@@ -41,7 +33,11 @@ end
     SessionActions.shutdown(ss, nb)
 end
 
-@testset "test_macro2.jl" begin
+@testitem "test_macro2.jl" begin
+    # Include the setup
+    include(joinpath(@__DIR__, "with_pluto_helpers.jl"))
+    srcdir = joinpath(@__DIR__, "../TestPackage/src/")
+    # Do the tests
     ss = ServerSession(; options)
     path = joinpath(srcdir, "test_macro2.jl")
     nb = SessionActions.open(ss, path; run_async=false)
@@ -61,7 +57,11 @@ end
 #     SessionActions.shutdown(ss, nb)
 # end
 
-@testset "test_pkgmanager.jl" begin
+@testitem "test_pkgmanager.jl" begin
+    # Include the setup
+    include(joinpath(@__DIR__, "with_pluto_helpers.jl"))
+    srcdir = joinpath(@__DIR__, "../TestPackage/src/")
+    # Do the tests
     ss = ServerSession(; options)
     path = abspath(srcdir, "../test_pkgmanager.jl")
     nb = SessionActions.open(ss, path; run_async=false)
@@ -71,10 +71,13 @@ end
     SessionActions.shutdown(ss, nb)
 end
 
-# We test the ParseError (issue 30)
-srcdir = joinpath(@__DIR__, "../TestParseError/src/")
-instantiate_from_path(srcdir)
-@testset "test_parse_error.jl" begin
+@testitem "test_parse_error.jl" begin
+    # Include the setup
+    include(joinpath(@__DIR__, "with_pluto_helpers.jl"))
+    # We test the ParseError (issue 30)
+    srcdir = joinpath(@__DIR__, "../TestParseError/src/")
+    instantiate_from_path(srcdir)
+    # Do the tests
     ss = ServerSession(; options)
     path = abspath(srcdir, "../parseerror_notebook.jl")
     nb = SessionActions.open(ss, path; run_async=false)
@@ -89,10 +92,13 @@ instantiate_from_path(srcdir)
     SessionActions.shutdown(ss, nb)
 end
 
-# We test dev dependencies with relative path (issue 30)
-srcdir = joinpath(@__DIR__, "../TestDevDependency/src/")
-instantiate_from_path(srcdir)
-@testset "test_dev_dependency.jl" begin
+@testitem "test_dev_dependency.jl" begin
+    # Include the setup
+    include(joinpath(@__DIR__, "with_pluto_helpers.jl"))
+    # We test dev dependencies with relative path (issue 30)
+    srcdir = joinpath(@__DIR__, "../TestDevDependency/src/")
+    instantiate_from_path(srcdir)
+    # Do the tests
     ss = ServerSession(; options)
     path = abspath(srcdir, "../test_notebook.jl")
     nb = SessionActions.open(ss, path; run_async=false)
@@ -102,10 +108,13 @@ instantiate_from_path(srcdir)
     SessionActions.shutdown(ss, nb)
 end
 
-# We test @exclude_using (issue 11)
-srcdir = joinpath(@__DIR__, "../TestUsingNames/src/")
-instantiate_from_path(srcdir)
-@testset "Using Names" begin
+@testitem "Using Names" begin
+    # Include the setup
+    include(joinpath(@__DIR__, "with_pluto_helpers.jl"))
+    # We test @exclude_using (issue 11)
+    srcdir = joinpath(@__DIR__, "../TestUsingNames/src/")
+    instantiate_from_path(srcdir)
+    # Do the tests
     ss = ServerSession(; options)
     for filename in ["test_notebook1.jl", "test_notebook2.jl"]
         path = abspath(srcdir, "..", filename)

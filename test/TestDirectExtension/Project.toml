@@ -18,3 +18,4 @@ PlotlyBaseExt = "PlotlyBase"
 
 [compat]
 PlotlyBase = "0.8"
+PlotlyExtensionsHelper = "0.2"

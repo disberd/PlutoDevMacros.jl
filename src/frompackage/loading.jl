@@ -75,9 +75,10 @@ function try_load_extensions!(p::FromPackageController)
             nactive += is_loaded
         end
         if nactive === length(triggers)
-            entry_path = Base.project_file_ext_path(p.project.file, name)
+            entry_path = find_ext_path(p.project, name)
             # Set the module to the package module
             p.current_module = get_temp_module(p)
+            # Load the extension module inside the package module
             process_include_expr!(p, entry_path)
             push!(p.loaded_extensions, name)
         end

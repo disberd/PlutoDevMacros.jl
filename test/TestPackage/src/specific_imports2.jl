@@ -17,7 +17,7 @@ end
   ╠═╡ =#
 
 # ╔═╡ d8bb9b0c-b777-4b92-aab4-688358059f6d
-using PlutoDevMacros.FromPackage
+using PlutoDevMacros
 
 # ╔═╡ da3cb2df-c686-45ed-abad-d4556c253ffa
 # When using PackageModule as name of the package to use or import from, `PackageModule` is substituted with the acutal module of the package targeted by @frompackage/@fromparent and loaded within the notebook.

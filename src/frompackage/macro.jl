@@ -60,14 +60,14 @@ function _combined(ex, target, calling_file, caller_module; macroname)
 	# Enforce absolute path to handle different OSs
 	calling_file = abspath(calling_file)
 	_, cell_id = _cell_data(calling_file)
-    inside_notebook = !isempty(cell_id)
+    notebook_local = !isempty(cell_id)
     # Get the target file
-	target_file = extract_target_path(target, caller_module; calling_file, inside_notebook)
+	target_file = extract_target_path(target, caller_module; calling_file, notebook_local)
 	out = try
 		frompackage(ex, target_file, caller_module; macroname, cell_id)
 	catch e
 		# If we are outside of pluto we simply rethrow
-		inside_notebook || rethrow()
+		notebook_local || rethrow()
 		out = Expr(:block)
 		if !(e isa ErrorException && startswith(e.msg, "Multiple Calls: The"))
 			text = "Reload $macroname"

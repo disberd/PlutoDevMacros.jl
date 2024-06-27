@@ -1,28 +1,6 @@
-import PlutoDevMacros.FromPackage: FromPackage, @fromparent, load_module!, FromPackageController, generate_manifest_deps, ProjectData, extract_raw_str, @frompackage
-using Test
-
-import Pkg: Pkg, Types.EnvCache, Types.Context
-include(joinpath(@__DIR__, "helpers.jl"))
-
-# FromPackage.default_pkg_io[] = Pkg.stderr_f()
-
-TestPackage_path = normpath(@__DIR__, "../TestPackage")
-# The LOAD_PATH hack is required because if we add ./TestPackage as a test dependency we get the error in https://github.com/JuliaLang/Pkg.jl/issues/1585
-push!(LOAD_PATH, TestPackage_path)
-import TestPackage
-import TestPackage: testmethod
-import TestPackage.Issue2
-pop!(LOAD_PATH)
-
-# We point at the helpers file inside the TestPackage module, we stuff up to the first include
-outpackage_target = TestPackage_path
-inpackage_target = joinpath(outpackage_target, "src/inner_notebook2.jl")
-outpluto_caller = joinpath(TestPackage_path, "src")
-# We simulate a caller from a notebook by appending a fake cell-id
-inpluto_caller = join([outpluto_caller, "#==#", "00000000-0000-0000-0000-000000000000"])
-
-tmpdir = mktempdir()
-@testset "Project/Manifest" begin
+@testitem "Project/Manifest" begin
+    include(joinpath(@__DIR__, "basics_helpers.jl"))
+    tmpdir = mktempdir()
     # We test parsing the project of the test folder
     test_proj = Base.current_project(@__DIR__)
     pd = ProjectData(test_proj)
@@ -31,13 +9,13 @@ tmpdir = mktempdir()
     @test pd.version |> isnothing
 
     @test "Revise" in keys(pd.deps)
-    @test "SafeTestsets" in keys(pd.deps)
+    @test "TestItemRunner" in keys(pd.deps)
 
     # We test parsing of the Manifest
     md = generate_manifest_deps(test_proj)
 
     @test "Revise" in values(md)
-    @test "SafeTestsets" in values(md)
+    @test "TestItemRunner" in values(md)
     # Indirect Dependencies
     @test "CodeTracking" in values(md)
     @test "p7zip_jll" in values(md)
@@ -51,32 +29,37 @@ tmpdir = mktempdir()
     # After instantiating, the manifest is correctly parsed and equivalent to the original one
     md2 = generate_manifest_deps(copied_proj)
     @test md2 == md
+
+    # We test that pointing to a folder without a project throws
+    @test_throws "No project was found" FromPackageController(homedir(), @__MODULE__)
 end
 
-# Test the macroexpand part
-@test Expr(:block) == Core.eval(@__MODULE__, :(@macroexpand @frompackage $(inpackage_target) import *))
-@test_throws "No project was found" Core.eval(@__MODULE__, :(@macroexpand @frompackage "/asd/lol" import TOML))
-@testset "raw_str" begin
-    str, valid = extract_raw_str("asd")
-    @test valid
-    @test str == "asd"
-    str, valid = extract_raw_str(:(raw"asd\lol"))
-    @test valid
-    @test str == "asd\\lol"
-    @test_throws "Only `AbstractStrings`" Core.eval(Main, :(@frompackage 3 + 2 import *))
-    cd(dirname(inpackage_target)) do
-        @test Core.eval(@__MODULE__, :(@frompackage raw".." import *)) === nothing
-    end
+@testitem "extract_target_path" begin
+    include(joinpath(@__DIR__, "basics_helpers.jl"))
+    calling_file = @__FILE__
+    m = @__MODULE__
+    # Test that an invalid file throws
+    @test_throws "does not seem to be a valid path" extract_target_path("asd", m; calling_file)
+    # We test that it create abspath based on the dir of the calling file
+    @test extract_target_path(basename(@__FILE__), m; calling_file) === @__FILE__
+    # We test that this also works with an expression, if inside pluto
+    basepath = basename(@__FILE__)
+    @test extract_target_path(:basepath, m; calling_file, notebook_local = true) === @__FILE__
+    # We test that also an expression works
+    @test extract_target_path(:(basename($(@__FILE__))), m; calling_file, notebook_local = true) === @__FILE__
+    # Test that this instead throws an error outside of pluto as at macro expansion we don't know symbols
+    @test_throws "the path must be provided as" extract_target_path(:basepath, m; calling_file, notebook_local = false) === @__FILE__
 end
 
-@testset "Outside Pluto" begin
-    dict = get_package_data(outpackage_target)
-    valid(ex) = nothing !== process_outside_pluto!(deepcopy(ex), dict)
-    invalid(ex) = nothing === process_outside_pluto!(deepcopy(ex), dict)
+@testitem "Outside Pluto" begin
+    include(joinpath(@__DIR__, "basics_helpers.jl"))
+    controller = FromPackageController(outpackage_target, @__MODULE__)
+    valid(ex) = any(x -> Meta.isexpr(x, (:using, :import)), process_outside_pluto(controller, ex).args)
+    invalid(ex) = !valid(ex)
 
     @test valid(:(import .ASD: lol))
     @test invalid(:(import .ASD: *))
-    @test invalid(:(import TestPackage: lol)) # PlutoDevMacros is the name of the inpackage_target package, we don't allow that
+    @test invalid(:(import TestPackage: lol)) # We only allow relative imports or imports from direct deps (always starting with >.)
     @test invalid(:(import *)) # Outside of pluto the catchall is removed
 
     @test valid(:(import >.BenchmarkTools)) # This is a direct dependency
@@ -85,17 +68,50 @@ end
     @test invalid(:(import >.Statistics)) # This is an stdlib, but on in the proj
     @test invalid(:(import >.DataFrames)) # This is not a dependency
 
+    f_compare(ex_out, ex_in) = compare_exprs(ex_out, process_outside_pluto(controller, ex_in))
 
+    # We test some some specific imports
+    ex_out = quote import BenchmarkTools as BT end
+    ex_in = :(import >.BenchmarkTools as BT)
+    @test f_compare(ex_out, ex_in)
 
-    # Here we test that the loaded TestPackage has the intended functionality
-    # We verify that the relative import statement from @fromparent outside
-    # of Pluto works as intended, correctly importing and extending
-    # `testmethod`
-    @test testmethod("a") == "ANY"
-    @test testmethod(3) == "INT"
-    @test testmethod(3.0) == "FLOAT"
+    ex_out = quote 
+        using BenchmarkTools 
+        using Markdown
+    end
+    ex_in = :(using >.BenchmarkTools, >.Markdown)
+    @test f_compare(ex_out, ex_in)
 
-    @test Issue2.foo(Issue2.c) !== nothing
+    # MacroTools is an indirect dep so it's discarded
+    ex_out = quote 
+        using BenchmarkTools 
+    end
+    ex_in = :(using >.BenchmarkTools, >.MacroTools)
+    @test f_compare(ex_out, ex_in)
+
+    ex_out = quote 
+        import BenchmarkTools as BT 
+        import .ASD as LOL
+    end
+    ex_in = :(import >.BenchmarkTools as BT, .ASD as LOL)
+    @test f_compare(ex_out, ex_in)
+
+    ex_out = quote 
+        using BenchmarkTools
+        import .ASD: boh as lol
+    end
+    ex_in = quote 
+        using >.BenchmarkTools
+        import .ASD: boh as lol
+    end
+    @test f_compare(ex_out, ex_in)
+
+    ex_out = quote end
+    ex_in = quote 
+        import *
+        using >.CodeTracking # Interactive dependency
+    end
+    @test f_compare(ex_out, ex_in)
 end
 
 @testset "Include using names" begin
@@ -184,7 +200,12 @@ end
 end
 
 
-@testset "Inside Pluto" begin
+@testitem "Inside Pluto" begin
+
+    include(joinpath(@__DIR__, "basics_helpers.jl"))
+    # Import TestPath in this testitem
+    eval_with_load_path(:(import TestPackage: TestPackage, testmethod, Issue2), TestPackage_path)
+
     @testset "Input Parsing" begin
         @testset "target included in Package" begin
             caller_module = Module(gensym())
@@ -298,78 +319,6 @@ function clean_expr(ex)
     Meta.isexpr(ex, :block) || return ex
     args = filter(!isnothing, map(clean_expr, ex.args))
     return Expr(:block, args...)
-end
-
-@testset "Skip Lines" begin
-    # Some coverage
-    ln = LineNumberNode(3, Symbol(@__FILE__))
-    lnr = LineNumberRange(ln)
-    @test lnr.first == lnr.last
-    @test _inrange(ln, ln)
-    @testset "Parsing" begin
-        function iseq(lr1::LineNumberRange, lr2::LineNumberRange)
-            lr1.first == lr2.first && lr1.last == lr2.last
-        end
-
-        srcdir = abspath(@__DIR__, "../../src")
-        f(path) = abspath(srcdir, path)
-        mainfile = f("PlutoDevMacros.jl")
-
-        p = "frompackage/helpers.jl"
-        @test iseq(parse_skipline("$(f(p)):::3-5", mainfile), LineNumberRange(f(p), 3, 5))
-        @test iseq(parse_skipline("$(f(p)):::3", mainfile), LineNumberRange(f(p), 3, 3))
-        @test iseq(parse_skipline("$(f(p))", mainfile), LineNumberRange(f(p), 1, 10^6))
-        @test iseq(parse_skipline("3-5", mainfile), LineNumberRange(mainfile, 3, 5))
-        @test iseq(parse_skipline("5", mainfile), LineNumberRange(mainfile, 5, 5))
-    end
-    @testset "Outside Pluto" begin
-        # Outside of Pluto the @skiplines macro is simply removed from the exp
-        f(ex) = _combined(ex, inpackage_target, outpluto_caller, Main; macroname="@frompackage") |> clean_expr
-        ex = quote
-            import DataFrames
-            import >.BenchmarkTools
-            @skiplines begin
-                "TestPacakge.jl:8-100"
-            end
-        end
-        out_ex = quote
-            import BenchmarkTools
-        end
-        @test clean_expr(out_ex) == f(ex)
-    end
-    @testset "Inside Pluto" begin
-        dict = get_package_data(outpackage_target)
-        ex = quote
-            import >.BenchmarkTools
-            @skiplines begin
-                "TestPackage.jl:::21-100" # We are skipping from line 21, so we only load up to the notebook1.jl
-            end
-        end
-        process_skiplines!(ex, dict)
-        load_module_in_caller(dict, Main)
-        _m = get_temp_module().TestPackage
-
-        @test isdefined(_m, :hidden_toplevel_variable) # This is directly at the top of the module
-        @test isdefined(_m, :testmethod) # this variable is defined inside notebook1.jl
-        @test !isdefined(_m, :Inner) # This is defined after line 20
-
-        # Now we test providing lines as abs path
-        dict = get_package_data(outpackage_target)
-        fullpath = abspath(TestPackage_path, "src/TestPackage.jl")
-        skip_str = "$(fullpath):::26-100"
-        ex = quote
-            import >.HypertextLiteral
-            @skiplines $(skip_str) # We are skipping from line 26
-        end
-        process_skiplines!(ex, dict)
-        load_module_in_caller(dict, Main)
-        _m = get_temp_module().TestPackage
-
-        @test isdefined(_m, :hidden_toplevel_variable) # This is directly at the top of the module
-        @test isdefined(_m, :testmethod) # this variable is defined inside notebook1.jl
-        @test isdefined(_m, :Inner) # This is defined at line 22-25
-        @test !isdefined(_m, :Issue2) # This is defined at lines 27-30, which should be skipped
-    end
 end
 
 # This tests macroexpand and the multiple calls error

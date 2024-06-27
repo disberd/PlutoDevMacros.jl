@@ -25,6 +25,7 @@ end
     @test asd(3.0) === 4.0
     @test asd("ASD") === "LOL3"
     @test PlutoDevMacros.is_notebook_local() === false
+    @test PlutoDevMacros.is_notebook_local(@__FILE__) === false
 end
 
 options = Configuration.from_flat_kwargs(; disable_writing_notebook_files=true, workspace_use_distributed_stdlib = true)

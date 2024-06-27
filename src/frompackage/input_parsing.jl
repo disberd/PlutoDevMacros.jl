@@ -128,17 +128,18 @@ function process_outside_pluto(p::FromPackageController, ex::Expr)
             if root_name === :.
                 # Relative import, we just make sure it's not a catch all
                 is_catchall(mwn) && continue
-                # If we get here we can push this arg as it is
-                push!(block.args, reconstruct_import_statement(mwn))
             elseif root_name === :>
                 # Deps import, we have to make sure we are only importing direct dependencies
                 # We remove the first symbol as its :>
                 popfirst!(modname_path)
                 depname = first(modname_path)
                 String(depname) in keys(p.project.deps) || continue
-                ex = reconstruct_import_statement(JustModules(mwn))
-                push!(block.args, ex)
+            else
+                continue
             end
+            import_data = isempty(mwn.imported) ? JustModules(mwn) : mwn
+            ex = reconstruct_import_statement(import_data)
+            push!(block.args, ex)
         end
     end
     return block

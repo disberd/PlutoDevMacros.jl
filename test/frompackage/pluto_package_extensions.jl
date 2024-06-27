@@ -16,6 +16,7 @@ end
     env_path = joinpath(direct_path, "notebook_env")
     dev_package_in_proj(env_path)
     instantiate_from_path(env_path)
+    instantiate_from_path(direct_path)
     # Do the rest
     ss = ServerSession(; options)
     path = joinpath(direct_path, "test_extension.jl")

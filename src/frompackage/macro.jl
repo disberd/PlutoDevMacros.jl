@@ -30,7 +30,7 @@ end
 
 ## @frompackage
 
-function frompackage(ex, target_file, caller, caller_module; macroname, cell_id)
+function frompackage(ex, target_file, caller_module; macroname, cell_id)
     p = FromPackageController(target_file, caller_module; cell_id)
 	p.cell_id !== nothing || return process_outside_pluto(p, ex)
     load_module!(p)
@@ -57,23 +57,14 @@ function frompackage(ex, target_file, caller, caller_module; macroname, cell_id)
 end
 
 function _combined(ex, target, calling_file, caller_module; macroname)
-    target_file = if target isa Symbol
-        @assert isdefined(caller_module, target) "The provided symbol does not seem to be defined inside the calling module"
-        target_file = Core.eval(caller_module, target)
-        ispath(target_file) || error("The provided variable $target does not seem to point to a valid path")
-        target_file
-    else
-        target_file, valid = extract_raw_str(target)
-        @assert valid "Only `AbstractStrings` or `Exprs` of type `raw\"...\"` are allowed as `target` in the `@frompackage` macro."
-        target_file
-    end
 	# Enforce absolute path to handle different OSs
-	target_file = abspath(target_file)
 	calling_file = abspath(calling_file)
 	_, cell_id = _cell_data(calling_file)
     inside_notebook = !isempty(cell_id)
+    # Get the target file
+	target_file = extract_target_path(target, caller_module; calling_file, inside_notebook)
 	out = try
-		frompackage(ex, target_file, calling_file, caller_module; macroname, cell_id)
+		frompackage(ex, target_file, caller_module; macroname, cell_id)
 	catch e
 		# If we are outside of pluto we simply rethrow
 		inside_notebook || rethrow()

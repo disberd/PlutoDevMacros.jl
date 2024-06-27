@@ -1,5 +1,5 @@
 module FromPackage
-    import ..PlutoDevMacros: @addmethod, _cell_data
+    import ..PlutoDevMacros: @addmethod, _cell_data, is_notebook_local
     import Pkg
     import TOML
     using MacroTools: postwalk, flatten

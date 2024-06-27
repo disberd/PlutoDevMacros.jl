@@ -51,23 +51,6 @@ function simulate_manual_rerun(cell_ids::Array; kwargs...)
 end
 =#
 
-## execute only in notebook
-# We have to create our own simple check to only execute some stuff inside the notebook where they are defined. We have stuff in basics.jl but we don't want to include that in this notebook
-function is_notebook_local(calling_file::String)
-    name_cell = split(calling_file, "#==#")
-    return length(name_cell) == 2 && length(name_cell[2]) == 36
-end
-
-# # Get the first element in itr that satisfies predicate p, or nothing if itr is empty or no elements satisfy p
-# function getfirst(p, itr)
-#     for el in itr
-#         p(el) && return el
-#     end
-#     return nothing
-# end
-# getfirst(itr) = getfirst(x -> true, itr)
-
-
 ## HTML Popup
 
 _popup_style(id) = """
@@ -147,17 +130,20 @@ function issamepath(path1::String, path2::String)
 end
 issamepath(path1::Symbol, path2::Symbol) = issamepath(String(path1), String(path2))
 
-# This will extract the string from a raw_str macro, and will throw an error otherwise
-function extract_raw_str(ex::Expr)
-    valid = Meta.isexpr(ex, :macrocall) && ex.args[1] === Symbol("@raw_str")
-    if valid
-        return ex.args[end], true
-    else
-        return "", false
-    end
+is_raw_str(ex) = Meta.isexpr(ex, :macrocall) && first(ex.args) === Symbol("@raw_str")
+# This function extracts the target path by evaluating the ex of the target in the caller module. It will error if `ex` is not a string or a raw string literal if called outside of Pluto
+function extract_target_path(ex, caller_module::Module; calling_file, notebook_local::Bool = is_notebook_local(calling_file))
+    valid_outside = ex isa AbstractString || is_raw_str(ex)
+    # If we are not inside a notebook and the path is not provided as string or raw string, we throw an error as the behavior is not supported
+    @assert notebook_local || valid_outside "When calling `@frompackage` outside of a notebook, the path must be provided as `String` or `@raw_str` (i.e. an expression of type `raw\"...\"`)."
+    path = Core.eval(caller_module, ex)
+    # Make the path absolute
+    path = abspath(dirname(calling_file), path)
+    # Eventuallly remove the cell_id from the target
+    path = cleanpath(path)
+    @assert ispath(path) "The extracted path does not seem to be a valid path.\n-`extracted_path`: $path"
+    return path
 end
-extract_raw_str(s::AbstractString) = String(s), true
-
 
 function beautify_package_path(p::FromPackageController{name}) where name
     @nospecialize

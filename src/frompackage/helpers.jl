@@ -128,7 +128,6 @@ function issamepath(path1::String, path2::String)
         path1 == path2 && return true
     end
 end
-issamepath(path1::Symbol, path2::Symbol) = issamepath(String(path1), String(path2))
 
 is_raw_str(ex) = Meta.isexpr(ex, :macrocall) && first(ex.args) === Symbol("@raw_str")
 # This function extracts the target path by evaluating the ex of the target in the caller module. It will error if `ex` is not a string or a raw string literal if called outside of Pluto

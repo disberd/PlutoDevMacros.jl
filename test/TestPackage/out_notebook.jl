@@ -48,6 +48,12 @@ let
 	isdefined(m, :tp) & isdefined(m, :TML) || error("`tp` and `TML` should be defined inside the ImportAsStatements module")
 end
 
+# ╔═╡ c3691cc1-9cfb-460e-b94a-15c9357b0892
+TestPackage.ModExpr.should_be_100 == 100 || error("The custom application of mapexpr in `include` did not work")
+
+# ╔═╡ a298f325-85ef-4b48-a15c-67080515dd8d
+!isdefined(TestPackage.ModExpr, :var_to_delete) || error("The custom application of mapexpr in `include` did not work")
+
 # ╔═╡ Cell order:
 # ╠═931a8c2c-ed76-11ed-3721-396dae146ad4
 # ╠═bd0d177f-ab66-493d-89a6-a9faca81cd11
@@ -59,3 +65,5 @@ end
 # ╠═e37034a1-398c-45ad-803c-4b78e3388464
 # ╠═8642825b-d05c-407b-84ad-958a83a92953
 # ╠═081f71cb-8512-4b66-9f64-80a7c3fa8a71
+# ╠═c3691cc1-9cfb-460e-b94a-15c9357b0892
+# ╠═a298f325-85ef-4b48-a15c-67080515dd8d

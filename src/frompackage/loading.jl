@@ -104,11 +104,10 @@ function load_module!(p::FromPackageController{name}; reset=true) where {name}
     p.current_module = get_temp_module()
     if reset
         # This reset is currently always true, it will be relevant mostly when trying to incorporate Revise
-        m = let
-            # We create the module holding the target package inside the calling pluto workspace. This is done to have Pluto automatically remove any binding the the previous module upon re-run of the cell containing the macro. Not doing so will cause some very weird inconsistencies as some functions will still refer to the previous version of the module which should not exist anymore from within the notebook
-            temp_mod = Core.eval(p.caller_module, :(module $(gensym(:TempModule)) end))
-            Core.eval(temp_mod, :(module $name end))
-        end
+        # We create the module holding the target package inside the calling pluto workspace. This is done to have Pluto automatically remove any binding the the previous module upon re-run of the cell containing the macro. Not doing so will cause some very weird inconsistencies as some functions will still refer to the previous version of the module which should not exist anymore from within the notebook
+        temp_mod = Core.eval(p.caller_module, :(module $(gensym(:TempModule)) end))
+        # We create our actal module of interest inside this temp module
+        m = Core.eval(temp_mod, :(module $name end))
         # We mirror the generated module inside the temp_module module, so we can alwyas access it without having to know the current workspace
         Core.eval(get_temp_module(), :($name = $m))
         # We put the controller inside the module

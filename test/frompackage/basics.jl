@@ -119,6 +119,7 @@ end
 @testitem "Include using names" begin
     include(joinpath(@__DIR__, "basics_helpers.jl"))
     target_dir = abspath(@__DIR__, "../TestUsingNames/")
+    instantiate_from_path(target_dir)
     caller_module = Core.eval(@__MODULE__, :(module $(gensym(:TestUsingNames)) end))
     function f(target; caller_module = caller_module)
         cell_id = Base.UUID(0)

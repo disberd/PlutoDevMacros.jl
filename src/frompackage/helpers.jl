@@ -232,6 +232,10 @@ function extract_nested_module(starting_module::Module, nested_path; first_dot_s
     return m
 end
 
+# This will create a unique name for a module by translating the PkgId into a symbol
+unique_module_name(m::Module) = Symbol(Base.PkgId(m))
+unique_module_name(uuid::Base.UUID, name::AbstractString) = Symbol(Base.PkgId(uuid,name))
+
 function get_temp_module()
     if isdefined(Main, TEMP_MODULE_NAME)
         getproperty(Main, TEMP_MODULE_NAME)::Module
@@ -254,6 +258,7 @@ function get_temp_module(::FromPackageController{name}) where {name}
 end
 
 get_loaded_modules_mod() = get_temp_module(:_LoadedModules_)::Module
+get_direct_deps_mod() = get_temp_module(:_DirectDeps_)::Module
 
 function populate_loaded_modules()
     loaded_modules = get_loaded_modules_mod()
@@ -266,26 +271,25 @@ function populate_loaded_modules()
     end
     callbacks = Base.package_callbacks
     if mirror_package_callback ∉ callbacks
-        # We just make sure to delete previous instances of the package callbacks when reloading this package itself
-        for i in reverse(eachindex(callbacks))
-            f = callbacks[i]
-            nameof(f) === :mirror_package_callback || continue
-            nameof(parentmodule(f)) === nameof(@__MODULE__) || continue
-            # We delete this as it's a previous version of the mirror_package_callback function
-            @warn "Deleting previous version of package_callback function"
-            deleteat!(callbacks, i)
-        end
+        # # We just make sure to delete previous instances of the package callbacks when reloading this package itself
+        # for i in reverse(eachindex(callbacks))
+        #     f = callbacks[i]
+        #     nameof(f) === :mirror_package_callback || continue
+        #     nameof(parentmodule(f)) === nameof(@__MODULE__) || continue
+        #     # We delete this as it's a previous version of the mirror_package_callback function
+        #     @warn "Deleting previous version of package_callback function"
+        #     deleteat!(callbacks, i)
+        # end
         # Add the package callback if not already present
         push!(callbacks, mirror_package_callback)
     end
 end
 
 # This function will extract a module from the _LoadedModules_ module which will be populated when each package is loaded in julia
-function get_dep_from_loaded_modules(id::Base.PkgId)
+function get_dep_from_loaded_modules(key::Symbol)
     loaded_modules = get_loaded_modules_mod()
-    key = Symbol(id)
     isdefined(loaded_modules, key) || error("The module $key can not be found in the loaded modules.")
-    m = getproperty(loaded_modules, Symbol(id))::Module
+    m = getproperty(loaded_modules, key)::Module
     return m
 end
 # This is internally calls the previous function, allowing to control which packages can be loaded (by default only direct dependencies and stdlibs are allowed)
@@ -303,7 +307,7 @@ function get_dep_from_loaded_modules(p::FromPackageController{name}, base_name::
     end
     if allow_stdlibs
         uuid = get(STDLIBS_DATA, package_name, nothing)
-        uuid !== nothing && return get_dep_from_loaded_modules(Base.PkgId(uuid, package_name))
+        uuid !== nothing && return get_dep_from_loaded_modules(unique_module_name(uuid, package_name))
     end
     proj = p.project
     uuid = get(proj.deps, package_name) do
@@ -317,8 +321,8 @@ function get_dep_from_loaded_modules(p::FromPackageController{name}, base_name::
         end
         error(error_msg)
     end
-    id = Base.PkgId(uuid, package_name)
-    return get_dep_from_loaded_modules(id)
+    key = unique_module_name(uuid, package_name)
+    return get_dep_from_loaded_modules(key)
 end
 
 # Basically Base.names but ignores names that are not defined in the module and allows to restrict to only exported names (since 1.11 added also public names as out of names). It also defaults `all` and `imported` to true (to be more precise, to the opposite of `only_exported`)

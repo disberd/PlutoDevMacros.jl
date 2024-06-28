@@ -70,8 +70,8 @@ function try_load_extensions!(p::FromPackageController)
         nactive = 0
         for trigger_name in triggers
             trigger_uuid = weakdeps[trigger_name]
-            id = Base.PkgId(trigger_uuid, trigger_name)
-            is_loaded = isdefined(loaded_modules, Symbol(id))
+            unique_name = unique_module_name(trigger_uuid, trigger_name)
+            is_loaded = isdefined(loaded_modules, unique_name)
             nactive += is_loaded
         end
         if nactive === length(triggers)
@@ -88,9 +88,9 @@ end
 ### Load Module ###
 function load_direct_deps(p::FromPackageController)
     @nospecialize
-    deps_mod = get_temp_module(:_DirectDeps_)::Module
+    deps_mod = get_direct_deps_mod()
     for (name, uuid) in p.project.deps
-        name_uuid = Base.PkgId(uuid, name) |> Symbol
+        name_uuid = unique_module_name(uuid, name)
         isdefined(deps_mod, name_uuid) && continue
         Core.eval(deps_mod, :(import $(Symbol(name)) as $name_uuid))
     end

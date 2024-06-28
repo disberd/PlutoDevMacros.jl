@@ -7,7 +7,6 @@ function ImportAs(original::Vector)
     @assert all(nm -> isa(nm, Symbol), original) "Only vectors containing just symbols are valid inputs to the ImportAs constructor."
     ImportAs(Symbol.(original), nothing)
 end
-ImportAs(original::Symbol, as::Symbol) = ImportAs([original], as)
 function ImportAs(ex::Expr)
     if ex.head === :.
         ImportAs(ex.args)
@@ -110,6 +109,7 @@ function process_modpath!(mwn::ModuleWithNames, p::FromPackageController{name}; 
     path = modname.original
     root_name = popfirst!(path)
     if root_name in (:ParentModule, :<)
+        @assert !isnothing(p.target_module) "You can't import from the Parent Module when the calling file is not a file `included` in the target package."
         m = p.target_module
         prepend!(path, fullname(m))
     elseif root_name in (:PackageModule, :^, name)
@@ -117,10 +117,10 @@ function process_modpath!(mwn::ModuleWithNames, p::FromPackageController{name}; 
         prepend!(path, fullname(m))
     elseif root_name === :>
         # Deps import
-        @assert :* ∉ mwn.imported "You can't use the catch-all expression when importing from dependencies"
+        @assert !is_catchall(mwn) "You can't use the catch-all expression when importing from dependencies"
         m = get_dep_from_loaded_modules(p, first(path); allow_manifest=true)
         # Replace the deps name with the uuid_name symbol from loaded modules
-        path[1] = Symbol(Base.PkgId(m))
+        path[1] = unique_module_name(m)
         # Add the loaded module path
         prepend!(path, fullname(get_loaded_modules_mod()))
     elseif root_name === :*
@@ -131,10 +131,12 @@ function process_modpath!(mwn::ModuleWithNames, p::FromPackageController{name}; 
         prepend!(path, fullname(m))
         push!(mwn.imported, ImportAs(:*))
     elseif root_name === :.
-        m = extract_nested_module(p.current_module, path; first_dot_skipped=true)
+        @assert inner || !isnothing(p.target_module) "You can't use relative imports when the calling file is not a file `included` in the target package."
+        starting_module = @something p.target_module get_temp_module(p)
+        m = extract_nested_module(starting_module, path; first_dot_skipped=true)
         modname.original = fullname(m) |> collect
     else
-        error("The provided import statement is not a valid input for the @frompackage macro.")
+        error("The provided import statement is not a valid input for the @frompackage macro.\nIf you want to import from a dependency of the target package, prepend `>.` in front of the package name, e.g. `using >.BenchmarkTools`.")
     end
     return
 end

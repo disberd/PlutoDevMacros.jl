@@ -131,6 +131,7 @@ function process_outside_pluto(p::FromPackageController, ex::Expr)
                 # Relative import, we just make sure it's not a catch all
                 is_catchall(mwn) && continue
             elseif root_name === :>
+                @assert !is_catchall(mwn) "You can't use the catch-all expression when importing from dependencies"
                 # Deps import, we have to make sure we are only importing direct dependencies
                 # We remove the first symbol as its :>
                 popfirst!(modname_path)

@@ -121,24 +121,13 @@ end
     target_dir = abspath(@__DIR__, "../TestUsingNames/")
     instantiate_from_path(target_dir)
     caller_module = Core.eval(@__MODULE__, :(module $(gensym(:TestUsingNames)) end))
-    function f(target; caller_module = caller_module)
+    function f(target; caller_module=caller_module)
         cell_id = Base.UUID(0)
         target_file = joinpath(target_dir, target * "#==#$cell_id")
         controller = FromPackageController(target_file, caller_module; cell_id)
         # Load the module
         load_module!(controller)
         return controller
-    end
-    function has_symbol(symbol, ex::Expr)
-        imported_symbol(ia::ImportAs) = something(ia.as, last(ia.original))
-        block = MacroTools.prettify(ex) |> MacroTools.block
-        any(block.args) do arg
-            any(iterate_imports(arg)) do mwn
-                any(mwn.imported) do ia
-                    imported_symbol(ia) === symbol
-                end
-            end
-        end
     end
     # Test1 - test1.jl
     target = "src/test1.jl"
@@ -192,134 +181,140 @@ end
     # We create a function in the new module
     m.top_level_func = target_mod.top_level_func
     # We test that :top_level_func will not be imported because it's already in the caller module
-    @test :top_level_func ∉ filterednames(f(""; caller_module = m), target_mod)
+    @test :top_level_func ∉ filterednames(f(""; caller_module=m), target_mod)
     # If we put a controller with the :top_level_func name inside the `imported_names` field as previous controller in the caller module, it will instead be imported as it was in the list of previously imported names
     push!(controller.imported_names, :top_level_func)
     Core.eval(m, :($PREV_CONTROLLER_NAME = $controller))
-    @test :top_level_func ∈ filterednames(f(""; caller_module = m), target_mod)
+    @test :top_level_func ∈ filterednames(f(""; caller_module=m), target_mod)
 end
 
 
-# @testitem "Inside Pluto" begin
-
-#     include(joinpath(@__DIR__, "basics_helpers.jl"))
-#     # Import TestPath in this testitem
-#     eval_with_load_path(:(import TestPackage: TestPackage, testmethod, Issue2), TestPackage_path)
-
-#     @testset "Input Parsing" begin
-#         @testset "target included in Package" begin
-#             caller_module = Module(gensym())
-#             dict = load_module_in_caller(inpackage_target, caller_module)
-#             f(ex) = parseinput(deepcopy(ex), dict; caller_module)
+@testitem "target in package" begin
+    include(joinpath(@__DIR__, "basics_helpers.jl"))
+    cell_id = Base.UUID(0)
+    caller_module = Core.eval(@__MODULE__, :(module $(gensym(:InPackage)) end))
+    controller = FromPackageController(inpackage_target, caller_module; cell_id)
+    load_module!(controller)
+    f(ex; alias=false) = MacroTools.prettify(process_input_expr(controller, ex); alias)
 
 
-#             parent_path = temp_module_path() |> collect
-#             # FromDeps imports
-#             ex = :(using >.BenchmarkTools)
+    # FromDeps imports
+    ex = :(using >.BenchmarkTools)
+    expected_parent_path = fullname(get_loaded_modules_mod())
+    mwn = ModuleWithNames(f(ex))
+    # We remove the last name which is the unique name
+    modname_path = copy(mwn.modname.original)
+    unique_name = pop!(modname_path)
+    @test compare_modname(modname_path, expected_parent_path)
+    @test unique_name === unique_module_name(Base.UUID("6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"), "BenchmarkTools")
 
-#             LoadedModules = get_temp_module()._LoadedModules_
-#             direct_dep_name = :BenchmarkTools
-#             direct_deps_module = getfield(LoadedModules, direct_dep_name)
 
-#             mod_path = Expr(:., vcat(parent_path, [:_LoadedModules_, direct_dep_name])...)
-#             exported_names = map(x -> Expr(:., x), names(direct_deps_module))
-#             expected = Expr(:import, Expr(:(:), mod_path, exported_names...))
-#             @test expected == f(ex) # This should work as MacroTools is a deps of PlutoDevMacros
 
-#             ex = :(using >.$(direct_dep_name): *)
-#             @test_throws "catch-all" f(ex)
+    ex = :(using >.BenchmarkTools: *)
+    @test_throws "catch-all" f(ex)
 
-#             ex = :(using DataFrames)
-#             @test_throws "import expression is not supported" f(ex)
+    ex = :(using DataFrames)
+    @test_throws "The provided import statement is not a valid input" f(ex)
 
-#             # Test indirect import
-#             indirect_id = Base.PkgId(Base.UUID("682c06a0-de6a-54ab-a142-c8b1cf79cde6"), "JSON")
-#             # This will load Tricks inside _DepsImports_
-#             _ex = f(:(using >.JSON))
-#             # We now test that Tricks is loaded in DepsImports
-#             @test LoadedModules.JSON === Base.maybe_root_module(indirect_id)
+    # Test indirect import
+    ex = f(:(using >.JSON))
+    # We now test that Tricks is loaded in DepsImports
+    @test has_symbol(:json, ex)
 
-#             # We test that trying to load a package that is not a dependency throws an error saying so
-#             @test_throws "The package DataFrames was not" f(:(using >.DataFrames))
+    # We test that trying to load a package that is not a dependency throws an error saying so
+    @test_throws "The package with name DataFrames could not" f(:(using >.DataFrames))
 
-#             # FromPackage imports
-#             ex = :(import TestPackage)
-#             expected = :(import $(parent_path...).TestPackage)
-#             @test expected == f(ex) # This works because TestPackage is the name of the loaded package
+    # FromPackage imports
+    ex = :(import TestPackage)
+    mwn = f(ex) |> ModuleWithNames
+    # This works because TestPackage is the name of the loaded package
+    @test compare_modname(mwn, fullname(get_temp_module(controller)))
 
-#             ex = :(import PackageModule.SUBINIT)
-#             expected = :(import $(parent_path...).TestPackage.SUBINIT)
-#             @test expected == f(ex)
+    ex = :(import PackageModule.SUBINIT)
+    mwn = f(ex) |> ModuleWithNames
+    @test compare_modname(mwn, [fullname(get_temp_module(controller))..., :SUBINIT])
 
-#             ex = :(using PackageModule.SUBINIT)
-#             expected = :(import $(parent_path...).TestPackage.SUBINIT: SUBINIT) # This does not export anything
-#             @test expected == f(ex)
+    out_ex = f(:(using PackageModule.SUBINIT))
+    @test has_symbol(:SUBINIT, out_ex)
 
-#             # Relative imports
-#             ex = :(import ..SUBINIT)
-#             expected = :(import $(parent_path...).TestPackage.SUBINIT)
-#             @test expected == f(ex) # This should work as Script is a valid sibling module of FromPackage
+    # # Relative imports
+    ex = f(:(import ..SUBINIT))
+    mwn = ex |> ModuleWithNames
+    @test compare_modname(mwn, [fullname(get_temp_module(controller))..., :SUBINIT])
 
-#             ex = :(import ..NonExistant)
-#             @test_throws UndefVarError f(ex) # It can't find the module
+    ex = :(import ..NonExistant)
+    @test_throws "The module `NonExistant` could not be found" f(ex) # It can't find the module
 
-#             # FromParent import
-#             ex = :(@exclude_using import *)
-#             expected = :(import $(parent_path...).TestPackage.Inner: Inner, testmethod)
-#             @test expected == f(ex)
+    # FromParent import
+    ex = :(@exclude_using import *)
+    parent_path = fullname(get_temp_module(controller))
+    expected = :(import $(parent_path...).Inner: Inner, testmethod)
+    @test expected == f(ex)
 
-#             ex = :(@exclude_using import ParentModule: *)
-#             @test expected == f(ex)
+    ex = :(@exclude_using import ParentModule: *)
+    @test expected == f(ex)
 
-#             ex = :(import ParentModule: testmethod)
-#             expected = :(import $(parent_path...).TestPackage.Inner: testmethod)
-#             @test expected == f(ex)
+    ex = :(import ParentModule: testmethod)
+    expected = :(import $(parent_path...).Inner: testmethod)
+    @test expected == f(ex)
 
-#             ex = :(using ParentModule)
-#             expected = :(import $(parent_path...).TestPackage.Inner: Inner)
-#             @test expected == f(ex)
-#         end
-#         @testset "target not included in Package" begin
-#             caller_module = Module(gensym())
-#             dict = load_module_in_caller(inpluto_caller, caller_module)
-#             f(ex) = parseinput(deepcopy(ex), dict; caller_module)
-#             parent_path = temp_module_path() |> collect
+    ex = :(using ParentModule)
+    expected = :(import $(parent_path...).Inner: Inner)
+    @test expected == f(ex)
+end
+@testitem "target not in package" begin
+    include(joinpath(@__DIR__, "basics_helpers.jl"))
+    cell_id = Base.UUID(0)
+    caller_module = Core.eval(@__MODULE__, :(module $(gensym(:NotInPackage)) end))
+    controller = FromPackageController(outpackage_target, caller_module; cell_id)
+    load_module!(controller)
+    f(ex; alias=false) = MacroTools.prettify(process_input_expr(controller, ex); alias)
 
-#             ex = :(import PackageModule.Issue2)
-#             expected = :(import $(parent_path...).TestPackage.Issue2)
-#             @test expected == f(ex)
+    parent_path = fullname(get_temp_module(controller))
 
-#             ex = :(@exclude_using import *)
-#             expected = let _mod = get_temp_module().TestPackage
-#                 imported_names = filterednames(_mod; all=true, imported=true, caller_module)
-#                 importednames_exprs = map(n -> Expr(:., n), imported_names)
-#                 modname_expr = Expr(:., vcat(parent_path, :TestPackage)...)
-#                 reconstruct_import_expr(modname_expr, importednames_exprs)
-#             end
-#             @test expected == f(ex)
+    ex = :(import PackageModule.Issue2)
+    expected = :(import $(parent_path...).Issue2: Issue2)
+    @test expected == f(ex)
 
-#             # FromParent import
-#             ex = :(import ParentModule: *)
-#             @test_throws "The current file was not found" f(ex)
+    ex = f(:(@exclude_using import *))
+    mwn = ModuleWithNames(ex)
+    # Test that the module path is correct
+    @test compare_modname(mwn, parent_path)
+    # We test that non-exported names of TestPackage are in the explicitly imported names
+    @test has_symbol(:hidden_toplevel_variable, ex)
+    # We test that the names coming from `using` statements within the target package are not re-exported
+    @test !has_symbol(:TEST_SUBINIT, ex)
 
-#             ex = :(import ParentModule: hidden_toplevel_variable)
-#             @test_throws "The current file was not found" f(ex)
-#         end
-#     end
-# end
+    # We now include usings
+    ex = f(:(import *))
+    # We also test that also symbols visible in the target package due to `using` statements are re-exported
+    @test has_symbol(:TEST_SUBINIT, ex)
+    @test has_symbol(Symbol("@code_lowered"), ex)
+    @test has_symbol(Symbol("@md_str"), ex)
 
-# # Reconstruct import without explicit names
-# @test reconstruct_import_expr(Expr(:., :ParentModule, :TestPackage), []) == :(import ParentModule.TestPackage)
 
-# # Clean the given expression by removing `nothing` and LineNumberNodes
-# function clean_expr(ex)
-#     ex = deepcopy(ex)
-#     ex isa LineNumberNode && return nothing
-#     ex isa Expr || return ex
-#     Meta.isexpr(ex, :block) || return ex
-#     args = filter(!isnothing, map(clean_expr, ex.args))
-#     return Expr(:block, args...)
-# end
+    # We test that you can't call the parent module or relative imports when not included
+    ex = :(import ParentModule: *)
+    @test_throws "You can't import from the Parent Module" f(ex)
+
+    ex = :(import ..LOL)
+    @test_throws "You can't use relative imports" f(ex)
+end
+
+@testitem "Errors" begin
+    include(joinpath(@__DIR__, "basics_helpers.jl"))
+    cell_id = Base.UUID(0)
+    caller_module = Core.eval(@__MODULE__, :(module $(gensym(:NotInPackage)) end))
+    controller = FromPackageController(outpackage_target, caller_module; cell_id)
+    load_module!(controller)
+
+    # Test that an error is thrown if the dependency could not be found in deps or weakdeps
+    @test_throws "could not be found as a dependency (or weak dependency)" get_dep_from_loaded_modules(controller, :DataFrames; allow_weakdeps = true)
+
+    @test_throws "is not valid for constructing ImportAs" ImportAs(:(1+1))
+
+    @test_throws "or a begin-end block of import statements" extract_input_args(:(1+1))
+end
 
 # # This tests macroexpand and the multiple calls error
 # @testset "Macroexpand" begin

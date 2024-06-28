@@ -199,7 +199,7 @@ function generate_manifest_deps(proj_file::String)
             break
         end
     end
-    @assert !isempty(manifest_file) "A manifest could not be found at the project's location.\nYou have to provide an instantiated environment."
+    @assert !isempty(manifest_file) "A manifest could not be found at the project's location.\nYou have to provide an instantiated environment.\nEnvDir: $envdir"
     d = TOML.parsefile(manifest_file)
     out = Dict{Base.UUID, String}()
     for (name, data) in d["deps"]

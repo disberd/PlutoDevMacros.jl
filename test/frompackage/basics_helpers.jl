@@ -11,6 +11,9 @@ end
 include(joinpath(@__DIR__, "helpers.jl"))
 TestPackage_path = normpath(@__DIR__, "../TestPackage")
 
+dev_package_in_proj(TestPackage_path)
+instantiate_from_path(TestPackage_path)
+
 # We point at the helpers file inside the TestPackage module, we stuff up to the first include
 outpackage_target = TestPackage_path
 inpackage_target = joinpath(outpackage_target, "src/inner_notebook2.jl")

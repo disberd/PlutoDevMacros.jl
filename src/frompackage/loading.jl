@@ -108,9 +108,9 @@ function load_module!(p::FromPackageController{name}; reset=true) where {name}
             Core.eval(temp_mod, :(module $name end))
         end
         # We mirror the generated module inside the temp_module module, so we can alwyas access it without having to know the current workspace
-        setproperty!(get_temp_module(), name, m)
+        Core.eval(get_temp_module(), :($name = $m))
         # We put the controller inside the module
-        setproperty!(m, variable_name(p), p)
+        Core.eval(m, :($(variable_name(p)) = $p))
     end
     # We put the controller in the Ref
     CURRENT_FROMPACKAGE_CONTROLLER[] = p

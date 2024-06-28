@@ -56,15 +56,39 @@ end
     SessionActions.shutdown(ss, nb)
 end
 
-# @testset "out_notebook.jl" begin
-#     ss = ServerSession(; options)
-#     path = abspath(srcdir, "../out_notebook.jl")
-#     nb = SessionActions.open(ss, path; run_async=false)
-#     for cell in nb.cells
-#         @test noerror(cell)
-#     end
-#     SessionActions.shutdown(ss, nb)
-# end
+@testitem "TestPackage/import_as.jl" begin
+    # Include the setup
+    include(joinpath(@__DIR__, "with_pluto_helpers.jl"))
+    srcdir = joinpath(@__DIR__, "../TestPackage/src/")
+    # We add PlutoDevMacros as dev dependency to TestPackage
+    dev_package_in_proj(srcdir)
+    instantiate_from_path(srcdir)
+    # Do the tests
+    ss = ServerSession(; options)
+    path = joinpath(srcdir, "import_as.jl")
+    nb = SessionActions.open(ss, path; run_async=false)
+    for cell in nb.cells
+        @test noerror(cell)
+    end
+    SessionActions.shutdown(ss, nb)
+end
+
+@testitem "TestPackage/out_notebook.jl" begin
+    # Include the setup
+    include(joinpath(@__DIR__, "with_pluto_helpers.jl"))
+    srcdir = joinpath(@__DIR__, "../TestPackage/src/")
+    # We add PlutoDevMacros as dev dependency to TestPackage
+    dev_package_in_proj(srcdir)
+    instantiate_from_path(srcdir)
+    # Do the tests
+    ss = ServerSession(; options)
+    path = abspath(srcdir, "../out_notebook.jl")
+    nb = SessionActions.open(ss, path; run_async=false)
+    for cell in nb.cells
+        @test noerror(cell)
+    end
+    SessionActions.shutdown(ss, nb)
+end
 
 @testitem "test_pkgmanager.jl" begin
     # Include the setup
@@ -109,7 +133,9 @@ end
     include(joinpath(@__DIR__, "with_pluto_helpers.jl"))
     # We test dev dependencies with relative path (issue 30)
     srcdir = joinpath(@__DIR__, "../TestDevDependency/src/")
-    instantiate_from_path(srcdir)
+    # We add TestPackage as dev dependency
+    dev_package_in_proj(srcdir, testpackage_path)
+
     # Do the tests
     ss = ServerSession(; options)
     path = abspath(srcdir, "../test_notebook.jl")

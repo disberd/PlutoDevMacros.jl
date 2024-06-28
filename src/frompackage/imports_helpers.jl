@@ -1,9 +1,9 @@
 mutable struct ImportAs
-    original::Vector{Symbol} 
-    as::Union{Symbol, Nothing}
+    original::Vector{Symbol}
+    as::Union{Symbol,Nothing}
 end
 ImportAs(nm::Symbol) = ImportAs([nm], nothing)
-function ImportAs(original::Vector) 
+function ImportAs(original::Vector)
     @assert all(nm -> isa(nm, Symbol), original) "Only vectors containing just symbols are valid inputs to the ImportAs constructor."
     ImportAs(Symbol.(original), nothing)
 end
@@ -47,7 +47,7 @@ function ModuleWithNames(ex::Expr)
     imported = map(ImportAs, args[2:end])
     ModuleWithNames(ex.head, modname, imported)
 end
-function reconstruct_import_statement(mwn::ModuleWithNames; head = mwn.head)
+function reconstruct_import_statement(mwn::ModuleWithNames; head=mwn.head)
     inner_expr = Expr(:(:), reconstruct_import_statement(mwn.modname), map(reconstruct_import_statement, mwn.imported)...)
     Expr(head, inner_expr)
 end
@@ -58,7 +58,7 @@ mutable struct JustModules <: ImportData
 end
 function JustModules(ex::Expr)
     args = ex.args
-    is_valid = Meta.isexpr(ex, (:using, :import)) && all(x -> Meta.isexpr(x, (:., :as)),args)
+    is_valid = Meta.isexpr(ex, (:using, :import)) && all(x -> Meta.isexpr(x, (:., :as)), args)
     @assert is_valid "Only import/using expression with multiple imported/used modules are valid inputs to the JustModules constructor."
     JustModules(ex.head, map(ImportAs, args))
 end
@@ -103,7 +103,7 @@ function add_imported_names!(p::FromPackageController, mwn::ModuleWithNames)
 end
 
 # This function will update the modname_path to make always start from Main. The inner flag specifies whether the provided import expression was found inside the package/extension code, or inside the code given as input to the macro
-function process_modpath!(mwn::ModuleWithNames, p::FromPackageController{name}; inner::Bool = false) where {name}
+function process_modpath!(mwn::ModuleWithNames, p::FromPackageController{name}; inner::Bool=false) where {name}
     @nospecialize
     inner && process_inner_imports!(mwn, p)
     modname = mwn.modname
@@ -118,7 +118,7 @@ function process_modpath!(mwn::ModuleWithNames, p::FromPackageController{name}; 
     elseif root_name === :>
         # Deps import
         @assert :* ∉ mwn.imported "You can't use the catch-all expression when importing from dependencies"
-        m = get_dep_from_loaded_modules(p, first(path); allow_manifest = true)
+        m = get_dep_from_loaded_modules(p, first(path); allow_manifest=true)
         # Replace the deps name with the uuid_name symbol from loaded modules
         path[1] = Symbol(Base.PkgId(m))
         # Add the loaded module path
@@ -131,7 +131,7 @@ function process_modpath!(mwn::ModuleWithNames, p::FromPackageController{name}; 
         prepend!(path, fullname(m))
         push!(mwn.imported, ImportAs(:*))
     elseif root_name === :.
-        m = extract_nested_module(p.current_module, path; first_dot_skipped = true)
+        m = extract_nested_module(p.current_module, path; first_dot_skipped=true)
         modname.original = fullname(m) |> collect
     else
         error("The provided import statement is not a valid input for the @frompackage macro.")
@@ -154,29 +154,37 @@ end
 # This function will include all the names of the module as explicit imports in the import statement. It will modify the provided mwn in place and unless usings are excluded, it will also add all the using statements being parsed while evaluating the target module
 function catchall_import_expression!(mwn::ModuleWithNames, p::FromPackageController, m::Module; exclude_usings::Bool)
     @nospecialize
-    mwn.imported = filterednames(p,m) .|> ImportAs
-    ex = reconstruct_import_statement(mwn; head = :import)
+    mwn.imported = filterednames(p, m) .|> ImportAs
+    ex = reconstruct_import_statement(mwn; head=:import)
     # If we exclude using, we simply return the expression
     exclude_usings && return ex
     # Otherwise, we add the using statements we collected for this module
-    block = quote $ex end
+    block = quote
+        $ex
+    end
     # We extract the using expression that were encountered while loading the specified module
     using_expressions = get(Set{Expr}, p.using_expressions, m)
-    for ex in using_expressions
-        new_ex = process_import_statement(p, ex; exclude_usings, inner = true)
-        push!(block.args, new_ex)
+    old_current = p.current_module
+    try
+        p.current_module = m
+        for ex in using_expressions
+            new_ex = process_import_statement(p, ex; exclude_usings, inner=true)
+            push!(block.args, new_ex)
+        end
+    finally
+        p.current_module = old_current
     end
     return block
 end
 
 # This will modify the import statements provided as input to `@frompackage` by updating the modname_path and eventually extracting exported names from the module and explicitly import them. It will also transform each statement into using explicit imported names (even for simple imports) are import/using without explicit names are currently somehow broken in Pluto if not handled by the PkgManager
-function complete_imported_names!(mwn::ModuleWithNames, p::FromPackageController; exclude_usings::Bool = false, inside_extension::Bool = false, inner::Bool = inside_extension)::Expr
+function complete_imported_names!(mwn::ModuleWithNames, p::FromPackageController; exclude_usings::Bool=false, inside_extension::Bool=false, inner::Bool=inside_extension)::Expr
     catchall = is_catchall(mwn)
     inner && catchall && error("You can't use the catchall import statement `import *` inside package code")
     if !isempty(mwn.imported) && !catchall
         # If we already have an explicit list of imports, we do not modify and simply return the corresponding expression
         # Here we do not modify the list of explicitily imported names, as it's better to get an error if you explicitly import something that was already defined in the notebook
-        return reconstruct_import_statement(mwn; head = :import)
+        return reconstruct_import_statement(mwn; head=:import)
     end
     m = extract_nested_module(Main, mwn.modname.original)
     if catchall
@@ -197,9 +205,9 @@ function complete_imported_names!(mwn::ModuleWithNames, p::FromPackageController
             push!(mwn.imported, import_as)
         else
             # We export the names exported by the module
-            mwn.imported = _names(m; only_exported = true) .|> ImportAs
+            mwn.imported = _names(m; only_exported=true) .|> ImportAs
         end
-    end 
+    end
     if !inside_extension
         # We have to filter the imported names to exclude ones that are already defined in the caller
         filter_func = filterednames_filter_func(p)
@@ -210,12 +218,14 @@ function complete_imported_names!(mwn::ModuleWithNames, p::FromPackageController
         end
     end
     # The list of imported names should be empty only when inner=false
-    ex = isempty(mwn.imported) ? quote QuoteNode(:_Removed_Import_Statement) end : reconstruct_import_statement(mwn; head = :import)
+    ex = isempty(mwn.imported) ? quote
+        QuoteNode(:_Removed_Import_Statement)
+    end : reconstruct_import_statement(mwn; head=:import)
     return ex
 end
 
 # This function will generate an importa statement by expanding the modname_path to the correct path based on the provided `starting_module`. It will also expand imported names if a catchall expression is found
-function process_import_statement(p::FromPackageController, ex::Expr; exclude_usings::Bool=false, inside_extension::Bool = false, inner::Bool = inside_extension)
+function process_import_statement(p::FromPackageController, ex::Expr; exclude_usings::Bool=false, inside_extension::Bool=false, inner::Bool=inside_extension)
     @nospecialize
     # Extract the import statement data
     block = quote end

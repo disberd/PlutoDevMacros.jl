@@ -69,7 +69,7 @@ end
 
 function excluded_names(p::FromPackageController)
     @nospecialize
-    excluded = (:eval, :include, variable_name(p), Symbol("@bind"), :PLUTO_PROJECT_TOML_CONTENTS, :PLUTO_MANIFEST_TOML_CONTENTS, :__init__)
+    excluded = (:eval, :include, variable_name(p), Symbol("@bind"), :PLUTO_PROJECT_TOML_CONTENTS, :PLUTO_MANIFEST_TOML_CONTENTS, :__init__, PREV_CONTROLLER_NAME)
     return excluded
 end
 
@@ -116,6 +116,8 @@ end
 
 function process_outside_pluto(p::FromPackageController, ex::Expr)
     @nospecialize
+    # Remove `@exclude_using` if present
+    should_exclude_using_names!(ex)
     args = extract_input_args(ex)
     block = Expr(:block)
     for arg in args

@@ -90,7 +90,9 @@ function load_direct_deps(p::FromPackageController)
     @nospecialize
     deps_mod = get_temp_module(:_DirectDeps_)::Module
     for (name, uuid) in p.project.deps
-        Core.eval(deps_mod, :(import $(Symbol(name))))
+        name_uuid = Base.PkgId(uuid, name) |> Symbol
+        isdefined(deps_mod, name_uuid) && continue
+        Core.eval(deps_mod, :(import $(Symbol(name)) as $name_uuid))
     end
 end
 

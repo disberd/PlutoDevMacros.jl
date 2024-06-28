@@ -34,6 +34,10 @@ module SpecificImport
     include("specific_imports2.jl")
 end
 
+module ImportAsStatements
+    include("import_as.jl")
+end
+
 function __init__()
     TEST_INIT[] = 5
 end

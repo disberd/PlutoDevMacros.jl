@@ -1,4 +1,4 @@
-import PlutoDevMacros.FromPackage: FromPackage, @fromparent, load_module!, FromPackageController, generate_manifest_deps, ProjectData, @frompackage, extract_target_path, is_notebook_local, process_outside_pluto
+import PlutoDevMacros.FromPackage: FromPackage, @fromparent, load_module!, FromPackageController, generate_manifest_deps, ProjectData, @frompackage, extract_target_path, is_notebook_local, process_outside_pluto, process_input_expr, iterate_imports, ImportAs, get_temp_module, PREV_CONTROLLER_NAME, filterednames
 import MacroTools
 
 function compare_exprs(ex1, ex2)

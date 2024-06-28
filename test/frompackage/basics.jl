@@ -44,11 +44,11 @@ end
     @test extract_target_path(basename(@__FILE__), m; calling_file) === @__FILE__
     # We test that this also works with an expression, if inside pluto
     basepath = basename(@__FILE__)
-    @test extract_target_path(:basepath, m; calling_file, notebook_local = true) === @__FILE__
+    @test extract_target_path(:basepath, m; calling_file, notebook_local=true) === @__FILE__
     # We test that also an expression works
-    @test extract_target_path(:(basename($(@__FILE__))), m; calling_file, notebook_local = true) === @__FILE__
+    @test extract_target_path(:(basename($(@__FILE__))), m; calling_file, notebook_local=true) === @__FILE__
     # Test that this instead throws an error outside of pluto as at macro expansion we don't know symbols
-    @test_throws "the path must be provided as" extract_target_path(:basepath, m; calling_file, notebook_local = false) === @__FILE__
+    @test_throws "the path must be provided as" extract_target_path(:basepath, m; calling_file, notebook_local=false) === @__FILE__
 end
 
 @testitem "Outside Pluto" begin
@@ -71,133 +71,132 @@ end
     f_compare(ex_out, ex_in) = compare_exprs(ex_out, process_outside_pluto(controller, ex_in))
 
     # We test some some specific imports
-    ex_out = quote import BenchmarkTools as BT end
+    ex_out = quote
+        import BenchmarkTools as BT
+    end
     ex_in = :(import >.BenchmarkTools as BT)
     @test f_compare(ex_out, ex_in)
 
-    ex_out = quote 
-        using BenchmarkTools 
+    ex_out = quote
+        using BenchmarkTools
         using Markdown
     end
     ex_in = :(using >.BenchmarkTools, >.Markdown)
     @test f_compare(ex_out, ex_in)
 
     # MacroTools is an indirect dep so it's discarded
-    ex_out = quote 
-        using BenchmarkTools 
+    ex_out = quote
+        using BenchmarkTools
     end
     ex_in = :(using >.BenchmarkTools, >.MacroTools)
     @test f_compare(ex_out, ex_in)
 
-    ex_out = quote 
-        import BenchmarkTools as BT 
+    ex_out = quote
+        import BenchmarkTools as BT
         import .ASD as LOL
     end
     ex_in = :(import >.BenchmarkTools as BT, .ASD as LOL)
     @test f_compare(ex_out, ex_in)
 
-    ex_out = quote 
+    ex_out = quote
         using BenchmarkTools
         import .ASD: boh as lol
     end
-    ex_in = quote 
+    ex_in = quote
         using >.BenchmarkTools
         import .ASD: boh as lol
     end
     @test f_compare(ex_out, ex_in)
 
     ex_out = quote end
-    ex_in = quote 
+    ex_in = quote
         import *
         using >.CodeTracking # Interactive dependency
     end
     @test f_compare(ex_out, ex_in)
 end
 
-# @testset "Include using names" begin
-#     target_dir = abspath(@__DIR__, "../TestUsingNames/")
-#     caller_module = Core.eval(Main, :(module $(gensym(:TestUsingNames)) end))
-#     function f(target)
-#         target_file = joinpath(target_dir, target * "#==#00000000-0000-0000-0000-000000000000")
-#         dict = get_package_data(target_file)
-#         # Load the module
-#         load_module_in_caller(dict, caller_module)
-#         return dict
-#     end
-#     function has_symbol(symbol, ex::Expr)
-#         _, args = extract_import_args(ex)
-#         for ex in args
-#             name = ex.args[1]
-#             name === symbol && return true
-#         end
-#         return false
-#     end
-#     # Test1 - test1.jl
-#     target = "src/test1.jl"
-#     dict = f(target)
-#     invalid(ex) = nothing === process_outside_pluto!(deepcopy(ex), dict)
-#     # Test that this only works with catchall
-#     @test_throws "You can only use @exclude_using" parseinput(:(@exclude_using import Downloads), dict; caller_module)
-#     # Test that it throws with ill-formed expression
-#     @test_throws "You can only use @exclude_using" parseinput(:(@exclude_using), dict; caller_module)
-#     # Test the deprecation warning
-#     @test_logs (:warn, r"Use `@exclude_using`") parseinput(:(@include_using import *), dict; caller_module)
-#     # Test unsupported expression
-#     @test_throws "The provided input expression is not supported" parseinput(:(@asd import *), dict; caller_module)
+@testitem "Include using names" begin
+    include(joinpath(@__DIR__, "basics_helpers.jl"))
+    target_dir = abspath(@__DIR__, "../TestUsingNames/")
+    caller_module = Core.eval(@__MODULE__, :(module $(gensym(:TestUsingNames)) end))
+    function f(target; caller_module = caller_module)
+        cell_id = Base.UUID(0)
+        target_file = joinpath(target_dir, target * "#==#$cell_id")
+        controller = FromPackageController(target_file, caller_module; cell_id)
+        # Load the module
+        load_module!(controller)
+        return controller
+    end
+    function has_symbol(symbol, ex::Expr)
+        imported_symbol(ia::ImportAs) = something(ia.as, last(ia.original))
+        block = MacroTools.prettify(ex) |> MacroTools.block
+        any(block.args) do arg
+            any(iterate_imports(arg)) do mwn
+                any(mwn.imported) do ia
+                    imported_symbol(ia) === symbol
+                end
+            end
+        end
+    end
+    # Test1 - test1.jl
+    target = "src/test1.jl"
+    controller = f(target)
+    valid(ex) = any(x -> Meta.isexpr(x, (:using, :import)), process_outside_pluto(controller, ex).args)
+    invalid(ex) = !valid(ex)
+    # Test that this only works with catchall
+    @test_throws "The provided input expression is not supported." process_input_expr(controller, :(@include_using import Downloads))
+    # Test that even with the @exclude_using macro in front the expression is filtered out outside Pluo
+    @test invalid(:(@exclude_using import *))
+    # Test that the names are extracted correctly
+    ex = process_input_expr(controller, :(import *))
+    @test has_symbol(:domath, ex)
+    ex = process_input_expr(controller, :(@exclude_using import *))
+    @test !has_symbol(:domath, ex)
 
-#     # Test that even with the @exclude_using macro in front the expression is filtered out outside Pluo
-#     @test invalid(:(@exclude_using import *))
-#     # Test that the names are extracted correctly
-#     ex = parseinput(:(import *), dict; caller_module)
-#     @test has_symbol(:domath, ex)
-#     ex = parseinput(:(@exclude_using import *), dict; caller_module)
-#     @test !has_symbol(:domath, ex)
+    # Test2 - test2.jl
+    target = "src/test2.jl"
+    controller = f(target)
+    # Test that the names are extracted correctly
+    ex = process_input_expr(controller, :(import *)) |> MacroTools.prettify
+    @test has_symbol(:test1, ex) # test1 is exported by Module Test1
+    @test has_symbol(:base64encode, ex) # test1 is exported by Module Base64
+    ex = process_input_expr(controller, :(@exclude_using import *))
+    @test !has_symbol(:test1, ex)
+    @test !has_symbol(:base64encode, ex)
 
-#     # Test2 - test2.jl
-#     target = "src/test2.jl"
-#     dict = f(target)
-#     # Test that the names are extracted correctly
-#     ex = parseinput(:(import *), dict; caller_module)
-#     @test has_symbol(:test1, ex) # test1 is exported by Module Test1
-#     @test has_symbol(:base64encode, ex) # test1 is exported by Module Base64
-#     ex = parseinput(:(@exclude_using import *), dict; caller_module)
-#     @test !has_symbol(:test1, ex)
-#     @test !has_symbol(:base64encode, ex)
+    # Test3 - test3.jl
+    target = "src/test3.jl"
+    controller = f(target)
+    # Test that the names are extracted correctly, :top_level_func is exported by TestUsingNames
+    ex = process_input_expr(controller, :(import *)) |> MacroTools.prettify
+    @test has_symbol(:top_level_func, ex)
+    ex = process_input_expr(controller, :(@exclude_using import *))
+    @test !has_symbol(:top_level_func, ex)
 
-#     # Test3 - test3.jl
-#     target = "src/test3.jl"
-#     dict = f(target)
-#     # Test that the names are extracted correctly, :top_level_func is exported by TestUsingNames
-#     ex = parseinput(:(import *), dict; caller_module)
-#     @test has_symbol(:top_level_func, ex)
-#     ex = parseinput(:(@exclude_using import *), dict; caller_module)
-#     @test !has_symbol(:top_level_func, ex)
+    # Test from a file outside the package
+    target = ""
+    controller = f(target)
+    # # Test that the names are extracted correctly, :base64encode is exported by Base64
+    ex = process_input_expr(controller, :(import *)) |> MacroTools.prettify
+    @test has_symbol(:base64encode, ex)
+    ex = process_input_expr(controller, :(@exclude_using import *))
+    @test !has_symbol(:base64encode, ex)
 
-#     # Test from a file outside the package
-#     target = ""
-#     dict = f(target)
-#     # Test that the names are extracted correctly, :base64encode is exported by Base64
-#     ex = parseinput(:(import *), dict; caller_module)
-#     @test has_symbol(:base64encode, ex)
-#     ex = parseinput(:(@exclude_using import *), dict; caller_module)
-#     @test !has_symbol(:base64encode, ex)
-
-#     # We test the new skipping capabilities of `filterednames`
-#     # We save the loaded module in the created_modules variable
-#     target_mod = update_stored_module(dict)
-#     m = Module(gensym())
-#     m.top_level_func = target_mod.top_level_func
-#     @test :top_level_func ∉ filterednames(target_mod; caller_module =  m)
-#     # We test that it will be imported in a new module without clash
-#     @test :top_level_func ∈ filterednames(target_mod; caller_module =  Module(gensym()))
-#     # We test that it will also be imported with clash if the name was explicitly imported before. It will still throw as there is already a variable with that name defined in the caller but the filterins should not exclude it
-#     overwrite_imported_symbols([:top_level_func])
-#     @test :top_level_func ∈ filterednames(target_mod; caller_module = m)
-
-#     # We test the warning if we are trying to overwrite something we didn't put
-#     overwrite_imported_symbols([])
-#     @test_logs (:warn, r"is already present in the caller module") filterednames(target_mod; caller_module = m)
-# end
+    # We test the new skipping capabilities of `filterednames`
+    # We save the module associated to the controller
+    controller = f("")
+    target_mod = get_temp_module(controller)
+    m = Module(gensym())
+    # We create a function in the new module
+    m.top_level_func = target_mod.top_level_func
+    # We test that :top_level_func will not be imported because it's already in the caller module
+    @test :top_level_func ∉ filterednames(f(""; caller_module = m), target_mod)
+    # If we put a controller with the :top_level_func name inside the `imported_names` field as previous controller in the caller module, it will instead be imported as it was in the list of previously imported names
+    push!(controller.imported_names, :top_level_func)
+    Core.eval(m, :($PREV_CONTROLLER_NAME = $controller))
+    @test :top_level_func ∈ filterednames(f(""; caller_module = m), target_mod)
+end
 
 
 # @testitem "Inside Pluto" begin

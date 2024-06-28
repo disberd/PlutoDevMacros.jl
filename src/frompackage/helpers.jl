@@ -267,12 +267,13 @@ function populate_loaded_modules()
     end
     callbacks = Base.package_callbacks
     if mirror_package_callback ∉ callbacks
-        # We just make sure to delete previous instances of the package callbacks when relading this package itself
+        # We just make sure to delete previous instances of the package callbacks when reloading this package itself
         for i in reverse(eachindex(callbacks))
             f = callbacks[i]
             nameof(f) === :mirror_package_callback || continue
             nameof(parentmodule(f)) === nameof(@__MODULE__) || continue
             # We delete this as it's a previous version of the mirror_package_callback function
+            @warn "Deleting previous version of package_callback function"
             deleteat!(callbacks, i)
         end
         # Add the package callback if not already present

@@ -10,6 +10,7 @@ module FromPackage
     export @fromparent, @addmethod, @frompackage
 
     include("types.jl")
+    include("consts.jl")
     include("imports_helpers.jl")
     include("helpers.jl")
     include("code_parsing.jl")

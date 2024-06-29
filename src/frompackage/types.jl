@@ -1,18 +1,15 @@
 
-const default_pkg_io = Ref{IO}(devnull)
-
-const IS_DEV = first(fullname(@__MODULE__)) === :Main
-const TEMP_MODULE_NAME = Symbol(:_FrompPackage_TempModule_, IS_DEV ? "DEV_" : "")
-const EMPTY_PIPE = Pipe()
-const STDLIBS_DATA = Dict{String,Base.UUID}()
-for (uuid, (name, _)) in Pkg.Types.stdlibs()
-    STDLIBS_DATA[name] = uuid
-end
-const PREV_CONTROLLER_NAME = Symbol(:_Previous_Controller_, IS_DEV ? "DEV_" : "")
-
 # This structure is just a placeholder that is put in place of expressions that are to be removed when parsing a file
 struct RemoveThisExpr end
 
+@kwdef mutable struct FromPackageOptions
+    "Specifies whether the target package shall be registered as root module while loading"
+    rootmodule::Bool = false
+    "Flag to specify whether the project should be resolved before loading"
+    resolve::Bool = false
+    "Flag to enable verbose logging of FromPackage functions"
+    verbose::Bool = false
+end
 struct ProjectData
     file::String
     deps::Dict{String, Base.UUID}
@@ -79,8 +76,9 @@ abstract type AbstractEvalController end
     imported_names::Set{Symbol} = Set{Symbol}()
     "ID of the cell where the macro was called, nothing if not called from Pluto"
     cell_id::Union{Nothing, Base.UUID} = nothing
+    "Options to customize loading"
+    options::FromPackageOptions = FromPackageOptions()
 end
-const CURRENT_FROMPACKAGE_CONTROLLER = Ref{FromPackageController}()
 
 # Default constructor
 function FromPackageController(target_path::AbstractString, caller_module::Module; cell_id = nothing)

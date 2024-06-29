@@ -11,7 +11,10 @@ function map_and_clean_expr(ex::Expr, mapexpr)
     @nospecialize
     new_args = map(mapexpr, ex.args)
     filter!(x -> !isa(x, RemoveThisExpr), new_args)
-    return isempty(new_args) ? RemoveThisExpr() : Expr(ex.head, new_args...)
+    # If we still have args, or if the head is a block, we return the modified haed. We have this special case for a block for tests mostly
+    !isempty(new_args) | (ex.head === :block) && return Expr(ex.head, new_args...)
+    # If we get here we just return RemoveThisExpr
+    return RemoveThisExpr()
 end
 
 ## custom_walk! ##
@@ -66,12 +69,18 @@ function custom_walk!(::AbstractEvalController, ex::Expr, ::Val{:struct})
     return ex
 end
 
-# This handles include calls, by adding p.custom_walk as the modexpr
-function custom_walk!(p::AbstractEvalController, ex::Expr, ::Val{:call})
+function custom_walk!(p::AbstractEvalController, ex::Expr, v::Val{:call})
     @nospecialize
-    f = p.custom_walk
-    # We just process this expression if it's not an `include` call
-    first(ex.args) === :include || return Expr(:call, map(f, ex.args)...)
+    func_name = first(ex.args) |> Symbol
+    return custom_walk!(p, ex, v, Val{func_name}())
+end
+function custom_walk!(p::AbstractEvalController, ex::Expr, ::Val{:call}, ::Val)
+    @nospecialize
+    return map_and_clean_expr(ex, p.custom_walk)
+end
+# This handles include calls, by adding p.custom_walk as the modexpr
+function custom_walk!(p::AbstractEvalController, ex::Expr, ::Val{:call}, ::Val{:include})
+    @nospecialize
     new_ex = :($process_include_expr!($p))
     append!(new_ex.args, ex.args[2:end])
     return new_ex

@@ -43,11 +43,12 @@ module PrettyPrint
     struct SomeType end
 end
 
-module ModExpr
-    import PlutoDevMacros.FromPackage: RemoveThisExpr
+module MapExpr
+    import PlutoDevMacros.FromPackage: RemoveThisExpr, map_and_clean_expr
     import PlutoDevMacros.FromPackage.MacroTools: postwalk
     function mapexpr(ex)
-        Meta.isexpr(ex, :(=)) || return ex
+        ex isa Expr || return ex
+        Meta.isexpr(ex, :(=)) || return map_and_clean_expr(ex, identity)
         args = deepcopy(ex.args)
         varname = first(args)
         varname === :var_to_delete && return RemoveThisExpr()

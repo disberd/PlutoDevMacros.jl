@@ -82,7 +82,7 @@ function _combined(ex, target, calling_file, caller_module; macroname)
         push!(out.args, :(CapturedException($we, $bt)))
         out
     end
-    out
+    return out
 end
 
 """

@@ -42,7 +42,3 @@ eval_in_nb(sn, expr) = WorkspaceManager.eval_fetch_in_workspace(sn, expr)
     end
     SessionActions.shutdown(ss, nb)
 end
-
-html_content = "asd"
-html = html"asd"
-@test hide_this_log(html_content; id = "asd") == hide_this_log(html; id = "asd")

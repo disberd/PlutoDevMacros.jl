@@ -6,6 +6,9 @@
 [![Coverage](https://codecov.io/gh/disberd/PlutoDevMacros.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/disberd/PlutoDevMacros.jl)
 [![Aqua QA](https://raw.githubusercontent.com/JuliaTesting/Aqua.jl/master/badge.svg)](https://github.com/JuliaTesting/Aqua.jl)
 
+> [!WARNING]
+> This package is currently undergoing a significant refactoring, the documentation is still outdated and will be updated (together with the README) once the code is stabilized
+
 This is a package containing macros/functions to help develop Packages using [Pluto](https://github.com/fonsp/Pluto.jl) notebooks testing/prototyping aids.
 
 The major feature contribution of this package is the `@fromparent` macro, which allows to load a local package in Pluto and have its code re-parsed and updated upon manual re-run of the cell containing the macro call.

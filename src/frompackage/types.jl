@@ -1,18 +1,14 @@
 
 const default_pkg_io = Ref{IO}(devnull)
 
-const TEMP_MODULE_NAME = if first(fullname(@__MODULE__)) === :Main
-    # We are loading this module from PlutoDevMacros, so we use a dev name
-    :_FromPackage_TempModule_DEV_
-else
-    :_FromPackage_TempModule_
-end
+const IS_DEV = first(fullname(@__MODULE__)) === :Main
+const TEMP_MODULE_NAME = Symbol(:_FrompPackage_TempModule_, IS_DEV ? "DEV_" : "")
 const EMPTY_PIPE = Pipe()
 const STDLIBS_DATA = Dict{String,Base.UUID}()
 for (uuid, (name, _)) in Pkg.Types.stdlibs()
     STDLIBS_DATA[name] = uuid
 end
-const PREV_CONTROLLER_NAME = :_Previous_Controller_
+const PREV_CONTROLLER_NAME = Symbol(:_Previous_Controller_, IS_DEV ? "DEV_" : "")
 
 # This structure is just a placeholder that is put in place of expressions that are to be removed when parsing a file
 struct RemoveThisExpr end

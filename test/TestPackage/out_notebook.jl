@@ -69,7 +69,7 @@ This tests that using custom `mapexpr` function within include statements in the
 TestPackage.MapExpr.should_be_100 == 100 || error("The custom application of mapexpr in `include` did not work")
 
 # ╔═╡ 83b8c9bb-c831-48cd-8d5d-0c9b8691d35c
-TestPackage.MapExpr.should_be_1 == 1 || error("The custom application of mapexpr in `include` did not work.\nVariable `should_be_1` is not 1")
+TestPackage.MapExpr.should_not_be_15 !== 15 || error("The custom application of mapexpr in `include` did not work.\nVariable `should_not_be_15` is 15")
 
 # ╔═╡ a298f325-85ef-4b48-a15c-67080515dd8d
 !isdefined(TestPackage.MapExpr, :var_to_delete) || error("The custom application of mapexpr in `include` did not work")

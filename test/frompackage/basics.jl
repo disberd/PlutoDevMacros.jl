@@ -179,7 +179,7 @@ end
     target_mod = get_temp_module(controller)
     m = Module(gensym())
     # We create a function in the new module
-    m.top_level_func = target_mod.top_level_func
+    Core.eval(m, :(top_level_func = $(target_mod.top_level_func)))
     # We test that :top_level_func will not be imported because it's already in the caller module
     @test :top_level_func ∉ filterednames(f(""; caller_module=m), target_mod)
     # If we put a controller with the :top_level_func name inside the `imported_names` field as previous controller in the caller module, it will instead be imported as it was in the list of previously imported names

@@ -62,9 +62,9 @@ _popup_style(id) = """
 	    margin-top: 5px;
 	    padding-right: 5px;
 	    z-index: 200;
-		background: #ffffff;
+		background: var(--overlay-button-bg);
 	    padding: 5px 8px;
-	    border: 3px solid #e3e3e3;
+	    border: 3px solid var(--overlay-button-border);
 	    border-radius: 12px;
 	    height: 35px;
 	    font-family: "Segoe UI Emoji", "Roboto Mono", monospace;

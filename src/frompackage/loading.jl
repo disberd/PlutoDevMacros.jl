@@ -130,7 +130,8 @@ function load_module!(p::FromPackageController{name}; reset=true) where {name}
     # Maybe call init
     maybe_call_init(get_temp_module(p))
     # We populate the loaded modules
-    populate_loaded_modules()
+    (; verbose) = p.options
+    populate_loaded_modules(;verbose)
     # Try loading extensions
     try_load_extensions!(p)
     return p
@@ -171,4 +172,23 @@ function process_include_expr!(p::FromPackageController, mapexpr::Function, path
     ast = extract_file_ast(filepath)
     split_and_execute!(p, ast, f)
     return nothing
+end
+
+# This function will register the target module for `dict` as a root module.
+# This relies on Base internals (and even the C API) but will allow make the loaded module behave more like if we simply did `using TargetPackage` in the REPL
+function register_target_as_root(p::FromPackageController)
+    @nospecialize
+    (;name, uuid) = p.project
+    m = get_temp_module(p)
+    id = Base.PkgId(uuid, name)
+    @lock Base.require_lock begin
+        # Set the uuid of this module with the C API. This is required to get the correct UUID just from the module within `register_root_module`
+        ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), m, uuid)
+        # Register this module as root
+        Base.with_logger(EMPTY_PIPE) do
+            Base.register_root_module(m)
+        end
+        # Set the path of the module to the actual package
+        Base.set_pkgorigin_version_path(id, entry_point)
+    end
 end

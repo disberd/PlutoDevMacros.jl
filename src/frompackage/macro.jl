@@ -29,10 +29,10 @@ function frompackage(ex, target_file, caller_module; macroname, cell_id)
         try
             $(args...)
             # We add the reload button as last expression so it's sent to the cell output
-            $html_reload_button($p; text=$text)
+            $html_reload_button($p)
         catch e
             # We also send the reload button as an @info log, so that we can use the cell output to format the error nicely
-            @info $html_reload_button($p; text=$text, err = true)
+            @info $html_reload_button($p; err = true)
             rethrow()
         end
     end |> flatten
@@ -53,9 +53,8 @@ function _combined(ex, target, calling_file, caller_module; macroname)
         notebook_local || rethrow()
         out = Expr(:block)
         if !(e isa ErrorException && startswith(e.msg, "Multiple Calls: The"))
-            text = "Reload $macroname"
             # We send a log to maintain the reload button
-            @info html_reload_button(cell_id; text, err=true)
+            @info html_reload_button(cell_id; name = macroname, err=true)
         end
         # Wrap ParseError in LoadError (see https://github.com/disberd/PlutoDevMacros.jl/issues/30)
         we = wrap_parse_error(e)

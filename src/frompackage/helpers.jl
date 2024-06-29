@@ -51,71 +51,101 @@ end
 
 ## HTML Popup
 
-_popup_style(id) = """
-	fromparent-container {
-	    height: 20px;
-	    position: fixed;
-	    top: 40px;
-		right: 10px;
-	    margin-top: 5px;
-	    padding-right: 5px;
-	    z-index: 200;
-		background: var(--overlay-button-bg);
-	    padding: 5px 8px;
-	    border: 3px solid var(--overlay-button-border);
-	    border-radius: 12px;
-	    height: 35px;
-	    font-family: "Segoe UI Emoji", "Roboto Mono", monospace;
-	    font-size: 0.75rem;
-	}
-	fromparent-container.errored {
-		border-color: var(--error-cell-color)
-	}
-	fromparent-container:hover {
-	    font-weight: 800;
-		cursor: pointer;
-	}
-	body.disable_ui fromparent-container {
-		display: none;
-	}
-	pluto-log-dot-positioner[hidden] {
-		display: none;
-	}
+function _popup_style()
+#! format: off
 """
+fromparent-container {
+  height: 20px;
+  position: fixed;
+  top: 40px;
+  right: 10px;
+  margin-top: 5px;
+  padding-right: 5px;
+  z-index: 200;
+  background: var(--overlay-button-bg);
+  padding: 5px 8px;
+  border: 3px solid var(--overlay-button-border);
+  border-radius: 12px;
+  height: 35px;
+  font-family: "Segoe UI Emoji", "Roboto Mono", monospace;
+  font-size: 0.75rem;
+}
 
-function html_reload_button(p::FromPackageController; text)
+fromparent-container.PlutoDevMacros {
+  right: auto;
+  left: 10px;
+}
+fromparent-container.PlutoDevMacros:before {
+  content: "Reload PlutoDevMacros"
+}
+
+fromparent-container.errored {
+  border-color: var(--error-cell-color);
+}
+fromparent-container:hover {
+  font-weight: 800;
+  cursor: pointer;
+}
+body.disable_ui fromparent-container {
+  display: none;
+}
+pluto-log-dot-positioner[hidden] {
+  display: none;
+}
+"""
+#! format: on
+end
+
+function is_plutodevmacros(p::FromPackageController)
     @nospecialize
+    (; name, uuid) = p.project
+    return name === "PlutoDevMacros" && uuid === Base.UUID("a0499f29-c39b-4c5c-807c-88074221b949")
+end
+
+function html_reload_button(p::FromPackageController; kwargs...)
+    @nospecialize
+    (; name) = p.project
     simple_html_cat(
         beautify_package_path(p),
-        html_reload_button(p.cell_id; text)
+        html_reload_button(p.cell_id; name, kwargs...),
     )
 end
-function html_reload_button(cell_id; text="Reload @frompackage", err=false)
+function html_reload_button(cell_id; name="@frompackage", err=false)
     id = string(cell_id)
-    style_content = _popup_style(id)
-    html_content = """
-    <script id='html_reload_button'>
-    		const container = document.querySelector('fromparent-container') ?? document.body.appendChild(html`<fromparent-container>`)
-    		container.innerHTML = '$text'
-    		// We set the errored state
-    		container.classList.toggle('errored', $err)
-    		const style = container.querySelector('style') ?? container.appendChild(html`<style>`)
-    		style.innerHTML = `$(style_content)`
-    		const cell = document.getElementById('$id')
-    		const actions = cell._internal_pluto_actions
-    		container.onclick = (e) => {
-    			if (e.ctrlKey) {
-    				history.pushState({},'')			
-    				cell.scrollIntoView({
-    					behavior: 'auto',
-    					block: 'center',				
-    				})
-    			} else {
-    				actions.set_and_run_multiple(['$id'])
-    			}
-    		}
-    </script>
+    text_content = "Reload $name"
+    style_content = _popup_style()
+    #! format: off
+    # We add the text content based on the package name
+    style_content *= """
+fromparent-container:before {
+  content: '$text_content';
+}
     """
+    html_content = """
+<script id='html_reload_button'>
+  const container = html`<fromparent-container class='$name'>`
+  // We set the errored state
+  container.classList.toggle('errored', $err)
+  const style = container.appendChild(html`<style>`)
+  style.innerHTML = `$(style_content)`
+  const cell = document.getElementById('$id')
+  const actions = cell._internal_pluto_actions
+  container.onclick = (e) => {
+    if (e.ctrlKey) {
+      history.pushState({}, '')
+      cell.scrollIntoView({
+        behavior: 'auto',
+        block: 'center',
+      })
+    } else {
+      actions.set_and_run_multiple(['$id'])
+    }
+  }
+
+  return container
+</script>
+    """
+    #! format: on
     # We make an HTML object combining this content and the hide_this_log functionality
     return hide_this_log(html_content)
 end
@@ -266,8 +296,18 @@ end
 
 function update_loadpath(p::FromPackageController)
     @nospecialize
+    (; verbose) = p.options
     proj_file = p.project.file
+    if isassigned(CURRENT_FROMPACKAGE_CONTROLLER)
+        prev_proj = CURRENT_FROMPACKAGE_CONTROLLER[].project.file
+        prev_idx = findfirst(==(prev_proj), LOAD_PATH)
+        if !isnothing(prev_idx) && prev_proj !== proj_file
+            verbose && @info "Deleting $prev_proj from LOAD_PATH"
+            deleteat!(LOAD_PATH, prev_idx)
+        end
+    end
     if proj_file ∉ LOAD_PATH
+        verbose && @info "Adding $proj_file to end of LOAD_PATH"
         push!(LOAD_PATH, proj_file)
     end
 end
@@ -315,7 +355,7 @@ end
 get_loaded_modules_mod() = get_temp_module(:_LoadedModules_)::Module
 get_direct_deps_mod() = get_temp_module(:_DirectDeps_)::Module
 
-function populate_loaded_modules()
+function populate_loaded_modules(; verbose=false)
     loaded_modules = get_loaded_modules_mod()
     @lock Base.require_lock begin
         for (id, m) in Base.loaded_modules
@@ -334,7 +374,7 @@ function populate_loaded_modules()
             nameof(owner) === nameof(@__MODULE__) || continue
             isdefined(owner, :IS_DEV) && owner.IS_DEV || continue
             # We delete this as it's a previous version of the mirror_package_callback function
-            @warn "Deleting previous version of package_callback function"
+            verbose && @warn "Deleting previous version of package_callback function"
             deleteat!(callbacks, i)
         end
         # Add the package callback if not already present

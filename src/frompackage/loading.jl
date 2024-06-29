@@ -36,8 +36,9 @@ function process_exprsplitter_item!(p::AbstractEvalController, ex, process_func:
     # We update the current line under evaluation
     lnn, ex = destructure_expr(ex)
     p.current_line = lnn
+    # @info "Original" ex
     new_ex = process_func(ex)
-    # @info "Change" ex new_ex
+    # @info "Change" new_ex
     if !isa(new_ex, RemoveThisExpr) && !p.target_reached
         # if process_func !== p.custom_walk
         #     subtype = process_func isa ComposedFunction{typeof(p.custom_walk),<:Any}

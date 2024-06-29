@@ -32,9 +32,12 @@ function custom_walk!(p::AbstractEvalController, ex)
     if p.target_reached
         return RemoveThisExpr()
     else
+        ex isa Expr || return ex
+        if isdef(ex)
+            ex = longdef(ex)
+        end
         # We pass through all non Expr, and process the Exprs
-        new_ex = ex isa Expr ? custom_walk!(p, ex, Val{ex.head}()) : ex
-        return new_ex
+        return custom_walk!(p, ex, Val{ex.head}())
     end
 end
 function custom_walk!(p::AbstractEvalController, ex::Expr, ::Val)
@@ -68,6 +71,16 @@ function custom_walk!(::AbstractEvalController, ex::Expr, ::Val{:struct})
     @nospecialize
     return ex
 end
+# We do not process inside quote blocks
+function custom_walk!(::AbstractEvalController, ex::Expr, ::Val{:quote})
+    @nospecialize
+    return ex
+end
+# We do not modify function definitions
+function custom_walk!(::AbstractEvalController, ex::Expr, ::Val{:function})
+    @nospecialize
+    return ex
+end
 
 function custom_walk!(p::AbstractEvalController, ex::Expr, v::Val{:call})
     @nospecialize
@@ -81,8 +94,10 @@ end
 # This handles include calls, by adding p.custom_walk as the modexpr
 function custom_walk!(p::AbstractEvalController, ex::Expr, ::Val{:call}, ::Val{:include})
     @nospecialize
+    (; current_line) = p
     new_ex = :($process_include_expr!($p))
     append!(new_ex.args, ex.args[2:end])
+    push!(new_ex.args, String(current_line.file))
     return new_ex
 end
 
@@ -108,53 +123,52 @@ function custom_walk!(p::AbstractEvalController, ex::Expr, ::Val{:let})
     return valid ? b2 : Expr(:let, b1, b2)
 end
 
-# This process each argument of the block, and then fitlers out elements which are not expressions and clean up eventual LineNumberNodes hanging from removed expressions
-function custom_walk!(p::AbstractEvalController, ex::Expr, ::Val{:block})
-    @nospecialize
-    f = p.custom_walk
-    args = map(f, ex.args)
-    # We now go in reverse args order, and remove all the RemoveThisExpr (and corresponding LineNumberNodes)
-    valids = trues(length(args))
-    next_arg = RemoveThisExpr()
-    for i in reverse(eachindex(args))
-        this_arg = args[i]
-        valids[i] = valid_blockarg(this_arg, next_arg)
-        next_arg = this_arg
-    end
-    any(valids) || return RemoveThisExpr()
-    return Expr(:block, args[valids]...)
-end
+# # This process each argument of the block, and then fitlers out elements which are not expressions and clean up eventual LineNumberNodes hanging from removed expressions
+# function custom_walk!(p::AbstractEvalController, ex::Expr, ::Val{:block})
+#     @nospecialize
+#     f = p.custom_walk
+#     args = map(f, ex.args)
+#     # We now go in reverse args order, and remove all the RemoveThisExpr (and corresponding LineNumberNodes)
+#     valids = trues(length(args))
+#     next_arg = RemoveThisExpr()
+#     for i in reverse(eachindex(args))
+#         this_arg = args[i]
+#         valids[i] = valid_blockarg(this_arg, next_arg)
+#         next_arg = this_arg
+#     end
+#     any(valids) || return RemoveThisExpr()
+#     return Expr(:block, args[valids]...)
+# end
 
-## custom_walk! Helpers ##
-function valid_blockarg(this_arg, next_arg)
-    @nospecialize
-    if this_arg isa RemoveThisExpr
-        return false
-    elseif this_arg isa LineNumberNode
-        return !isa(next_arg, LineNumberNode) && !isa(next_arg, RemoveThisExpr)
-    else
-        return true
-    end
-end
+# ## custom_walk! Helpers ##
+# function valid_blockarg(this_arg, next_arg)
+#     @nospecialize
+#     if this_arg isa RemoveThisExpr
+#         return false
+#     elseif this_arg isa LineNumberNode
+#         return !isa(next_arg, LineNumberNode) && !isa(next_arg, RemoveThisExpr)
+#     else
+#         return true
+#     end
+# end
 
-function get_filepath(p::FromPackageController, path::AbstractString)
+function get_filepath(path::AbstractString, caller_file::Union{Nothing, AbstractString})
     @nospecialize
-    (; current_line) = p
-    base_dir = if isnothing(current_line)
+    base_dir = if isnothing(caller_file)
         pwd()
     else
-        p.current_line.file |> string |> dirname
+        dirname(caller_file)
     end
     return abspath(base_dir, path)
 end
 
-function process_include_expr!(p::FromPackageController, path::AbstractString)
+function process_include_expr!(p::FromPackageController, path::AbstractString, caller_path = nothing)
     @nospecialize
-    process_include_expr!(p, identity, path)
+    process_include_expr!(p, identity, path, caller_path)
 end
-function process_include_expr!(p::FromPackageController, modexpr::Function, path::AbstractString)
+function process_include_expr!(p::FromPackageController, modexpr::Function, path::AbstractString, caller_path = nothing)
     @nospecialize
-    filepath = get_filepath(p, path)
+    filepath = get_filepath(path, caller_path)
     # @info "Custom Including $(basename(filepath))"
     if issamepath(p.target_path, filepath)
         p.target_reached = true

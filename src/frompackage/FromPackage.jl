@@ -3,7 +3,7 @@ module FromPackage
     import ..PlutoDevMacros: hide_this_log, simple_html_cat
     import Pkg
     import TOML
-    using MacroTools: postwalk, flatten, MacroTools
+    using MacroTools: postwalk, flatten, MacroTools, isdef, longdef
     using JuliaInterpreter: ExprSplitter
 
 

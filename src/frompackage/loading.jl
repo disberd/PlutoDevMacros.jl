@@ -39,6 +39,10 @@ function process_exprsplitter_item!(p::AbstractEvalController, ex, process_func:
     new_ex = process_func(ex)
     # @info "Change" ex new_ex
     if !isa(new_ex, RemoveThisExpr) && !p.target_reached
+        # if process_func !== p.custom_walk
+        #     subtype = process_func isa ComposedFunction{typeof(p.custom_walk),<:Any}
+        #     @info "inside mapexpr" new_ex ex process_func p.custom_walk subtype typeof(process_func)
+        # end
         Core.eval(p.current_module, new_ex)
     end
     return

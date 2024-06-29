@@ -1,5 +1,3 @@
-import ..PlutoDevMacros: hide_this_log
-
 # This function imitates Base.find_ext_path to get the path of the extension specified by name, from the project in p
 function find_ext_path(p::ProjectData, extname::String)
     project_path = dirname(p.file)
@@ -8,7 +6,7 @@ function find_ext_path(p::ProjectData, extname::String)
     return joinpath(project_path, "ext", extname * ".jl")
 end
 
-function inside_extension(p::FromPackageController{name}) where name
+function inside_extension(p::FromPackageController{name}) where {name}
     @nospecialize
     m = p.current_module
     nm = nameof(m)
@@ -85,11 +83,18 @@ _popup_style(id) = """
 	}
 """
 
+function html_reload_button(p::FromPackageController; text)
+    @nospecialize
+    simple_html_cat(
+        beautify_package_path(p),
+        html_reload_button(p.cell_id; text)
+    )
+end
 function html_reload_button(cell_id; text="Reload @frompackage", err=false)
     id = string(cell_id)
     style_content = _popup_style(id)
     html_content = """
-    <script>
+    <script id='html_reload_button'>
     		const container = document.querySelector('fromparent-container') ?? document.body.appendChild(html`<fromparent-container>`)
     		container.innerHTML = '$text'
     		// We set the errored state
@@ -131,7 +136,7 @@ end
 
 is_raw_str(ex) = Meta.isexpr(ex, :macrocall) && first(ex.args) === Symbol("@raw_str")
 # This function extracts the target path by evaluating the ex of the target in the caller module. It will error if `ex` is not a string or a raw string literal if called outside of Pluto
-function extract_target_path(ex, caller_module::Module; calling_file, notebook_local::Bool = is_notebook_local(calling_file))
+function extract_target_path(ex, caller_module::Module; calling_file, notebook_local::Bool=is_notebook_local(calling_file))
     valid_outside = ex isa AbstractString || is_raw_str(ex)
     # If we are not inside a notebook and the path is not provided as string or raw string, we throw an error as the behavior is not supported
     @assert notebook_local || valid_outside "When calling `@frompackage` outside of a notebook, the path must be provided as `String` or `@raw_str` (i.e. an expression of type `raw\"...\"`)."
@@ -144,48 +149,98 @@ function extract_target_path(ex, caller_module::Module; calling_file, notebook_l
     return path
 end
 
-function beautify_package_path(p::FromPackageController{name}) where name
+function beautify_package_path(p::FromPackageController)
     @nospecialize
-    temp_name = join(fullname(get_temp_module()), raw"\.")
+    modpath..., name = fullname(get_temp_module(p))
+    modpath = map(enumerate(modpath)) do (i, s)
+        Base.isgensym(s) || return String(s)
+        return "var\"$s\""
+    end
+    regex = """/$(join(modpath, "\\."))(\\.$(name))?/g"""
+    Docs.HTML(
+        #! format: off
 """
-    <script>
-        // We have a mutationobserver for each cell:
-        const mut_observers = {
-            current: [],
-        }
+<script id='frompackage-text-replace'>
+  // We have a mutationobserver for each cell:
+  const notebook = document.querySelector('pluto-notebook')
 
-const createCellObservers = () => {
-	mut_observers.current.forEach((o) => o.disconnect())
-	mut_observers.current = Array.from(notebook.querySelectorAll("pluto-cell")).map(el => {
-		const o = new MutationObserver(updateCallback)
-		o.observe(el, {attributeFilter: ["class"]})
-		return o
-	})
-}
-createCellObservers()
+  const mut_observers = {
+    current: [],
+  }
+  currentScript.mut_observers = mut_observers
+  function replaceTextInNode(node, pattern, replacement, originals = []) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      const content = node.textContent
+      if (!pattern.test(content)) {return}
+      originals.push({node, content})
+      node.textContent = content.replace(pattern, replacement);
+    } else {
+      node.childNodes.forEach(child => replaceTextInNode(child, pattern, replacement, originals));
+    }
+  }
+  function execute_cell_observer(observer) {
+    if (invalidated.current) {
+      observer.disconnect()
+      return
+    }
+    const { cell, regex, replacement, originals } = observer
+    const output = cell.querySelector('pluto-output')
+    const content = output.lastChild
+    replaceTextInNode(content, regex, replacement, originals);
+  }
 
-// And one for the notebook's child list, which updates our cell observers:
-const notebookObserver = new MutationObserver(() => {
-	updateCallback()
-	createCellObservers()
-})
-notebookObserver.observe(notebook, {childList: true})
-    	const cell_id = "a360000b-d9bb-4e12-a64b-276bff027591"
-    	const cell = document.getElementById(cell_id)
-    	const output = cell.querySelector('pluto-output')
-    	const regex = /Main\\._FromPackage_TempModule_\\.(PlutoDevMacros)?/g
-    	const replacement = "PlutoDevMacros"
-    	const content = output.lastChild
-    	function replaceTextInNode(node, pattern, replacement) {
-          if (node.nodeType === Node.TEXT_NODE) {
-            node.textContent = node.textContent.replace(pattern, replacement);
-          } else {
-            node.childNodes.forEach(child => replaceTextInNode(child, pattern, replacement));
-          }
-        }
-    	replaceTextInNode(content, regex, replacement);
-    </script>
-"""
+  function revert_cell_original_text(observer) {
+    observer.originals?.forEach(item => {
+      item.node.textContent = item.content
+    })
+  }
+
+  currentScript.revert_original_text = () => {
+    mut_observers.current.forEach(revert_cell_original_text)
+  }
+
+  const invalidated = { current: false }
+
+  const createCellObservers = () => {
+    mut_observers.current.forEach((o) => o.disconnect())
+    mut_observers.current = Array.from(notebook.querySelectorAll("pluto-cell")).map(el => {
+      const o = new MutationObserver((mutations, observer) => {execute_cell_observer(observer)})
+      o.cell = el
+      o.regex = $regex
+      o.replacement = '$name'
+      o.originals = []
+      o.observe(el, { attributeFilter: ["class"] })
+      execute_cell_observer(o)
+      return o
+    })
+  }
+  createCellObservers()
+
+  // And one for the notebook's child list, which updates our cell observers:
+  const notebookObserver = new MutationObserver((mutations, observer) => {
+    if (invalidation.current) {
+      observer.disconnect()
+      return
+    }
+    createCellObservers()
+  })
+  notebookObserver.observe(notebook, { childList: true })
+
+  const cell = currentScript.closest('pluto-cell')
+
+  invalidation.then(() => {
+    invalidated.current = true
+    const revert = cell?.querySelector("script[id='frompackage-text-replace']") == null
+    notebookObserver.disconnect()
+    mut_observers.current.forEach((o) => {
+      revert && revert_cell_original_text(o)
+      o.disconnect()
+    })
+  })
+</script>
+   """
+   #! format: on
+    )
 end
 
 function generate_manifest_deps(proj_file::String)
@@ -200,7 +255,7 @@ function generate_manifest_deps(proj_file::String)
     end
     @assert !isempty(manifest_file) "A manifest could not be found at the project's location.\nYou have to provide an instantiated environment.\nEnvDir: $envdir"
     d = TOML.parsefile(manifest_file)
-    out = Dict{Base.UUID, String}()
+    out = Dict{Base.UUID,String}()
     for (name, data) in d["deps"]
         # We use only here because I believe the entry will always contain a single dict wrapped in an array. If we encounter a case where this is not true the only will throw instead of silently taking just the first
         uuid = only(data)["uuid"] |> Base.UUID
@@ -211,7 +266,7 @@ end
 
 function update_loadpath(p::FromPackageController)
     @nospecialize
-    proj_file = p.project.file 
+    proj_file = p.project.file
     if proj_file ∉ LOAD_PATH
         push!(LOAD_PATH, proj_file)
     end
@@ -234,7 +289,7 @@ end
 
 # This will create a unique name for a module by translating the PkgId into a symbol
 unique_module_name(m::Module) = Symbol(Base.PkgId(m))
-unique_module_name(uuid::Base.UUID, name::AbstractString) = Symbol(Base.PkgId(uuid,name))
+unique_module_name(uuid::Base.UUID, name::AbstractString) = Symbol(Base.PkgId(uuid, name))
 
 function get_temp_module()
     if isdefined(Main, TEMP_MODULE_NAME)
@@ -293,12 +348,12 @@ function get_dep_from_loaded_modules(key::Symbol)
     return m
 end
 # This is internally calls the previous function, allowing to control which packages can be loaded (by default only direct dependencies and stdlibs are allowed)
-function get_dep_from_loaded_modules(p::FromPackageController{name}, base_name::Symbol; allow_manifest=false, allow_weakdeps = inside_extension(p), allow_stdlibs=true)::Module where {name}
+function get_dep_from_loaded_modules(p::FromPackageController{name}, base_name::Symbol; allow_manifest=false, allow_weakdeps=inside_extension(p), allow_stdlibs=true)::Module where {name}
     @nospecialize
     base_name === name && return get_temp_module(p)
     package_name = string(base_name)
     # Construct the custom error message
-    error_msg = let 
+    error_msg = let
         msg = """The package with name $package_name could not be found as a dependency$(allow_weakdeps ? " (or weak dependency)" : "") of the target project"""
         both = allow_manifest && allow_stdlibs
         allow_manifest && (msg *= """$(both ? "," : " or") as indirect dependency from the manifest""")
@@ -326,7 +381,7 @@ function get_dep_from_loaded_modules(p::FromPackageController{name}, base_name::
 end
 
 # Basically Base.names but ignores names that are not defined in the module and allows to restrict to only exported names (since 1.11 added also public names as out of names). It also defaults `all` and `imported` to true (to be more precise, to the opposite of `only_exported`)
-function _names(m::Module; only_exported = false, all=!only_exported, imported=!only_exported, kwargs...)
+function _names(m::Module; only_exported=false, all=!only_exported, imported=!only_exported, kwargs...)
     mod_names = names(m; all, imported, kwargs...)
     filter!(mod_names) do nm
         isdefined(m, nm) || return false

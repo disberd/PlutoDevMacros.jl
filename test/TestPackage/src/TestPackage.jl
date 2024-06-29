@@ -38,18 +38,26 @@ module ImportAsStatements
     include("import_as.jl")
 end
 
+module PrettyPrint
+    function some_function end
+    struct SomeType end
+end
+
 module ModExpr
     import PlutoDevMacros.FromPackage: RemoveThisExpr
+    import PlutoDevMacros.FromPackage.MacroTools: postwalk
     function mapexpr(ex)
         Meta.isexpr(ex, :(=)) || return ex
         args = deepcopy(ex.args)
-        if first(args) === :var_to_delete
-            return :($RemoveThisExpr())
+        varname = first(args)
+        varname === :var_to_delete && return RemoveThisExpr()
+        if varname === :should_be_100
+            args[2] = 100
+            return Expr(:(=), args...)
         end
-        args[2] = 100
-        out = Expr(:(=), args...)
+        return ex
     end
-    include(mapexpr, "test_mapexpr.jl")
+    include(ex -> postwalk(mapexpr, ex), "test_mapexpr.jl")
 end
 
 function __init__()

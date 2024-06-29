@@ -1,8 +1,9 @@
 module FromPackage
     import ..PlutoDevMacros: @addmethod, _cell_data, is_notebook_local
+    import ..PlutoDevMacros: hide_this_log, simple_html_cat
     import Pkg
     import TOML
-    using MacroTools: postwalk, flatten
+    using MacroTools: postwalk, flatten, MacroTools
     using JuliaInterpreter: ExprSplitter
 
 

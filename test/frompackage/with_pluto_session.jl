@@ -84,7 +84,7 @@ end
     ss = ServerSession(; options)
     path = abspath(srcdir, "../out_notebook.jl")
     nb = SessionActions.open(ss, path; run_async=false)
-    for cell in nb.cells
+    for cell in nb.cells[1:end-1] # The last cell contains an error on purpose
         @test noerror(cell)
     end
     SessionActions.shutdown(ss, nb)

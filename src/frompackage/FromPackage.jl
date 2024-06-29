@@ -11,7 +11,6 @@ module FromPackage
 
     include("types.jl")
     include("imports_helpers.jl")
-    include("settings.jl")
     include("helpers.jl")
     include("code_parsing.jl")
     include("loading.jl")

@@ -88,42 +88,6 @@ function custom_walk!(p::AbstractEvalController, ex::Expr, ::Val{:macrocall}, ::
     return new_ex
 end
 
-function get_filepath(path::AbstractString, caller_file::Union{Nothing, AbstractString})
-    @nospecialize
-    base_dir = if isnothing(caller_file)
-        pwd()
-    else
-        dirname(caller_file)
-    end
-    return abspath(base_dir, path)
-end
-
-function process_include_expr!(p::FromPackageController, path::AbstractString, caller_path = nothing)
-    @nospecialize
-    process_include_expr!(p, identity, path, caller_path)
-end
-function process_include_expr!(p::FromPackageController, mapexpr::Function, path::AbstractString, caller_path = nothing)
-    @nospecialize
-    filepath = get_filepath(path, caller_path)
-    # @info "Custom Including $(basename(filepath))"
-    if issamepath(p.target_path, filepath)
-        p.target_reached = true
-        p.target_location = p.current_line
-        p.target_module = p.current_module
-        return nothing
-    end
-    _f = p.custom_walk
-    f = if mapexpr === identity
-        _f
-    else
-        # We compose
-        _f ∘ mapexpr
-    end
-    ast = extract_file_ast(filepath)
-    split_and_execute!(p, ast, f)
-    return nothing
-end
-
 # This function will eventually modify using/import expressions inside extensions modules. Outside of extension modules, it will simply return the provided expression
 function handle_extensions_imports(p::FromPackageController, ex::Expr)
     @nospecialize

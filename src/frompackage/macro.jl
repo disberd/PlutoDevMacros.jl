@@ -12,22 +12,6 @@ function wrap_parse_error(e)
     return LoadError(file, line, e)
 end
 
-function is_macroexpand(trace, cell_id)
-    for _ ∈ eachindex(trace)
-        # We go throught the stack until we find the call to :macroexpand
-        frame = popfirst!(trace)
-        frame.func == :macroexpand && break
-    end
-    length(trace) < 1 && return false
-    caller_frame = popfirst!(trace)
-    file, id = _cell_data(String(caller_frame.file))
-    if id == cell_id
-        # @info "@macroexpand call"
-        return true
-    end
-    return false
-end
-
 ## @frompackage
 function frompackage(ex, target_file, caller_module; macroname, cell_id)
     p = FromPackageController(target_file, caller_module; cell_id)
@@ -75,8 +59,6 @@ function _combined(ex, target, calling_file, caller_module; macroname)
         end
         # Wrap ParseError in LoadError (see https://github.com/disberd/PlutoDevMacros.jl/issues/30)
         we = wrap_parse_error(e)
-        # If we are at macroexpand, simply rethrow here, ohterwise output the expression with the error
-        is_macroexpand(stacktrace(), cell_id) && throw(we)
         bt = stacktrace(catch_backtrace())
         # Outputting the CaptureException as last statement allows pretty printing of errors inside Pluto
         push!(out.args, :(CapturedException($we, $bt)))

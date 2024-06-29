@@ -44,11 +44,22 @@ module PrettyPrint
 end
 
 module MapExpr
-    import PlutoDevMacros.FromPackage: RemoveThisExpr, map_and_clean_expr
+    import PlutoDevMacros.FromPackage: RemoveThisExpr
     import PlutoDevMacros.FromPackage.MacroTools: postwalk
+    # This apply mapexpr to all the args of an expression and remove all of the arguments that are of type RemoveThisExpr after mapping.
+    # If not args are left, simply returns RemoveThisExpr, otherwise reconstruct the resulting expression
+    function map_and_clean_expr(ex::Expr, mapexpr = identity)
+        @nospecialize
+        new_args = map(mapexpr, ex.args)
+        filter!(x -> !isa(x, RemoveThisExpr), new_args)
+        # If we still have args, or if the head is a block, we return the modified haed. We have this special case for a block for tests mostly
+        !isempty(new_args) | (ex.head === :block) && return Expr(ex.head, new_args...)
+        # If we get here we just return RemoveThisExpr
+        return RemoveThisExpr()
+    end
     function mapexpr(ex)
         ex isa Expr || return ex
-        Meta.isexpr(ex, :(=)) || return map_and_clean_expr(ex, identity)
+        Meta.isexpr(ex, :(=)) || return map_and_clean_expr(ex)
         args = deepcopy(ex.args)
         varname = first(args)
         varname === :var_to_delete && return RemoveThisExpr()

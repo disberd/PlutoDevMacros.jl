@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.36
+# v0.19.42
 
 using Markdown
 using InteractiveUtils
@@ -31,6 +31,12 @@ end
 # ╔═╡ d341f653-e1d0-4fbf-b83f-fccaa383cfa8
 isdefined(@__MODULE__, :toplevel_variable) || error("toplevel_variable should be defined")
 
+# ╔═╡ 0cee8704-b824-4274-880d-9d00645fbdd2
+isdefined(@__MODULE__, :TOML) || error("TOML package was not imported apparently")
+
+# ╔═╡ a187f7aa-3d21-43d5-a877-83a49db3d965
+isdefined(@__MODULE__, Symbol("@benchmark")) || error("@benchmark macro not defined in module, the `using BenchmarkTools` import statement was not respected")
+
 # ╔═╡ f2aebf0c-b135-4735-89d2-716d9983d42c
 GreatStructure isa DataType || error("GreatStructure should be defined (and a Type)")
 
@@ -41,5 +47,7 @@ isdefined(@__MODULE__, Symbol("@benchmark")) || error("@benchmark should be avai
 # ╠═071ec1a4-eda6-11ed-3a1b-c1347c9fafa5
 # ╠═e12b4f7a-0d4a-4fa2-a850-faa6cb626795
 # ╠═d341f653-e1d0-4fbf-b83f-fccaa383cfa8
+# ╠═0cee8704-b824-4274-880d-9d00645fbdd2
+# ╠═a187f7aa-3d21-43d5-a877-83a49db3d965
 # ╠═f2aebf0c-b135-4735-89d2-716d9983d42c
 # ╠═3decbd80-c1bc-4d00-b89e-7f3ddaa07683

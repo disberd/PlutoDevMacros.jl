@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.25
+# v0.19.42
 
 using Markdown
 using InteractiveUtils
@@ -17,7 +17,7 @@ end
   ╠═╡ =#
 
 # ╔═╡ 8aa0221b-8f13-4ee8-8cc6-a19fdce2468b
-using PlutoDevMacros.FromPackage
+using PlutoDevMacros
 
 # ╔═╡ e1c8bbbd-da6f-4550-9f2c-30337d4962ad
 @fromparent begin

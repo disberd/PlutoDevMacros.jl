@@ -2,116 +2,95 @@ function extract_file_ast(filename)
     code = read(filename, String)
     ast = Meta.parseall(code; filename)
     @assert Meta.isexpr(ast, :toplevel)
-    ast
+    return ast
 end
 
-## Extract Module Expression
 
-function extract_module_expression(module_filepath::AbstractString)
-    ast = extract_file_ast(module_filepath)
-    mod_exp = getfirst(x -> Meta.isexpr(x, :module), ast.args)
-    mod_exp === nothing || return mod_exp
-    # We throw an error as parsing did not create a valid `module` expression
-    ex = last(ast.args)
-    e = ex.args[end]
-    if VERSION < v"1.10"
-        e isa String && error("Parsing $module_filepath did not generate a valid `module` expression because of the following error:\n$e")
+## custom_walk! ##
+# This function is inspired by MacroTools.walk (and prewalk/postwalk). It allows to specify custom way of parsing the expressions of an included file/package. The first method is used to process the include statement as the `mapexpr` in the two-argument `include` method (i.e. `include(mapexpr, file)`)
+function custom_walk!(p::AbstractEvalController)
+    @nospecialize
+    function mapexpr(ex)
+        out = custom_walk!(p, ex)
+        return out
+    end
+    return mapexpr
+end
+function custom_walk!(p::AbstractEvalController, ex)
+    @nospecialize
+    if p.target_reached
+        return RemoveThisExpr()
     else
-        throw(e)
-    end
-end
-
-## Remove Pluto Exprs
-function remove_pluto_exprs(ex)
-    ex.head == :(=) && ex.args[1] ∈ (:PLUTO_PROJECT_TOML_CONTENTS, :PLUTO_MANIFEST_TOML_CONTENTS) && return false
-    return true
-end
-remove_pluto_exprs(ex, args...) = remove_pluto_exprs(ex)
-
-# This will add all the names introduced by `using` statements to the Set{Symbol} in dict["Using Names"], we need to do this as these names are not returned by the `names` function. See https://discourse.julialang.org/t/get-all-names-accessible-from-a-module/98492
-function add_using_names!(package_dict::Dict, package_exprs, imported_names_args)
-    explicit_names, used_packages = package_dict["Using Names"]
-    if isempty(imported_names_args)
-        # We are in the `using PkgName` situation
-        for package_path_expr in package_exprs
-            # We simply put the last name in the module path in the `used_packages` set. This is because since it's being `used`, it will be directly available in the current module
-            mod_name = last(package_path_expr.args)
-            push!(used_packages, mod_name)
+        ex isa Expr || return ex
+        if isdef(ex)
+            ex = longdef(ex)
         end
-    else
-        # We have explicit names, so we just add them to the explicit names
-        for name_expr in imported_names_args
-            new_name::Symbol = name_expr.args[1]
-            push!(explicit_names, new_name)
-        end
+        # We pass through all non Expr, and process the Exprs
+        return custom_walk!(p, ex, Val{ex.head}())
     end
 end
-
-# This will substitute PackageName with the correct path pointed to the loaded module
-function modify_package_using!(ex::Expr, loc, package_dict::Dict, eval_module::Module)
-    Meta.isexpr(ex, (:using, :import)) || return true
-    package_name = Symbol(package_dict["name"])
-    package_exprs, imported_names_args = if length(ex.args) === 1
-        # We are in the form import PkgName: vars...
-        package_expr, imported_names = extract_import_args(ex)
-        [package_expr], imported_names
-    else
-        # We are in the form import PkgA, PkgB
-        ex.args, Expr[]
-    end
-    if ex.head === :using
-        add_using_names!(package_dict, package_exprs, imported_names_args)
-    end
-    for package_expr in package_exprs
-        package_expr_args = package_expr.args
-        extracted_package_name = first(package_expr_args)
-        if extracted_package_name === package_name
-            # We modify the specific using expression to point to the correct module path
-            prepend!(package_expr_args, temp_module_path())
-        end
-    end
-    return true
+# By defaults, all expression which are not explicitly customized simply return the input expression
+function custom_walk!(p::AbstractEvalController, ex::Expr, ::Val)
+    @nospecialize
+    return ex
 end
 
-_is_include(ex) = Meta.isexpr(ex, :call) && ex.args[1] === :include
-_is_block(ex) = Meta.isexpr(ex, :block)
-
-function should_skip(loc, lines_to_skip)
-    # We skip the line as it's in the list of lines to skip
-    skip = any(lines_to_skip) do lr
-        _inrange(loc, lr)
+# This will add calls below the `using` to track imported names
+function custom_walk!(p::AbstractEvalController, ex::Expr, ::Val{:using})
+    @nospecialize
+    new_ex = if inside_extension(p)
+        # We are inside an extension code, we do not need to track usings
+        handle_extensions_imports(p, ex)
+    else # Here we want to track the using expressions
+        # We add the expression to the set for the current module
+        expr_set = get!(Set{Expr}, p.using_expressions, p.current_module)
+        push!(expr_set, ex)
+        # We just leave the expression unchanged
+        ex
     end
-    # skip && @info "Skipping $loc"
-    skip
+    return new_ex
 end
 
-# process_expr, performs potential modification to ex and return true if this
-# expression has to be kept/evaluated
-function process_expr!(ex, loc, dict, eval_module)
-    ex isa Nothing && return false # We skip nothings
-    ex isa Expr || return true # Apart from Nothing, we keep everything that is not an expr
-    _is_block(ex) && return process_block!(ex, loc, dict, eval_module)
-    _is_include(ex) && error("A call to include not at toplevel was found around line $loc. This is not permitted")
-    keep = all((remove_pluto_exprs, modify_package_using!)) do f
-        f(ex, loc, dict, eval_module)
-    end
+function custom_walk!(p::AbstractEvalController, ex::Expr, ::Val{:import})
+    @nospecialize
+    return handle_extensions_imports(p, ex)
 end
 
-# Process a begin-end block
-function process_block!(ex, loc, dict, eval_module)
-    # We create an array of flags to check which portions to keep
-    args = ex.args
-    loc_idx = 0
-    keep_inds = falses(length(args))
-    for (i, arg) in enumerate(args)
-        if arg isa LineNumberNode
-            loc = arg
-            loc_idx = i
-            continue
-        end
-        # We keep the LineNumberNode if it has at least a valid associated expression
-        keep_inds[loc_idx] |= keep_inds[i] = process_expr!(arg, loc, dict, eval_module)
-    end
-    keepat!(args, keep_inds)
-    return any(keep_inds)
+# For function and macro calls, we want to be able to specialize on the name of the function being called
+function custom_walk!(p::AbstractEvalController, ex::Expr, v::Union{Val{:call}, Val{:macrocall}})
+    @nospecialize
+    called_name = first(ex.args) |> Symbol
+    return custom_walk!(p, ex, v, Val{called_name}())
+end
+function custom_walk!(::AbstractEvalController, ex::Expr, ::Union{Val{:call}, Val{:macrocall}}, ::Val)
+    @nospecialize
+    return ex
+end
+
+# This handles include calls, by adding p.custom_walk as the mapexpr
+function custom_walk!(p::AbstractEvalController, ex::Expr, ::Val{:call}, ::Val{:include})
+    @nospecialize
+    (; current_line) = p
+    new_ex = :($process_include_expr!($p))
+    append!(new_ex.args, ex.args[2:end])
+    push!(new_ex.args, String(current_line.file))
+    return new_ex
+end
+
+# This handles include calls, by adding p.custom_walk as the mapexpr
+function custom_walk!(p::AbstractEvalController, ex::Expr, ::Val{:macrocall}, ::Union{
+    Val{Symbol("@frompackage")},
+    Val{Symbol("@fromparent")},
+})
+    @nospecialize
+    # This will only process and returns the import block of the macro. We process it to exclude invalid statements outside pluto and eventualy track usings
+    new_ex = process_outside_pluto(p, ex.args[end])
+    return new_ex
+end
+
+# This function will eventually modify using/import expressions inside extensions modules. Outside of extension modules, it will simply return the provided expression
+function handle_extensions_imports(p::FromPackageController, ex::Expr)
+    @nospecialize
+    @assert Meta.isexpr(ex, (:using, :import)) "You can only call this function with using or import expressions as second argument"
+    return inside_extension(p) ? process_import_statement(p, ex; inside_extension = true) : ex
 end

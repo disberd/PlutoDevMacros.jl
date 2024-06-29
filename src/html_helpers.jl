@@ -31,7 +31,7 @@ end
 Which will correctly send the message to the console even if the cell output is not the javascript script:
 ![hide_this_log example gif](https://github.com/disberd/PlutoDevMacros.jl/assets/12846528/8208243b-62ce-437a-ae87-97e63ca94e12)
 """
-function hide_this_log(content::AbstractString = ""; id = randid())
+function hide_this_log(content = ""; id = randid())
     this_contents = "<script id = '$id'>
 	const logs_positioner = currentScript.closest('pluto-log-dot-positioner')
 	if (logs_positioner == undefined) {return}
@@ -59,11 +59,19 @@ function hide_this_log(content::AbstractString = ""; id = randid())
         observer.disconnect()
     })
     </script>"
-	Docs.HTML() do io
-        # We print the provided contents first
-        print(io, content)
-        # We now add our custom script to hide the log
-        print(io, this_contents)
+    simple_html_cat(content, this_contents)
+end
+
+extract_html_content(x::AbstractString) = x
+extract_html_content(html::Docs.HTML) = html.content
+
+function simple_html_cat(args...)
+    Docs.HTML() do io
+        for arg in args
+                content = extract_html_content(arg)
+                content isa Function ?
+                    content(io) :
+                    print(io, content)
+        end
     end
 end
-hide_this_log(html::Docs.HTML; kwargs...) = hide_this_log(html.content; kwargs...)

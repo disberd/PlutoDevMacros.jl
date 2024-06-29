@@ -1,25 +1,22 @@
-import ..PlutoDevMacros: hide_this_log
-
-function get_temp_module() 
-    isdefined(Main, TEMP_MODULE_NAME) || return nothing
-    return getproperty(Main, TEMP_MODULE_NAME)::Module
+# This function imitates Base.find_ext_path to get the path of the extension specified by name, from the project in p
+function find_ext_path(p::ProjectData, extname::String)
+    project_path = dirname(p.file)
+    extfiledir = joinpath(project_path, "ext", extname, extname * ".jl")
+    isfile(extfiledir) && return extfiledir
+    return joinpath(project_path, "ext", extname * ".jl")
 end
 
-# Extract the module that is the target in dict
-get_target_module(dict) = dict["Created Module"]
-
-function get_target_uuid(dict) 
-    uuid = get(dict, "uuid", nothing)
-    if !isnothing(uuid)
-        uuid = Base.UUID(uuid)
+function inside_extension(p::FromPackageController{name}) where {name}
+    @nospecialize
+    m = p.current_module
+    nm = nameof(m)
+    exts = keys(p.project.extensions)
+    while nm ∉ (:Main, name)
+        nm = nameof(m)
+        String(nm) in exts && return true
+        m = parentmodule(m)
     end
-    return uuid
-end
-
-function get_target_pkgid(dict)
-    mod_name = dict["name"]
-    uuid = get_target_uuid(dict)
-    Base.PkgId(uuid, mod_name)
+    return false
 end
 
 #=
@@ -52,127 +49,6 @@ function simulate_manual_rerun(cell_ids::Array; kwargs...)
 end
 =#
 
-# Functions to add and remove from the LOAD_PATH
-function add_loadpath(entry::String; should_prepend)
-    idx = findfirst(==(entry), LOAD_PATH)
-    if isnothing(idx)
-        f! = should_prepend ? pushfirst! : push!
-        # We add
-        f!(LOAD_PATH, entry)
-    end
-    return nothing
-end
-add_loadpath(ecg::EnvCacheGroup; kwargs...) = add_loadpath(ecg |> get_active |> get_project_file; kwargs...)
-
-## execute only in notebook
-# We have to create our own simple check to only execute some stuff inside the notebook where they are defined. We have stuff in basics.jl but we don't want to include that in this notebook
-function is_notebook_local(calling_file::String)
-	name_cell = split(calling_file, "#==#")
-	return length(name_cell) == 2 && length(name_cell[2]) == 36
-end
-
-## package extensions helpers
-has_extensions(package_data) = haskey(package_data, "extensions") && haskey(package_data, "weakdeps")
-
-function maybe_add_loaded_module(id::Base.PkgId)
-	symname = id.name |> Symbol
-	# We just returns if the module is already loaded
-	isdefined(LoadedModules, symname) && return nothing
-    loaded_module = Base.maybe_root_module(id)
-	isnothing(loaded_module) && error("The package $id does not seem to be loaded")
-	Core.eval(LoadedModules, :(const $(symname) = $(loaded_module)))
-	return nothing
-end
-
-## get parent data
-function get_package_data(packagepath::AbstractString)
-	project_file = Base.current_project(packagepath)
-	project_file isa Nothing && error("No project was found starting from $packagepath")
-	project_file = abspath(project_file)
-
-	ecg = default_ecg()
-
-	maybe_update_envcache(project_file, ecg; notebook = false)
-	target = get_target(ecg)
-	# We update the notebook and active envcaches to be up to date
-	update_ecg!(ecg)
-
-	# Check that the package file actually exists
-	package_file = get_entrypoint(target)
-	package_dir = dirname(package_file) |> abspath
-
-	isfile(package_file) || error("The package package main file was not found at path $package_file")
-
-	package_data = deepcopy(target.project.other)
-    package_data["project"] = project_file
-	package_data["dir"] = package_dir
-	package_data["file"] = package_file
-	package_data["target"] = packagepath
-	package_data["ecg"] = ecg
-
-	# We extract the PkgInfo for all packages in this environment
-	d,i = target_dependencies(target)
-	package_data["PkgInfo"] = (;direct = d, indirect = i)
-	
-	return package_data
-end
-
-# Get the first element in itr that satisfies predicate p, or nothing if itr is empty or no elements satisfy p
-function getfirst(p, itr)
-    for el in itr
-        p(el) && return el
-    end
-    return nothing
-end
-getfirst(itr) = getfirst(x -> true, itr)
-
-## Similar to names but allows to exclude names and add explicit ones. It also filter names based on whether they are defined already in the caller module
-function filterednames(m::Module; all = true, imported = true, explicit_names = Set{Symbol}(), caller_module::Module)
-	excluded = (:eval, :include, :_fromparent_dict_, Symbol("@bind"))
-    mod_names = names(m; all, imported)
-    filter_args = union(mod_names, explicit_names)
-    filter_func = filterednames_filter_func(;excluded, caller_module)
-	filter(filter_func, filter_args)
-end
-
-function has_ancestor_module(target::Module, ancestor_name::Symbol; previous = nothing, only_rootmodule = false)
-    has_ancestor_module(target, (ancestor_name,); previous, only_rootmodule)
-end
-function has_ancestor_module(target::Module, ancestor_names; previous = nothing, only_rootmodule = false)
-    nm = nameof(target)
-    ancestor_found = nm in ancestor_names 
-    !only_rootmodule && ancestor_found && return true # Ancestor found, and no check on only_rootmodule
-    nm === previous && return ancestor_found # The target is the same as previous, so we reached a top-level module. We return whether the ancestor was found and is a parent of itself
-    return has_ancestor_module(parentmodule(target), ancestor_names; previous = nm, only_rootmodule)
-end
-
-# This returns two flags: whether the name can be included and whether a warning should be generated
-function can_import_in_caller(name::Symbol, caller::Module)
-    isdefined(caller, name) || return true, false # If is not defined we can surely import it
-    owner = which(caller, name)
-    # Skip (and do not warn) for things defined in Base or Core
-    invalid_ancestor = has_ancestor_module(owner, (:Base, :Core, :Markdown, :InteractiveUtils))
-    invalid_ancestor && return false, false
-    # We check if the name is inside the list of symbols imported by the previous module
-    in_previous = name in PREVIOUS_CATCHALL_NAMES
-    return in_previous, !in_previous
-end
-
-function filterednames_filter_func(;excluded, caller_module)
-    f(s) = let excluded = excluded, caller = caller_module
-        Base.isgensym(s) && return false
-        s in excluded && return false
-        should_include, should_warn = can_import_in_caller(s, caller)
-        if should_warn 
-            owner = which(caller, s)
-            @warn "The name `$s`, defined in $owner, is already present in the caller module and will not be imported."
-        end
-        return should_include
-    end
-    return f
-end
-
-
 ## HTML Popup
 
 _popup_style(id) = """
@@ -184,9 +60,9 @@ _popup_style(id) = """
 	    margin-top: 5px;
 	    padding-right: 5px;
 	    z-index: 200;
-		background: #ffffff;
+		background: var(--overlay-button-bg);
 	    padding: 5px 8px;
-	    border: 3px solid #e3e3e3;
+	    border: 3px solid var(--overlay-button-border);
 	    border-radius: 12px;
 	    height: 35px;
 	    font-family: "Segoe UI Emoji", "Roboto Mono", monospace;
@@ -207,32 +83,39 @@ _popup_style(id) = """
 	}
 """
 
-function html_reload_button(cell_id; text = "Reload @frompackage", err = false)
-	id = string(cell_id)
+function html_reload_button(p::FromPackageController; text)
+    @nospecialize
+    simple_html_cat(
+        beautify_package_path(p),
+        html_reload_button(p.cell_id; text)
+    )
+end
+function html_reload_button(cell_id; text="Reload @frompackage", err=false)
+    id = string(cell_id)
     style_content = _popup_style(id)
-	html_content = """
-	<script>
-			const container = document.querySelector('fromparent-container') ?? document.body.appendChild(html`<fromparent-container>`)
-			container.innerHTML = '$text'
-			// We set the errored state
-			container.classList.toggle('errored', $err)
-			const style = container.querySelector('style') ?? container.appendChild(html`<style>`)
-			style.innerHTML = `$(style_content)`
-			const cell = document.getElementById('$id')
-			const actions = cell._internal_pluto_actions
-			container.onclick = (e) => {
-				if (e.ctrlKey) {
-					history.pushState({},'')			
-					cell.scrollIntoView({
-						behavior: 'auto',
-						block: 'center',				
-					})
-				} else {
-					actions.set_and_run_multiple(['$id'])
-				}
-			}
-	</script>
-	"""
+    html_content = """
+    <script id='html_reload_button'>
+    		const container = document.querySelector('fromparent-container') ?? document.body.appendChild(html`<fromparent-container>`)
+    		container.innerHTML = '$text'
+    		// We set the errored state
+    		container.classList.toggle('errored', $err)
+    		const style = container.querySelector('style') ?? container.appendChild(html`<style>`)
+    		style.innerHTML = `$(style_content)`
+    		const cell = document.getElementById('$id')
+    		const actions = cell._internal_pluto_actions
+    		container.onclick = (e) => {
+    			if (e.ctrlKey) {
+    				history.pushState({},'')			
+    				cell.scrollIntoView({
+    					behavior: 'auto',
+    					block: 'center',				
+    				})
+    			} else {
+    				actions.set_and_run_multiple(['$id'])
+    			}
+    		}
+    </script>
+    """
     # We make an HTML object combining this content and the hide_this_log functionality
     return hide_this_log(html_content)
 end
@@ -241,96 +124,268 @@ end
 cleanpath(path::String) = first(split(path, "#==#")) |> abspath
 # Check if two paths are equal, ignoring case on the drive letter on windows.
 function issamepath(path1::String, path2::String)
-	path1 = abspath(path1)
-	path2 = abspath(path2)
-	if Sys.iswindows()
-		uppercase(path1[1]) == uppercase(path2[1]) || return false
-		path1[2:end] == path2[2:end] && return true
-	else
-		path1 == path2 && return true
-	end
-end
-issamepath(path1::Symbol, path2::Symbol) = issamepath(String(path1), String(path2))
-
-# Create a Base.PkgId from a PkgInfo
-to_pkgid(p::PkgInfo) = Base.PkgId(p.uuid, p.name)
-
-# This will extract the string from a raw_str macro, and will throw an error otherwise
-function extract_raw_str(ex::Expr)
-    valid = Meta.isexpr(ex, :macrocall) && ex.args[1] === Symbol("@raw_str")
-    if valid
-        return ex.args[end], true
+    path1 = abspath(path1)
+    path2 = abspath(path2)
+    if Sys.iswindows()
+        uppercase(path1[1]) == uppercase(path2[1]) || return false
+        path1[2:end] == path2[2:end] && return true
     else
-        return "", false
+        path1 == path2 && return true
     end
 end
-extract_raw_str(s::AbstractString) = String(s), true
 
-function get_extensions_ids(old_module::Module, parent::Base.PkgId)
-    package_dict = old_module._fromparent_dict_
-    out = Base.PkgId[]
-    if has_extensions(package_dict)
-        for ext in keys(package_dict["extensions"])
-            id = Base.PkgId(Base.uuid5(parent.uuid, ext), ext)
-            push!(out, id)
+is_raw_str(ex) = Meta.isexpr(ex, :macrocall) && first(ex.args) === Symbol("@raw_str")
+# This function extracts the target path by evaluating the ex of the target in the caller module. It will error if `ex` is not a string or a raw string literal if called outside of Pluto
+function extract_target_path(ex, caller_module::Module; calling_file, notebook_local::Bool=is_notebook_local(calling_file))
+    valid_outside = ex isa AbstractString || is_raw_str(ex)
+    # If we are not inside a notebook and the path is not provided as string or raw string, we throw an error as the behavior is not supported
+    @assert notebook_local || valid_outside "When calling `@frompackage` outside of a notebook, the path must be provided as `String` or `@raw_str` (i.e. an expression of type `raw\"...\"`)."
+    path = Core.eval(caller_module, ex)
+    # Make the path absolute
+    path = abspath(dirname(calling_file), path)
+    # Eventuallly remove the cell_id from the target
+    path = cleanpath(path)
+    @assert ispath(path) "The extracted path does not seem to be a valid path.\n-`extracted_path`: $path"
+    return path
+end
+
+function beautify_package_path(p::FromPackageController)
+    @nospecialize
+    modpath..., name = fullname(get_temp_module(p))
+    modpath = map(enumerate(modpath)) do (i, s)
+        Base.isgensym(s) || return String(s)
+        return "var\"$s\""
+    end
+    regex = """/$(join(modpath, "\\."))(\\.$(name))?/g"""
+    Docs.HTML(
+        #! format: off
+"""
+<script id='frompackage-text-replace'>
+  // We have a mutationobserver for each cell:
+  const notebook = document.querySelector('pluto-notebook')
+
+  const mut_observers = {
+    current: [],
+  }
+  currentScript.mut_observers = mut_observers
+  function replaceTextInNode(node, pattern, replacement, originals = []) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      const content = node.textContent
+      if (!pattern.test(content)) {return}
+      originals.push({node, content})
+      node.textContent = content.replace(pattern, replacement);
+    } else {
+      node.childNodes.forEach(child => replaceTextInNode(child, pattern, replacement, originals));
+    }
+  }
+  function execute_cell_observer(observer) {
+    if (invalidated.current) {
+      observer.disconnect()
+      return
+    }
+    const { cell, regex, replacement, originals } = observer
+    const output = cell.querySelector('pluto-output')
+    const content = output.lastChild
+    replaceTextInNode(content, regex, replacement, originals);
+  }
+
+  function revert_cell_original_text(observer) {
+    observer.originals?.forEach(item => {
+      item.node.textContent = item.content
+    })
+  }
+
+  currentScript.revert_original_text = () => {
+    mut_observers.current.forEach(revert_cell_original_text)
+  }
+
+  const invalidated = { current: false }
+
+  const createCellObservers = () => {
+    mut_observers.current.forEach((o) => o.disconnect())
+    mut_observers.current = Array.from(notebook.querySelectorAll("pluto-cell")).map(el => {
+      const o = new MutationObserver((mutations, observer) => {execute_cell_observer(observer)})
+      o.cell = el
+      o.regex = $regex
+      o.replacement = '$name'
+      o.originals = []
+      o.observe(el, { attributeFilter: ["class"] })
+      execute_cell_observer(o)
+      return o
+    })
+  }
+  createCellObservers()
+
+  // And one for the notebook's child list, which updates our cell observers:
+  const notebookObserver = new MutationObserver((mutations, observer) => {
+    if (invalidation.current) {
+      observer.disconnect()
+      return
+    }
+    createCellObservers()
+  })
+  notebookObserver.observe(notebook, { childList: true })
+
+  const cell = currentScript.closest('pluto-cell')
+
+  invalidation.then(() => {
+    invalidated.current = true
+    const revert = cell?.querySelector("script[id='frompackage-text-replace']") == null
+    notebookObserver.disconnect()
+    mut_observers.current.forEach((o) => {
+      revert && revert_cell_original_text(o)
+      o.disconnect()
+    })
+  })
+</script>
+   """
+   #! format: on
+    )
+end
+
+function generate_manifest_deps(proj_file::String)
+    envdir = dirname(abspath(proj_file))
+    manifest_file = ""
+    for name in ("Manifest.toml", "JuliaManifest.toml")
+        path = joinpath(envdir, name)
+        if isfile(path)
+            manifest_file = path
+            break
         end
+    end
+    @assert !isempty(manifest_file) "A manifest could not be found at the project's location.\nYou have to provide an instantiated environment.\nEnvDir: $envdir"
+    d = TOML.parsefile(manifest_file)
+    out = Dict{Base.UUID,String}()
+    for (name, data) in d["deps"]
+        # We use only here because I believe the entry will always contain a single dict wrapped in an array. If we encounter a case where this is not true the only will throw instead of silently taking just the first
+        uuid = only(data)["uuid"] |> Base.UUID
+        out[uuid] = name
     end
     return out
 end
 
-# This function will register the target module for `dict` as a root module.
-# This relies on Base internals (and even the C API) but will allow make the loaded module behave more like if we simply did `using TargetPackage` in the REPL
-function register_target_module_as_root(package_dict)
-    name_str = package_dict["name"]
-    m = get_target_module(package_dict)
-    id = get_target_pkgid(package_dict)
-    uuid = id.uuid
-    entry_point = package_dict["file"]
-    @lock Base.require_lock begin
-        # Set the uuid of this module with the C API. This is required to get the correct UUID just from the module within `register_root_module`
-        ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), m, uuid)
-        # Register this module as root
-        Base.with_logger(Base.NullLogger()) do
-            Base.register_root_module(m)
-        end
-        # Set the path of the module to the actual package
-        Base.set_pkgorigin_version_path(id, entry_point)
+function update_loadpath(p::FromPackageController)
+    @nospecialize
+    proj_file = p.project.file
+    if proj_file ∉ LOAD_PATH
+        push!(LOAD_PATH, proj_file)
     end
 end
 
-function try_load_extensions(package_dict::Dict)
-    has_extensions(package_dict) || return
-    m = get_target_module(package_dict)
-    proj_file = package_dict["project"]
-    id = Base.PkgId(m)
-    ext_ids = get_extensions_ids(m, id)
-    @lock Base.require_lock begin
-        # We try to clean up the eventual extensions (with target as parent) that we loaded with the previous version
-        for id in ext_ids
-            haskey(Base.EXT_PRIMED, id) && delete!(Base.EXT_PRIMED, id)
-            haskey(Base.loaded_modules, id) && delete!(Base.loaded_modules, id)
+# This function traverse a path to access a nested module from a `starting_module`. It is used to extract the corresponding module from `import/using` statements.
+function extract_nested_module(starting_module::Module, nested_path; first_dot_skipped=false)
+    m = starting_module
+    for name in nested_path
+        m = if name === :.
+            first_dot_skipped ? parentmodule(m) : m
+        else
+            @assert isdefined(m, name) "The module `$name` could not be found inside parent module `$(nameof(m))`"
+            getproperty(m, name)::Module
         end
-        Base.insert_extension_triggers(proj_file, id)
-        Base.redirect_stderr(Base.DevNull()) do
-            Base.run_extension_callbacks(id)
+        first_dot_skipped = true
+    end
+    return m
+end
+
+# This will create a unique name for a module by translating the PkgId into a symbol
+unique_module_name(m::Module) = Symbol(Base.PkgId(m))
+unique_module_name(uuid::Base.UUID, name::AbstractString) = Symbol(Base.PkgId(uuid, name))
+
+function get_temp_module()
+    if isdefined(Main, TEMP_MODULE_NAME)
+        getproperty(Main, TEMP_MODULE_NAME)::Module
+    else
+        Core.eval(Main, :(module $TEMP_MODULE_NAME
+        module _LoadedModules_ end
+        module _DirectDeps_ end
+        end))::Module
+    end
+end
+get_temp_module(s::Symbol) = get_temp_module([s])
+function get_temp_module(names::Vector{Symbol})
+    temp = get_temp_module()
+    out = extract_nested_module(temp, names)::Module
+    return out
+end
+function get_temp_module(::FromPackageController{name}) where {name}
+    @nospecialize
+    get_temp_module(name)::Module
+end
+
+get_loaded_modules_mod() = get_temp_module(:_LoadedModules_)::Module
+get_direct_deps_mod() = get_temp_module(:_DirectDeps_)::Module
+
+function populate_loaded_modules()
+    loaded_modules = get_loaded_modules_mod()
+    @lock Base.require_lock begin
+        for (id, m) in Base.loaded_modules
+            name = Symbol(id)
+            isdefined(loaded_modules, name) && continue
+            Core.eval(loaded_modules, :(const $name = $m))
         end
     end
-    return
+    callbacks = Base.package_callbacks
+    if mirror_package_callback ∉ callbacks
+        # # We just make sure to delete previous instances of the package callbacks when reloading this package itself
+        # for i in reverse(eachindex(callbacks))
+        #     f = callbacks[i]
+        #     nameof(f) === :mirror_package_callback || continue
+        #     nameof(parentmodule(f)) === nameof(@__MODULE__) || continue
+        #     # We delete this as it's a previous version of the mirror_package_callback function
+        #     @warn "Deleting previous version of package_callback function"
+        #     deleteat!(callbacks, i)
+        # end
+        # Add the package callback if not already present
+        push!(callbacks, mirror_package_callback)
+    end
 end
 
-# This function will get the module stored in the created_modules dict based on the entry point
-get_stored_module() = STORED_MODULE[]
-# This will store in it
-update_stored_module(m::Module) = STORED_MODULE[] = m
-function update_stored_module(package_dict::Dict)
-    m = get_target_module(package_dict)
-    update_stored_module(m)
+# This function will extract a module from the _LoadedModules_ module which will be populated when each package is loaded in julia
+function get_dep_from_loaded_modules(key::Symbol)
+    loaded_modules = get_loaded_modules_mod()
+    isdefined(loaded_modules, key) || error("The module $key can not be found in the loaded modules.")
+    m = getproperty(loaded_modules, key)::Module
+    return m
+end
+# This is internally calls the previous function, allowing to control which packages can be loaded (by default only direct dependencies and stdlibs are allowed)
+function get_dep_from_loaded_modules(p::FromPackageController{name}, base_name::Symbol; allow_manifest=false, allow_weakdeps=inside_extension(p), allow_stdlibs=true)::Module where {name}
+    @nospecialize
+    base_name === name && return get_temp_module(p)
+    package_name = string(base_name)
+    # Construct the custom error message
+    error_msg = let
+        msg = """The package with name $package_name could not be found as a dependency$(allow_weakdeps ? " (or weak dependency)" : "") of the target project"""
+        both = allow_manifest && allow_stdlibs
+        allow_manifest && (msg *= """$(both ? "," : " or") as indirect dependency from the manifest""")
+        allow_stdlibs && (msg *= """ or as standard library""")
+        msg *= "."
+    end
+    if allow_stdlibs
+        uuid = get(STDLIBS_DATA, package_name, nothing)
+        uuid !== nothing && return get_dep_from_loaded_modules(unique_module_name(uuid, package_name))
+    end
+    proj = p.project
+    uuid = get(proj.deps, package_name) do
+        # Throw error unless either of manifest/weakdeps is allowed
+        allow_weakdeps | allow_manifest || error(error_msg)
+        out = get(proj.weakdeps, package_name, nothing)
+        !isnothing(out) && return out
+        allow_manifest || error(error_msg)
+        for (uuid, dep_name) in p.manifest_deps
+            package_name === dep_name && return uuid
+        end
+        error(error_msg)
+    end
+    key = unique_module_name(uuid, package_name)
+    return get_dep_from_loaded_modules(key)
 end
 
-overwrite_imported_symbols(package_dict::Dict) = overwrite_imported_symbols(get(Set{Symbol}, package_dict, "Catchall Imported Symbols"))
-# This overwrites the PREVIOUSLY_IMPORTED_SYMBOLS with the contents of new_symbols
-function overwrite_imported_symbols(new_symbols)
-    empty!(PREVIOUS_CATCHALL_NAMES)
-    union!(PREVIOUS_CATCHALL_NAMES, new_symbols)
-    nothing
+# Basically Base.names but ignores names that are not defined in the module and allows to restrict to only exported names (since 1.11 added also public names as out of names). It also defaults `all` and `imported` to true (to be more precise, to the opposite of `only_exported`)
+function _names(m::Module; only_exported=false, all=!only_exported, imported=!only_exported, kwargs...)
+    mod_names = names(m; all, imported, kwargs...)
+    filter!(mod_names) do nm
+        isdefined(m, nm) || return false
+        only_exported && return Base.isexported(m, nm)
+        return true
+    end
 end

@@ -6,6 +6,8 @@ function _cell_data(filesrc::String)
 		return names[1], ""
 	end
 end
+_cell_data(file::Symbol) = _cell_data(String(file))
+_cell_data(lnn::LineNumberNode) = _cell_data(lnn.file)
 
 """
 	is_notebook_local(filesrc::AbstractString)::Bool

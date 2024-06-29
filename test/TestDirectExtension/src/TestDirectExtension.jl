@@ -1,6 +1,7 @@
 module TestDirectExtension
 
 using PlotlyExtensionsHelper
+using HypertextLiteral
 
 export to_extend, plot_this
 

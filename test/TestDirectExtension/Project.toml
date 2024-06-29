@@ -4,6 +4,7 @@ authors = ["Alberto Mengali <disberd@gmail.com>"]
 version = "0.1.0"
 
 [deps]
+HypertextLiteral = "ac1192a8-f4b3-4bfe-ba22-af5b92cd3ab2"
 PlotlyExtensionsHelper = "a7e57fc7-3548-4021-90c3-ac0e175068b1"
 
 [weakdeps]
@@ -17,3 +18,4 @@ PlotlyBaseExt = "PlotlyBase"
 
 [compat]
 PlotlyBase = "0.8"
+PlotlyExtensionsHelper = "0.2"

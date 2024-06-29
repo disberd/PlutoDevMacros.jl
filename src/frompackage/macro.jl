@@ -1,138 +1,70 @@
 import Base: stacktrace, catch_backtrace
 
-_id_name(cell_id) = Symbol(:_fromparent_cell_id_, cell_id)
-
-function is_call_unique(cell_id, caller_module)
-	current_id = macro_cell[]
-	current_id == cell_id && return true
-	# If we get here we have a potential multiple call
-	id_name = _id_name(current_id)
-	return if isdefined(caller_module, id_name) 
-		false
-	else
-		# We have the update the cell reference
-		macro_cell[] = cell_id
-		true
-	end
-end
-
 function wrap_parse_error(e)
-	# Just return the error if we are not in 1.10 or is not a ParseError
-	VERSION >= v"1.10" && e isa Base.Meta.ParseError && hasproperty(e, :detail) || return e
-	# Extract the filename and line of the parseerror
-	(;source, diagnostics) = e.detail
-	byte_index = first(diagnostics) |> Base.JuliaSyntax.first_byte
-	line = Base.JuliaSyntax.source_line(source, byte_index)
-	file = source.filename
-	# We wrap this in a LoadError as if we `included` the file containnig the error
-	return LoadError(file, line, e)
-end
-
-function is_macroexpand(trace, cell_id)
-	for _ ∈ eachindex(trace)
-		# We go throught the stack until we find the call to :macroexpand
-		frame = popfirst!(trace)
-		frame.func == :macroexpand && break
-	end
-	length(trace) < 1 && return false
-	caller_frame = popfirst!(trace)
-	file, id = _cell_data(String(caller_frame.file))
-	if id == cell_id
-		# @info "@macroexpand call"
-		return true
-	end
-	return false
+    # Just return the error if we are not in 1.10 or is not a ParseError
+    VERSION >= v"1.10" && e isa Base.Meta.ParseError && hasproperty(e, :detail) || return e
+    # Extract the filename and line of the parseerror
+    (; source, diagnostics) = e.detail
+    byte_index = first(diagnostics) |> Base.JuliaSyntax.first_byte
+    line = Base.JuliaSyntax.source_line(source, byte_index)
+    file = source.filename
+    # We wrap this in a LoadError as if we `included` the file containnig the error
+    return LoadError(file, line, e)
 end
 
 ## @frompackage
-
-function frompackage(ex, target_file, caller, caller_module; macroname)
-	is_notebook_local(caller) || return process_outside_pluto!(ex, get_package_data(target_file))
-	_, cell_id = _cell_data(caller)
-	maybe_update_envcache(Base.active_project(), default_ecg(); notebook = true)
-	proj_file = Base.current_project(target_file)
-	id_name = _id_name(cell_id)
-	ex isa Expr || error("You have to call this macro with an import statement or a begin-end block of import statements")
-	# Try to load the module of the target package in the calling workspace and return the dict with extracted paramteres
-	package_dict = if is_call_unique(cell_id, caller_module)
-		dict = get_package_data(target_file)
-		# We try to extract eventual lines to skip
-		process_skiplines!(ex, dict)
-        # We extract and process custom settings
-		process_settings!(ex, dict)
-		load_module_in_caller(dict, caller_module)
-	else
-		error("Multiple Calls: The $macroname is already present in cell with id $(macro_cell[]), you can only have one call-site per notebook")
-	end
-	args = []
-	# We extract the parse dict
-	ex_args = if Meta.isexpr(ex, [:import, :using])
-		[ex]
-	elseif Meta.isexpr(ex, :macrocall) && ex.args[1] in (Symbol("@include_using"), Symbol("@exclude_using"))
-        # This is @include_using
-        [ex]
-	elseif Meta.isexpr(ex, :block)
-		ex.args
-	else
-		error("You have to call this macro with an import statement or a begin-end block of import statements")
-	end
-	# We now process/parse all the import/using statements
-	for arg in ex_args
-		arg isa LineNumberNode && continue
-		push!(args, parseinput(arg, package_dict; caller_module))
-	end
-    # We update th stored root module
-    update_stored_module(package_dict)
-    # We put the included names in PREVIOUS_CATCHALL_NAMES
-    overwrite_imported_symbols(package_dict)
-    # We call at runtime the function to trigger extensions loading
-    push!(args, :($try_load_extensions($package_dict)))
-	# We wrap the import expressions inside a try-catch, as those also correctly work from there.
-	# This also allow us to be able to catch the error in case something happens during loading and be able to gracefully clean the work space
-	text = "Reload $macroname"
-	out = quote
-		# We put the cell id variable
-		$id_name = true
-		try
-			$(args...)
-			# We add the reload button as last expression so it's sent to the cell output
-			$html_reload_button($cell_id; text = $text)
-		catch e
-			# We also send the reload button as an @info log, so that we can use the cell output to format the error nicely
-			@info $html_reload_button($cell_id; text = $text)
-			rethrow()
-		end
-	end
-	return out
+function frompackage(ex, target_file, caller_module; macroname, cell_id)
+    p = FromPackageController(target_file, caller_module; cell_id)
+    p.cell_id !== nothing || return process_outside_pluto(p, ex)
+    load_module!(p)
+    args = extract_input_args(ex)
+    for (i, arg) in enumerate(args)
+        arg isa Expr || continue
+        args[i] = process_input_expr(p, arg)
+    end
+    text = "Reload $macroname"
+    out = quote
+        # We put the cell id variable
+        $PREV_CONTROLLER_NAME = $p
+        try
+            $(args...)
+            # We add the reload button as last expression so it's sent to the cell output
+            $html_reload_button($p; text=$text)
+        catch e
+            # We also send the reload button as an @info log, so that we can use the cell output to format the error nicely
+            @info $html_reload_button($p; text=$text, err = true)
+            rethrow()
+        end
+    end |> flatten
+    return out
 end
 
 function _combined(ex, target, calling_file, caller_module; macroname)
-	# Enforce absolute path to handle different OSs
-	target = abspath(target)
-	calling_file = abspath(calling_file)
-	_, cell_id = _cell_data(calling_file)
-	proj_file = Base.current_project(target)
-	out = try
-		frompackage(ex, target, calling_file, caller_module; macroname)
-	catch e
-		# If we are outside of pluto we simply rethrow
-		is_notebook_local(calling_file) || rethrow()
-		out = Expr(:block)
-		if !(e isa ErrorException && startswith(e.msg, "Multiple Calls: The"))
-			text = "Reload $macroname"
-			# We send a log to maintain the reload button
-			@info html_reload_button(cell_id; text, err = true)
-		end
-		# Wrap ParseError in LoadError (see https://github.com/disberd/PlutoDevMacros.jl/issues/30)
-		we = wrap_parse_error(e)
-		# If we are at macroexpand, simply rethrow here, ohterwise output the expression with the error
-		is_macroexpand(stacktrace(), cell_id) && throw(we)
-		bt = stacktrace(catch_backtrace())
-		# Outputting the CaptureException as last statement allows pretty printing of errors inside Pluto
-		push!(out.args,	:(CapturedException($we, $bt)))
-		out
-	end
-	out
+    # Enforce absolute path to handle different OSs
+    calling_file = abspath(calling_file)
+    _, cell_id = _cell_data(calling_file)
+    notebook_local = !isempty(cell_id)
+    # Get the target file
+    target_file = extract_target_path(target, caller_module; calling_file, notebook_local)
+    out = try
+        frompackage(ex, target_file, caller_module; macroname, cell_id)
+    catch e
+        # If we are outside of pluto we simply rethrow
+        notebook_local || rethrow()
+        out = Expr(:block)
+        if !(e isa ErrorException && startswith(e.msg, "Multiple Calls: The"))
+            text = "Reload $macroname"
+            # We send a log to maintain the reload button
+            @info html_reload_button(cell_id; text, err=true)
+        end
+        # Wrap ParseError in LoadError (see https://github.com/disberd/PlutoDevMacros.jl/issues/30)
+        we = wrap_parse_error(e)
+        bt = stacktrace(catch_backtrace())
+        # Outputting the CaptureException as last statement allows pretty printing of errors inside Pluto
+        push!(out.args, :(CapturedException($we, $bt)))
+        out
+    end
+    return out
 end
 
 """
@@ -167,12 +99,10 @@ See the package [documentation](https://disberd.github.io/PlutoDevMacros.jl/dev/
 
 See also: [`@fromparent`](@ref)
 """
-macro frompackage(target::Union{AbstractString, Expr}, ex)
-    target_file, valid = extract_raw_str(target)
-    @assert valid "Only `AbstractStrings` or `Exprs` of type `raw\"...\"` are allowed as `target` in the `@frompackage` macro."
-	calling_file = String(__source__.file)
-	out = _combined(ex, target_file, calling_file, __module__; macroname = "@frompackage")
-	esc(out)
+macro frompackage(target::Union{AbstractString,Expr,Symbol}, ex)
+    calling_file = String(__source__.file)
+    out = _combined(ex, target, calling_file, __module__; macroname="@frompackage")
+    esc(out)
 end
 
 """
@@ -191,7 +121,7 @@ for understanding its use.
 See also: [`@addmethod`](@ref)
 """
 macro fromparent(ex)
-	calling_file = String(__source__.file)
-	out = _combined(ex, calling_file, calling_file, __module__; macroname = "@fromparent")
-	esc(out)
+    calling_file = String(__source__.file)
+    out = _combined(ex, calling_file, calling_file, __module__; macroname="@fromparent")
+    esc(out)
 end

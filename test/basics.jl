@@ -25,6 +25,8 @@ end
     @test asd(3.0) === 4.0
     @test asd("ASD") === "LOL3"
     @test PlutoDevMacros.is_notebook_local() === false
+    lnn = LineNumberNode(1, @__FILE__)
+    @test PlutoDevMacros.is_notebook_local(lnn) === false
 end
 
 options = Configuration.from_flat_kwargs(; disable_writing_notebook_files=true, workspace_use_distributed_stdlib = true)
@@ -40,7 +42,3 @@ eval_in_nb(sn, expr) = WorkspaceManager.eval_fetch_in_workspace(sn, expr)
     end
     SessionActions.shutdown(ss, nb)
 end
-
-html_content = "asd"
-html = html"asd"
-@test hide_this_log(html_content; id = "asd") == hide_this_log(html; id = "asd")

@@ -40,10 +40,6 @@ function process_exprsplitter_item!(p::AbstractEvalController, ex, process_func:
     new_ex = process_func(ex)
     # @info "Change" new_ex
     if !isa(new_ex, RemoveThisExpr) && !p.target_reached
-        # if process_func !== p.custom_walk
-        #     subtype = process_func isa ComposedFunction{typeof(p.custom_walk),<:Any}
-        #     @info "inside mapexpr" new_ex ex process_func p.custom_walk subtype typeof(process_func)
-        # end
         Core.eval(p.current_module, new_ex)
     end
     return
@@ -81,11 +77,15 @@ function try_load_extensions!(p::FromPackageController)
         end
         if nactive === length(triggers)
             entry_path = find_ext_path(p.project, name)
-            # Set the module to the package module
-            p.current_module = get_temp_module(p)
-            # Load the extension module inside the package module
-            process_include_expr!(p, entry_path)
-            push!(p.loaded_extensions, name)
+            # Set the module to the package module parent, which is a temp module in the Pluto workspace
+            p.current_module = get_temp_module(p) |> parentmodule
+            try
+                # Load the extension module inside the package module
+                process_include_expr!(p, entry_path)
+                push!(p.loaded_extensions, name)
+            finally
+                p.current_module = get_temp_module(p)
+            end
         end
     end
 end

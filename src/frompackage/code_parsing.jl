@@ -92,5 +92,6 @@ end
 function handle_extensions_imports(p::FromPackageController, ex::Expr)
     @nospecialize
     @assert Meta.isexpr(ex, (:using, :import)) "You can only call this function with using or import expressions as second argument"
-    return inside_extension(p) ? process_import_statement(p, ex; inside_extension = true) : ex
+    inside_extension(p) || return ex
+    return process_import_statement(p, ex; inside_extension = true)
 end

@@ -94,12 +94,6 @@ body.disable_ui fromparent-container {
 #! format: on
 end
 
-function is_plutodevmacros(p::FromPackageController)
-    @nospecialize
-    (; name, uuid) = p.project
-    return name === "PlutoDevMacros" && uuid === Base.UUID("a0499f29-c39b-4c5c-807c-88074221b949")
-end
-
 function html_reload_button(p::FromPackageController; kwargs...)
     @nospecialize
     (; name) = p.project

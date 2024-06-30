@@ -265,25 +265,52 @@ function beautify_package_path(p::FromPackageController)
     )
 end
 
-function generate_manifest_deps(proj_file::String)
-    envdir = dirname(abspath(proj_file))
-    manifest_file = ""
-    for name in ("Manifest.toml", "JuliaManifest.toml")
-        path = joinpath(envdir, name)
-        if isfile(path)
-            manifest_file = path
-            break
-        end
-    end
-    @assert !isempty(manifest_file) "A manifest could not be found at the project's location.\nYou have to provide an instantiated environment.\nEnvDir: $envdir"
-    d = TOML.parsefile(manifest_file)
-    out = Dict{Base.UUID,String}()
+function populate_manifest_deps!(p::FromPackageController)
+    @nospecialize
+    (;manifest_deps) = p
+    d = TOML.parsefile(get_manifest_file(p))
     for (name, data) in d["deps"]
-        # We use only here because I believe the entry will always contain a single dict wrapped in an array. If we encounter a case where this is not true the only will throw instead of silently taking just the first
+        # We use `only` here because I believe the entry will always contain a single dict wrapped in an array. If we encounter a case where this is not true the only will throw instead of silently taking just the first
         uuid = only(data)["uuid"] |> Base.UUID
-        out[uuid] = name
+        manifest_deps[uuid] = name
     end
-    return out
+    return manifest_deps
+end
+
+# This will extract the path of the manifest file. By default it will error if the manifest can not be found in the env directory, but it can be forced to instantiate/resolve using options
+function get_manifest_file(p::FromPackageController)
+    @nospecialize
+    (; project, options) = p
+    mode = options.manifest
+    proj_file = project.file
+    envdir = dirname(abspath(proj_file))
+    manifest_file = if mode in (:instantiate, :resolve)
+        context_kwargs = options.verbose ? (;) : (; io = devnull)
+        c = Context(;env = EnvCache(proj_file), context_kwargs...)
+        resolve = mode === :resolve
+        if resolve
+            Pkg.resolve(c)
+        else
+            Pkg.instantiate(c; update_registry = false, allow_build = false, allow_autoprecomp = false)
+        end
+        joinpath(envdir, "Manifest.toml")
+    else
+        manifest_file = ""
+        for name in ("Manifest.toml", "JuliaManifest.toml")
+            path = joinpath(envdir, name)
+            if isfile(path)
+                manifest_file = path
+                break
+            end
+        end
+        #! format: off
+        @assert !isempty(manifest_file) "A manifest could not be found at the project's location.
+You have to provide an instantiated environment or set the `manifest` option to `:resolve` or `:instantiate`.
+EnvDir: $envdir"
+        #! format: on
+        manifest_file
+    end
+    return manifest_file
 end
 
 function update_loadpath(p::FromPackageController)

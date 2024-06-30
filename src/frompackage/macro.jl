@@ -17,6 +17,7 @@ function frompackage(ex, target_file, caller_module; macroname, cell_id, extra_a
     p = FromPackageController(target_file, caller_module; cell_id)
     p.cell_id !== nothing || return process_outside_pluto(p, ex)
     parse_options!(p, ex, extra_args)
+    populate_manifest_deps!(p)
     load_module!(p)
     args = extract_input_args(ex)
     for (i, arg) in enumerate(args)

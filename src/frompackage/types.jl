@@ -92,7 +92,7 @@ function FromPackageController(target_path::AbstractString, caller_module::Modul
     @assert project.name !== nothing "@frompackage can only be called with a Package as target.\nThe pointed project does not have `name` and `uuid` fields"
     entry_point = joinpath(dirname(project_file), "src", project.name * ".jl")
     name = project.name
-    manifest_deps = generate_manifest_deps(project_file)
+    manifest_deps = Dict{Base.UUID, String}()
     # We parse the cell_id if string
     cell_id = cell_id isa AbstractString ? (isempty(cell_id) ? nothing : Base.UUID(cell_id)) : cell_id
     p = FromPackageController{Symbol(name)}(;entry_point, manifest_deps, target_path, project, caller_module, cell_id)

@@ -115,6 +115,7 @@ function load_module!(p::FromPackageController{name}; reset=true) where {name}
         m = Core.eval(temp_mod, :(module $name end))
         # We mirror the generated module inside the temp_module module, so we can alwyas access it without having to know the current workspace
         Core.eval(get_temp_module(), :($name = $m))
+        p.options.rootmodule && register_target_as_root(p)
         # We put the controller inside the module
         Core.eval(m, :($(variable_name(p)) = $p))
     end
@@ -185,10 +186,11 @@ function register_target_as_root(p::FromPackageController)
         # Set the uuid of this module with the C API. This is required to get the correct UUID just from the module within `register_root_module`
         ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), m, uuid)
         # Register this module as root
-        Base.with_logger(EMPTY_PIPE) do
+        logger = Logging.current_logger()
+        Logging.with_logger(logger) do
             Base.register_root_module(m)
         end
         # Set the path of the module to the actual package
-        Base.set_pkgorigin_version_path(id, entry_point)
+        Base.set_pkgorigin_version_path(id, p.entry_point)
     end
 end

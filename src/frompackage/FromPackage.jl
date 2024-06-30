@@ -5,6 +5,7 @@ module FromPackage
     import TOML
     using MacroTools: postwalk, flatten, MacroTools, isdef, longdef
     using JuliaInterpreter: ExprSplitter
+    using Logging
 
 
     export @fromparent, @addmethod, @frompackage

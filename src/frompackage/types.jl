@@ -4,9 +4,9 @@ struct RemoveThisExpr end
 
 @kwdef mutable struct FromPackageOptions
     "Specifies whether the target package shall be registered as root module while loading"
-    rootmodule::Bool = false
-    "Flag to specify whether the project should be resolved before loading"
-    resolve::Bool = false
+    rootmodule::Bool = true
+    "Symbol to select whether the target environment should be instantiated or resolved before loading the package"
+    manifest::Symbol = :none
     "Flag to enable verbose logging of FromPackage functions"
     verbose::Bool = false
 end

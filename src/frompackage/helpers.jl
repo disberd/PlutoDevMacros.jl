@@ -450,3 +450,6 @@ function _names(m::Module; only_exported=false, all=!only_exported, imported=!on
         return true
     end
 end
+
+# Check whether the FromPackageController has reached the target file while loading the module
+target_reached(p::FromPackageController) = (@nospecialize; p.target_location !== nothing)

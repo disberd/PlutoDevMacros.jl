@@ -18,7 +18,7 @@ function custom_walk!(p::AbstractEvalController)
 end
 function custom_walk!(p::AbstractEvalController, ex)
     @nospecialize
-    if p.target_reached
+    if target_reached(p)
         return RemoveThisExpr()
     else
         ex isa Expr || return ex

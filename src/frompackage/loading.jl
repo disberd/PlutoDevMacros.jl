@@ -39,7 +39,7 @@ function process_exprsplitter_item!(p::AbstractEvalController, ex, process_func:
     # @info "Original" ex
     new_ex = process_func(ex)
     # @info "Change" new_ex
-    if !isa(new_ex, RemoveThisExpr) && !p.target_reached
+    if !isa(new_ex, RemoveThisExpr) && !target_reached(p)
         Core.eval(p.current_module, new_ex)
     end
     return
@@ -124,13 +124,8 @@ function load_module!(p::FromPackageController{name}; reset=true) where {name}
     end
     # We put the controller in the Ref
     CURRENT_FROMPACKAGE_CONTROLLER[] = p
-    try
-        load_direct_deps(p) # We load the direct dependencies
-        Core.eval(p.current_module, process_include_expr!(p, p.entry_point))
-    finally
-        # We set the target reached to false to avoid skipping expression when loading extensions
-        p.target_reached = false
-    end
+    load_direct_deps(p) # We load the direct dependencies
+    Core.eval(p.current_module, process_include_expr!(p, p.entry_point))
     # Maybe call init
     maybe_call_init(get_temp_module(p))
     # We populate the loaded modules
@@ -161,7 +156,6 @@ function process_include_expr!(p::FromPackageController, mapexpr::Function, path
     filepath = get_filepath(path, caller_path)
     # @info "Custom Including $(basename(filepath))"
     if issamepath(p.target_path, filepath)
-        p.target_reached = true
         p.target_location = p.current_line
         p.target_module = p.current_module
         return nothing

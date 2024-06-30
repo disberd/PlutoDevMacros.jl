@@ -1,4 +1,25 @@
-# New stuff
+function parse_options!(p::FromPackageController, ex::Expr, extra_args)
+    @nospecialize
+    (; options) = p
+    #! format: off
+    error_msg = "The provided extra arguments at the end of the macro call are not in a supported format.
+Each argument should be in the form `option_name = value`, with the following supported option names and types:
+- `rootmodule::Bool`
+- `manifest::Symbol`
+- `verbose::Bool`
+Check the documentations for more details on the options."
+    #! format: on
+    for arg in extra_args
+        Meta.isexpr(arg, :(=)) || error(error_msg)
+        name, val = arg.args
+        typeof(name) in (Symbol, QuoteNode) || error(error_msg)
+        hasfield(FromPackageOptions, name) || error(error_msg)
+        name isa QuoteNode && (name = name.value)
+        val isa fieldtype(FromPackageOptions, name) || error(error_msg)
+        setproperty!(options, name, val)
+    end
+    return nothing
+end
 
 function should_exclude_using_names!(ex::Expr)
     Meta.isexpr(ex, :macrocall) || return false

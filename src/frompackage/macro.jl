@@ -13,9 +13,10 @@ function wrap_parse_error(e)
 end
 
 ## @frompackage
-function frompackage(ex, target_file, caller_module; macroname, cell_id)
+function frompackage(ex, target_file, caller_module; macroname, cell_id, extra_args)
     p = FromPackageController(target_file, caller_module; cell_id)
     p.cell_id !== nothing || return process_outside_pluto(p, ex)
+    parse_options!(p, ex, extra_args)
     load_module!(p)
     args = extract_input_args(ex)
     for (i, arg) in enumerate(args)
@@ -39,7 +40,7 @@ function frompackage(ex, target_file, caller_module; macroname, cell_id)
     return out
 end
 
-function _combined(ex, target, calling_file, caller_module; macroname)
+function _combined(ex, target, calling_file, caller_module; macroname, extra_args)
     # Enforce absolute path to handle different OSs
     calling_file = abspath(calling_file)
     _, cell_id = _cell_data(calling_file)
@@ -47,7 +48,7 @@ function _combined(ex, target, calling_file, caller_module; macroname)
     # Get the target file
     target_file = extract_target_path(target, caller_module; calling_file, notebook_local)
     out = try
-        frompackage(ex, target_file, caller_module; macroname, cell_id)
+        frompackage(ex, target_file, caller_module; macroname, cell_id, extra_args)
     catch e
         # If we are outside of pluto we simply rethrow
         notebook_local || rethrow()
@@ -96,9 +97,9 @@ See the package [documentation](https://disberd.github.io/PlutoDevMacros.jl/dev/
 
 See also: [`@fromparent`](@ref)
 """
-macro frompackage(target::Union{AbstractString,Expr,Symbol}, ex)
+macro frompackage(target::Union{AbstractString,Expr,Symbol}, ex, extra_args...)
     calling_file = String(__source__.file)
-    out = _combined(ex, target, calling_file, __module__; macroname="@frompackage")
+    out = _combined(ex, target, calling_file, __module__; macroname="@frompackage", extra_args)
     esc(out)
 end
 
@@ -117,8 +118,8 @@ Refer to the [`@frompackage`](@ref) docstring and the package
 for understanding its use.
 See also: [`@addmethod`](@ref)
 """
-macro fromparent(ex)
+macro fromparent(ex, extra_args...)
     calling_file = String(__source__.file)
-    out = _combined(ex, calling_file, calling_file, __module__; macroname="@fromparent")
+    out = _combined(ex, calling_file, calling_file, __module__; macroname="@fromparent", extra_args)
     esc(out)
 end

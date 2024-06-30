@@ -1,0 +1,15 @@
+name = "TestInception"
+uuid = "fc02ac8e-9cfc-4b2b-ab03-e2c2c1b89471"
+authors = ["Alberto Mengali <disberd@gmail.com>"]
+version = "0.1.0"
+
+[deps]
+PlotlyExtensionsHelper = "a7e57fc7-3548-4021-90c3-ac0e175068b1"
+
+[weakdeps]
+SimplePlutoInclude = "6f00a2c5-ea4a-46bf-9183-91b7b57a087f"
+Example = "7876af07-990d-54b4-ab0e-23690620f79a"
+
+[extensions]
+"DualExtension" = ["Example", "SimplePlutoInclude"]
+"SingleExtension" = "SimplePlutoInclude"

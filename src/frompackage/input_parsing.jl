@@ -2,7 +2,8 @@ function parse_options!(p::FromPackageController, ex::Expr, extra_args)
     @nospecialize
     (; options) = p
     #! format: off
-    error_msg = "The provided extra arguments at the end of the macro call are not in a supported format.
+    error_msg(arg) = "The provided extra arguments at the end of the macro call are not in a supported format.
+$(arg)
 Each argument should be in the form `option_name = value`, with the following supported option names and types:
 - `rootmodule::Bool`
 - `manifest::Symbol`
@@ -10,12 +11,12 @@ Each argument should be in the form `option_name = value`, with the following su
 Check the documentations for more details on the options."
     #! format: on
     for arg in extra_args
-        Meta.isexpr(arg, :(=)) || error(error_msg)
+        Meta.isexpr(arg, :(=)) || error(error_msg(arg))
         name, val = arg.args
-        typeof(name) in (Symbol, QuoteNode) || error(error_msg)
-        hasfield(FromPackageOptions, name) || error(error_msg)
-        name isa QuoteNode && (name = name.value)
-        val isa fieldtype(FromPackageOptions, name) || error(error_msg)
+        typeof(name) in (Symbol, QuoteNode) || error(error_msg(arg))
+        hasfield(FromPackageOptions, name) || error(error_msg(arg))
+        val isa QuoteNode && (val = val.value)
+        val isa fieldtype(FromPackageOptions, name) || error(error_msg(arg))
         setproperty!(options, name, val)
     end
     return nothing

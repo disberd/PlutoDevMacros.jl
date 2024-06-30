@@ -1,22 +1,15 @@
 
-const default_pkg_io = Ref{IO}(devnull)
-
-const TEMP_MODULE_NAME = if first(fullname(@__MODULE__)) === :Main
-    # We are loading this module from PlutoDevMacros, so we use a dev name
-    :_FromPackage_TempModule_DEV_
-else
-    :_FromPackage_TempModule_
-end
-const EMPTY_PIPE = Pipe()
-const STDLIBS_DATA = Dict{String,Base.UUID}()
-for (uuid, (name, _)) in Pkg.Types.stdlibs()
-    STDLIBS_DATA[name] = uuid
-end
-const PREV_CONTROLLER_NAME = :_Previous_Controller_
-
 # This structure is just a placeholder that is put in place of expressions that are to be removed when parsing a file
 struct RemoveThisExpr end
 
+@kwdef mutable struct FromPackageOptions
+    "Specifies whether the target package shall be registered as root module while loading"
+    rootmodule::Bool = false
+    "Symbol to select whether the target environment should be instantiated or resolved before loading the package"
+    manifest::Symbol = :none
+    "Flag to enable verbose logging of FromPackage functions"
+    verbose::Bool = false
+end
 struct ProjectData
     file::String
     deps::Dict{String, Base.UUID}
@@ -73,8 +66,6 @@ abstract type AbstractEvalController end
     target_location::Union{Nothing,LineNumberNode} = nothing
     "Module of where the target is included if the target is found. Nothing otherwise"
     target_module::Union{Nothing, Module} = nothing
-    "Flag that is set to true when the macro target is found in the code, to skip all the remaining expressions. It is set back to false after loading to allow extension handling."
-    target_reached::Bool = false
     "Custom walk function"
     custom_walk::Function = identity
     "Loaded Extensions"
@@ -83,8 +74,9 @@ abstract type AbstractEvalController end
     imported_names::Set{Symbol} = Set{Symbol}()
     "ID of the cell where the macro was called, nothing if not called from Pluto"
     cell_id::Union{Nothing, Base.UUID} = nothing
+    "Options to customize loading"
+    options::FromPackageOptions = FromPackageOptions()
 end
-const CURRENT_FROMPACKAGE_CONTROLLER = Ref{FromPackageController}()
 
 # Default constructor
 function FromPackageController(target_path::AbstractString, caller_module::Module; cell_id = nothing)
@@ -98,10 +90,9 @@ function FromPackageController(target_path::AbstractString, caller_module::Modul
     @assert project.name !== nothing "@frompackage can only be called with a Package as target.\nThe pointed project does not have `name` and `uuid` fields"
     entry_point = joinpath(dirname(project_file), "src", project.name * ".jl")
     name = project.name
-    manifest_deps = generate_manifest_deps(project_file)
     # We parse the cell_id if string
     cell_id = cell_id isa AbstractString ? (isempty(cell_id) ? nothing : Base.UUID(cell_id)) : cell_id
-    p = FromPackageController{Symbol(name)}(;entry_point, manifest_deps, target_path, project, caller_module, cell_id)
+    p = FromPackageController{Symbol(name)}(;entry_point, target_path, project, caller_module, cell_id)
     p.custom_walk = custom_walk!(p)
     return p
 end

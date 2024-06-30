@@ -51,71 +51,93 @@ end
 
 ## HTML Popup
 
-_popup_style(id) = """
-	fromparent-container {
-	    height: 20px;
-	    position: fixed;
-	    top: 40px;
-		right: 10px;
-	    margin-top: 5px;
-	    padding-right: 5px;
-	    z-index: 200;
-		background: var(--overlay-button-bg);
-	    padding: 5px 8px;
-	    border: 3px solid var(--overlay-button-border);
-	    border-radius: 12px;
-	    height: 35px;
-	    font-family: "Segoe UI Emoji", "Roboto Mono", monospace;
-	    font-size: 0.75rem;
-	}
-	fromparent-container.errored {
-		border-color: var(--error-cell-color)
-	}
-	fromparent-container:hover {
-	    font-weight: 800;
-		cursor: pointer;
-	}
-	body.disable_ui fromparent-container {
-		display: none;
-	}
-	pluto-log-dot-positioner[hidden] {
-		display: none;
-	}
+function _popup_style()
+#! format: off
 """
+fromparent-container {
+  height: 20px;
+  position: fixed;
+  top: 40px;
+  right: 10px;
+  margin-top: 5px;
+  padding-right: 5px;
+  z-index: 200;
+  background: var(--overlay-button-bg);
+  padding: 5px 8px;
+  border: 3px solid var(--overlay-button-border);
+  border-radius: 12px;
+  height: 35px;
+  font-family: "Segoe UI Emoji", "Roboto Mono", monospace;
+  font-size: 0.75rem;
+  visibility: visible;
+}
 
-function html_reload_button(p::FromPackageController; text)
+fromparent-container.PlutoDevMacros {
+  right: auto;
+  left: 10px;
+}
+fromparent-container.PlutoDevMacros:before {
+  content: "Reload PlutoDevMacros"
+}
+
+fromparent-container.errored {
+  border-color: var(--error-cell-color);
+}
+fromparent-container:hover {
+  font-weight: 800;
+  cursor: pointer;
+}
+body.disable_ui fromparent-container {
+  display: none;
+}
+"""
+#! format: on
+end
+
+function html_reload_button(p::FromPackageController; kwargs...)
     @nospecialize
+    (; name) = p.project
     simple_html_cat(
         beautify_package_path(p),
-        html_reload_button(p.cell_id; text)
+        html_reload_button(p.cell_id; name, kwargs...),
     )
 end
-function html_reload_button(cell_id; text="Reload @frompackage", err=false)
+function html_reload_button(cell_id; name="@frompackage", err=false)
     id = string(cell_id)
-    style_content = _popup_style(id)
-    html_content = """
-    <script id='html_reload_button'>
-    		const container = document.querySelector('fromparent-container') ?? document.body.appendChild(html`<fromparent-container>`)
-    		container.innerHTML = '$text'
-    		// We set the errored state
-    		container.classList.toggle('errored', $err)
-    		const style = container.querySelector('style') ?? container.appendChild(html`<style>`)
-    		style.innerHTML = `$(style_content)`
-    		const cell = document.getElementById('$id')
-    		const actions = cell._internal_pluto_actions
-    		container.onclick = (e) => {
-    			if (e.ctrlKey) {
-    				history.pushState({},'')			
-    				cell.scrollIntoView({
-    					behavior: 'auto',
-    					block: 'center',				
-    				})
-    			} else {
-    				actions.set_and_run_multiple(['$id'])
-    			}
-    		}
-    </script>
+    text_content = "Reload $name"
+    style_content = _popup_style()
+    #! format: off
+    # We add the text content based on the package name
+    style_content *= """
+fromparent-container:before {
+  content: '$text_content';
+}
     """
+    html_content = """
+<script id='html_reload_button'>
+  const container = html`<fromparent-container class='$name'>`
+  // We set the errored state
+  container.classList.toggle('errored', $err)
+  const style = container.appendChild(html`<style>`)
+  style.innerHTML = `$(style_content)`
+  const cell = document.getElementById('$id')
+  const actions = cell._internal_pluto_actions
+  container.onclick = (e) => {
+    if (e.ctrlKey) {
+      history.pushState({}, '')
+      cell.scrollIntoView({
+        behavior: 'auto',
+        block: 'center',
+      })
+    } else {
+      actions.set_and_run_multiple(['$id'])
+    }
+  }
+
+  return container
+</script>
+    """
+    #! format: on
     # We make an HTML object combining this content and the hide_this_log functionality
     return hide_this_log(html_content)
 end
@@ -243,31 +265,68 @@ function beautify_package_path(p::FromPackageController)
     )
 end
 
-function generate_manifest_deps(proj_file::String)
-    envdir = dirname(abspath(proj_file))
-    manifest_file = ""
-    for name in ("Manifest.toml", "JuliaManifest.toml")
-        path = joinpath(envdir, name)
-        if isfile(path)
-            manifest_file = path
-            break
-        end
-    end
-    @assert !isempty(manifest_file) "A manifest could not be found at the project's location.\nYou have to provide an instantiated environment.\nEnvDir: $envdir"
-    d = TOML.parsefile(manifest_file)
-    out = Dict{Base.UUID,String}()
+function populate_manifest_deps!(p::FromPackageController)
+    @nospecialize
+    (;manifest_deps) = p
+    d = TOML.parsefile(get_manifest_file(p))
     for (name, data) in d["deps"]
-        # We use only here because I believe the entry will always contain a single dict wrapped in an array. If we encounter a case where this is not true the only will throw instead of silently taking just the first
+        # We use `only` here because I believe the entry will always contain a single dict wrapped in an array. If we encounter a case where this is not true the only will throw instead of silently taking just the first
         uuid = only(data)["uuid"] |> Base.UUID
-        out[uuid] = name
+        manifest_deps[uuid] = name
     end
-    return out
+    return manifest_deps
+end
+
+# This will extract the path of the manifest file. By default it will error if the manifest can not be found in the env directory, but it can be forced to instantiate/resolve using options
+function get_manifest_file(p::FromPackageController)
+    @nospecialize
+    (; project, options) = p
+    mode = options.manifest
+    proj_file = project.file
+    envdir = dirname(abspath(proj_file))
+    manifest_file = if mode in (:instantiate, :resolve)
+        context_kwargs = options.verbose ? (;) : (; io = devnull)
+        c = Context(;env = EnvCache(proj_file), context_kwargs...)
+        resolve = mode === :resolve
+        if resolve
+            Pkg.resolve(c)
+        else
+            Pkg.instantiate(c; update_registry = false, allow_build = false, allow_autoprecomp = false)
+        end
+        joinpath(envdir, "Manifest.toml")
+    else
+        manifest_file = ""
+        for name in ("Manifest.toml", "JuliaManifest.toml")
+            path = joinpath(envdir, name)
+            if isfile(path)
+                manifest_file = path
+                break
+            end
+        end
+        #! format: off
+        @assert !isempty(manifest_file) "A manifest could not be found at the project's location.
+You have to provide an instantiated environment or set the `manifest` option to `:resolve` or `:instantiate`.
+EnvDir: $envdir"
+        #! format: on
+        manifest_file
+    end
+    return manifest_file
 end
 
 function update_loadpath(p::FromPackageController)
     @nospecialize
+    (; verbose) = p.options
     proj_file = p.project.file
+    if isassigned(CURRENT_FROMPACKAGE_CONTROLLER)
+        prev_proj = CURRENT_FROMPACKAGE_CONTROLLER[].project.file
+        prev_idx = findfirst(==(prev_proj), LOAD_PATH)
+        if !isnothing(prev_idx) && prev_proj !== proj_file
+            verbose && @info "Deleting $prev_proj from LOAD_PATH"
+            deleteat!(LOAD_PATH, prev_idx)
+        end
+    end
     if proj_file ∉ LOAD_PATH
+        verbose && @info "Adding $proj_file to end of LOAD_PATH"
         push!(LOAD_PATH, proj_file)
     end
 end
@@ -315,7 +374,7 @@ end
 get_loaded_modules_mod() = get_temp_module(:_LoadedModules_)::Module
 get_direct_deps_mod() = get_temp_module(:_DirectDeps_)::Module
 
-function populate_loaded_modules()
+function populate_loaded_modules(; verbose=false)
     loaded_modules = get_loaded_modules_mod()
     @lock Base.require_lock begin
         for (id, m) in Base.loaded_modules
@@ -326,15 +385,17 @@ function populate_loaded_modules()
     end
     callbacks = Base.package_callbacks
     if mirror_package_callback ∉ callbacks
-        # # We just make sure to delete previous instances of the package callbacks when reloading this package itself
-        # for i in reverse(eachindex(callbacks))
-        #     f = callbacks[i]
-        #     nameof(f) === :mirror_package_callback || continue
-        #     nameof(parentmodule(f)) === nameof(@__MODULE__) || continue
-        #     # We delete this as it's a previous version of the mirror_package_callback function
-        #     @warn "Deleting previous version of package_callback function"
-        #     deleteat!(callbacks, i)
-        # end
+        for i in reverse(eachindex(callbacks))
+            # This part is only useful when developing this package itself
+            f = callbacks[i]
+            nameof(f) === :mirror_package_callback || continue
+            owner = parentmodule(f)
+            nameof(owner) === nameof(@__MODULE__) || continue
+            isdefined(owner, :IS_DEV) && owner.IS_DEV || continue
+            # We delete this as it's a previous version of the mirror_package_callback function
+            verbose && @warn "Deleting previous version of package_callback function"
+            deleteat!(callbacks, i)
+        end
         # Add the package callback if not already present
         push!(callbacks, mirror_package_callback)
     end
@@ -389,3 +450,6 @@ function _names(m::Module; only_exported=false, all=!only_exported, imported=!on
         return true
     end
 end
+
+# Check whether the FromPackageController has reached the target file while loading the module
+target_reached(p::FromPackageController) = (@nospecialize; p.target_location !== nothing)

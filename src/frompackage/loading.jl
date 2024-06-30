@@ -39,11 +39,7 @@ function process_exprsplitter_item!(p::AbstractEvalController, ex, process_func:
     # @info "Original" ex
     new_ex = process_func(ex)
     # @info "Change" new_ex
-    if !isa(new_ex, RemoveThisExpr) && !p.target_reached
-        # if process_func !== p.custom_walk
-        #     subtype = process_func isa ComposedFunction{typeof(p.custom_walk),<:Any}
-        #     @info "inside mapexpr" new_ex ex process_func p.custom_walk subtype typeof(process_func)
-        # end
+    if !isa(new_ex, RemoveThisExpr) && !target_reached(p)
         Core.eval(p.current_module, new_ex)
     end
     return
@@ -70,6 +66,8 @@ function try_load_extensions!(p::FromPackageController)
     @nospecialize
     loaded_modules = get_loaded_modules_mod()
     (; extensions, deps, weakdeps) = p.project
+    package_name = p.project.name
+    (; options) = p
     for (name, triggers) in extensions
         name in p.loaded_extensions && continue
         nactive = 0
@@ -80,12 +78,17 @@ function try_load_extensions!(p::FromPackageController)
             nactive += is_loaded
         end
         if nactive === length(triggers)
+            options.verbose && @info "Loading code of extension $name for package $package_name"
             entry_path = find_ext_path(p.project, name)
-            # Set the module to the package module
-            p.current_module = get_temp_module(p)
-            # Load the extension module inside the package module
-            process_include_expr!(p, entry_path)
-            push!(p.loaded_extensions, name)
+            # Set the module to the package module parent, which is a temp module in the Pluto workspace
+            p.current_module = get_temp_module(p) |> parentmodule
+            try
+                # Load the extension module inside the package module
+                process_include_expr!(p, entry_path)
+                push!(p.loaded_extensions, name)
+            finally
+                p.current_module = get_temp_module(p)
+            end
         end
     end
 end
@@ -115,22 +118,19 @@ function load_module!(p::FromPackageController{name}; reset=true) where {name}
         m = Core.eval(temp_mod, :(module $name end))
         # We mirror the generated module inside the temp_module module, so we can alwyas access it without having to know the current workspace
         Core.eval(get_temp_module(), :($name = $m))
+        p.options.rootmodule && register_target_as_root(p)
         # We put the controller inside the module
         Core.eval(m, :($(variable_name(p)) = $p))
     end
     # We put the controller in the Ref
     CURRENT_FROMPACKAGE_CONTROLLER[] = p
-    try
-        load_direct_deps(p) # We load the direct dependencies
-        Core.eval(p.current_module, process_include_expr!(p, p.entry_point))
-    finally
-        # We set the target reached to false to avoid skipping expression when loading extensions
-        p.target_reached = false
-    end
+    load_direct_deps(p) # We load the direct dependencies
+    Core.eval(p.current_module, process_include_expr!(p, p.entry_point))
     # Maybe call init
     maybe_call_init(get_temp_module(p))
     # We populate the loaded modules
-    populate_loaded_modules()
+    (; verbose) = p.options
+    populate_loaded_modules(;verbose)
     # Try loading extensions
     try_load_extensions!(p)
     return p
@@ -156,7 +156,6 @@ function process_include_expr!(p::FromPackageController, mapexpr::Function, path
     filepath = get_filepath(path, caller_path)
     # @info "Custom Including $(basename(filepath))"
     if issamepath(p.target_path, filepath)
-        p.target_reached = true
         p.target_location = p.current_line
         p.target_module = p.current_module
         return nothing
@@ -171,4 +170,25 @@ function process_include_expr!(p::FromPackageController, mapexpr::Function, path
     ast = extract_file_ast(filepath)
     split_and_execute!(p, ast, f)
     return nothing
+end
+
+# This function will register the module of the target package as a root module.
+# This relies on Base internals (and even the C API) so it's disable by default but will allow make the loaded module behave more like if we simply did `using TargetPackage` without the macro
+function register_target_as_root(p::FromPackageController)
+    @nospecialize
+    (;name, uuid) = p.project
+    m = get_temp_module(p)
+    id = Base.PkgId(uuid, name)
+    (; verbose) = p.options
+    @lock Base.require_lock begin
+        # Set the uuid of this module with the C API. This is required to get the correct UUID just from the module within `register_root_module`
+        ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), m, uuid)
+        # Register this module as root
+        logger = verbose ? Logging.current_logger() : Logging.NullLogger()
+        Logging.with_logger(logger) do
+            Base.register_root_module(m)
+        end
+        # Set the path of the module to the actual package
+        Base.set_pkgorigin_version_path(id, p.entry_point)
+    end
 end

@@ -35,3 +35,10 @@ function instantiate_from_path(path::AbstractString; resolve = true)
     resolve && Pkg.resolve(c)
     Pkg.instantiate(c; update_registry = false, allow_build = false, allow_autoprecomp = false)
 end
+
+function delete_manifest(path::AbstractString)
+    envdir = dirname(Base.current_project(path))
+    manifest_file = joinpath(envdir, "Manifest.toml")
+    isfile(manifest_file) && rm(manifest_file)
+    return nothing
+end

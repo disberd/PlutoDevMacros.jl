@@ -52,10 +52,8 @@ function _combined(ex, target, calling_file, caller_module; macroname)
         # If we are outside of pluto we simply rethrow
         notebook_local || rethrow()
         out = Expr(:block)
-        if !(e isa ErrorException && startswith(e.msg, "Multiple Calls: The"))
-            # We send a log to maintain the reload button
-            @info html_reload_button(cell_id; name = macroname, err=true)
-        end
+        # We send a log to maintain the reload button
+        @info html_reload_button(cell_id; name = macroname, err=true)
         # Wrap ParseError in LoadError (see https://github.com/disberd/PlutoDevMacros.jl/issues/30)
         we = wrap_parse_error(e)
         bt = stacktrace(catch_backtrace())

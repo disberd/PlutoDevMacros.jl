@@ -69,6 +69,7 @@ fromparent-container {
   height: 35px;
   font-family: "Segoe UI Emoji", "Roboto Mono", monospace;
   font-size: 0.75rem;
+  visibility: visible;
 }
 
 fromparent-container.PlutoDevMacros {
@@ -87,9 +88,6 @@ fromparent-container:hover {
   cursor: pointer;
 }
 body.disable_ui fromparent-container {
-  display: none;
-}
-pluto-log-dot-positioner[hidden] {
   display: none;
 }
 """

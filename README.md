@@ -7,7 +7,7 @@
 [![Aqua QA](https://raw.githubusercontent.com/JuliaTesting/Aqua.jl/master/badge.svg)](https://github.com/JuliaTesting/Aqua.jl)
 
 > [!WARNING]
-> This package is currently undergoing a significant refactoring, the documentation is still outdated and will be updated (together with the README) once the code is stabilized
+> This package is currently undergoing a significant refactoring, the documentation is still outdated and will be updated (together with the README) once the code is stabilized. For the time being, you can check the presentation I gave at JuliaCon2024 [here](https://youtu.be/Zd33ePxEavc?t=8628) and the corresponding slides [in this repo](https://github.com/disberd/JuliaCon2024)
 
 This is a package containing macros/functions to help develop Packages using [Pluto](https://github.com/fonsp/Pluto.jl) notebooks testing/prototyping aids.
 

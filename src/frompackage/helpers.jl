@@ -267,7 +267,7 @@ end
 
 function populate_manifest_deps!(p::FromPackageController)
     @nospecialize
-    (;manifest_deps) = p
+    (; manifest_deps) = p
     d = TOML.parsefile(get_manifest_file(p))
     for (name, data) in d["deps"]
         # We use `only` here because I believe the entry will always contain a single dict wrapped in an array. If we encounter a case where this is not true the only will throw instead of silently taking just the first
@@ -285,13 +285,13 @@ function get_manifest_file(p::FromPackageController)
     proj_file = project.file
     envdir = dirname(abspath(proj_file))
     manifest_file = if mode in (:instantiate, :resolve)
-        context_kwargs = options.verbose ? (;) : (; io = devnull)
-        c = Context(;env = EnvCache(proj_file), context_kwargs...)
+        context_kwargs = options.verbose ? (;) : (; io=devnull)
+        c = Context(; env=EnvCache(proj_file), context_kwargs...)
         resolve = mode === :resolve
         if resolve
             Pkg.resolve(c)
         else
-            Pkg.instantiate(c; update_registry = false, allow_build = false, allow_autoprecomp = false)
+            Pkg.instantiate(c; update_registry=false, allow_build=false, allow_autoprecomp=false)
         end
         joinpath(envdir, "Manifest.toml")
     else
@@ -338,8 +338,8 @@ function extract_nested_module(starting_module::Module, nested_path; first_dot_s
         m = if name === :.
             first_dot_skipped ? parentmodule(m) : m
         else
-            @assert isdefined(m, name) "The module `$name` could not be found inside parent module `$(nameof(m))`"
-            getproperty(m, name)::Module
+            @assert invokelatest(isdefined, m, name) "The module `$name` could not be found inside parent module `$(nameof(m))`"
+            invokelatest(getproperty, m, name)::Module
         end
         first_dot_skipped = true
     end
@@ -351,20 +351,24 @@ unique_module_name(m::Module) = Symbol(Base.PkgId(m))
 unique_module_name(uuid::Base.UUID, name::AbstractString) = Symbol(Base.PkgId(uuid, name))
 
 function get_temp_module()
-    if isdefined(Main, TEMP_MODULE_NAME)
-        getproperty(Main, TEMP_MODULE_NAME)::Module
-    else
-        Core.eval(Main, :(module $TEMP_MODULE_NAME
-        module _LoadedModules_ end
-        module _DirectDeps_ end
-        end))::Module
+    invokelatest() do
+        if isdefined(Main, TEMP_MODULE_NAME)
+            getproperty(Main, TEMP_MODULE_NAME)::Module
+        else
+            Core.eval(Main, :(module $TEMP_MODULE_NAME
+            module _LoadedModules_ end
+            module _DirectDeps_ end
+            end))::Module
+        end
     end
 end
 get_temp_module(s::Symbol) = get_temp_module([s])
 function get_temp_module(names::Vector{Symbol})
-    temp = get_temp_module()
-    out = extract_nested_module(temp, names)::Module
-    return out
+    invokelatest(names) do names
+        temp = get_temp_module()
+        out = extract_nested_module(temp, names)::Module
+        return out
+    end
 end
 function get_temp_module(::FromPackageController{name}) where {name}
     @nospecialize
@@ -375,29 +379,31 @@ get_loaded_modules_mod() = get_temp_module(:_LoadedModules_)::Module
 get_direct_deps_mod() = get_temp_module(:_DirectDeps_)::Module
 
 function populate_loaded_modules(; verbose=false)
-    loaded_modules = get_loaded_modules_mod()
-    @lock Base.require_lock begin
-        for (id, m) in Base.loaded_modules
-            name = Symbol(id)
-            isdefined(loaded_modules, name) && continue
-            Core.eval(loaded_modules, :(const $name = $m))
+    invokelatest() do
+        loaded_modules = get_loaded_modules_mod()
+        @lock Base.require_lock begin
+            for (id, m) in Base.loaded_modules
+                name = Symbol(id)
+                isdefined(loaded_modules, name) && continue
+                Core.eval(loaded_modules, :(const $name = $m))
+            end
         end
-    end
-    callbacks = Base.package_callbacks
-    if mirror_package_callback ∉ callbacks
-        for i in reverse(eachindex(callbacks))
-            # This part is only useful when developing this package itself
-            f = callbacks[i]
-            nameof(f) === :mirror_package_callback || continue
-            owner = parentmodule(f)
-            nameof(owner) === nameof(@__MODULE__) || continue
-            isdefined(owner, :IS_DEV) && owner.IS_DEV || continue
-            # We delete this as it's a previous version of the mirror_package_callback function
-            verbose && @warn "Deleting previous version of package_callback function"
-            deleteat!(callbacks, i)
+        callbacks = Base.package_callbacks
+        if mirror_package_callback ∉ callbacks
+            for i in reverse(eachindex(callbacks))
+                # This part is only useful when developing this package itself
+                f = callbacks[i]
+                nameof(f) === :mirror_package_callback || continue
+                owner = parentmodule(f)
+                nameof(owner) === nameof(@__MODULE__) || continue
+                isdefined(owner, :IS_DEV) && owner.IS_DEV || continue
+                # We delete this as it's a previous version of the mirror_package_callback function
+                verbose && @warn "Deleting previous version of package_callback function"
+                deleteat!(callbacks, i)
+            end
+            # Add the package callback if not already present
+            push!(callbacks, mirror_package_callback)
         end
-        # Add the package callback if not already present
-        push!(callbacks, mirror_package_callback)
     end
 end
 

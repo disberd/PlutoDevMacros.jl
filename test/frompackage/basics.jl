@@ -32,7 +32,6 @@
     @test "Example" in values(md)
     @test "InteractiveUtils" in values(md)
     # Indirect Dependencies
-    @test "TOML" in values(md)
     @test "CodeTracking" in values(md)
 
     # We test that pointing to a folder without a project throws

@@ -1,12 +1,14 @@
 function maybe_call_init(m::Module)
-    # Check if it exists
-    isdefined(m, :__init__) || return nothing
-    # Check if it's owned by this module
-    which(m, :__init__) === m || return nothing
-    f = getproperty(m, :__init__)
-    # Verify that is a function
-    f isa Function || return nothing
-    Core.eval(m, :(__init__()))
+    invokelatest() do 
+        # Check if it exists
+        isdefined(m, :__init__) || return nothing
+        # Check if it's owned by this module
+        which(m, :__init__) === m || return nothing
+        f = getproperty(m, :__init__)
+        # Verify that is a function
+        f isa Function || return nothing
+        Core.eval(m, :(__init__()))
+    end
     return nothing
 end
 

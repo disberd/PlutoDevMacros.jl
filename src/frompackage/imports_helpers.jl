@@ -156,7 +156,7 @@ end
 # This function will include all the names of the module as explicit imports in the import statement. It will modify the provided mwn in place and unless usings are excluded, it will also add all the using statements being parsed while evaluating the target module
 function catchall_import_expression!(mwn::ModuleWithNames, p::FromPackageController, m::Module; exclude_usings::Bool)
     @nospecialize
-    mwn.imported = filterednames(p, m) .|> ImportAs
+    mwn.imported = invokelatest(filterednames, p, m) .|> ImportAs
     ex = reconstruct_import_statement(mwn; head=:import)
     # If we exclude using, we simply return the expression
     exclude_usings && return ex

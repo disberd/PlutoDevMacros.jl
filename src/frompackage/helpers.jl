@@ -177,11 +177,7 @@ function _fullname(m::Module)
     rootname = first(ref)
     rootname === :Main && return ref # This is already fine
     temp_mod = get_temp_module()
-    invokelatest(isdefined, temp_mod, rootname) && return prepend!(ref, fullname(temp_mod))
-    loaded_mod = get_loaded_modules_mod()
-    invokelatest(isdefined, loaded_mod, rootname) && return prepend!(ref, fullname(loaded_mod))
-    # If we get here, we try looking into the loaded dependencies module
-    return ref
+    return invokelatest(isdefined, temp_mod, rootname) ? prepend!(ref, fullname(temp_mod)) : ref
 end
 
 function beautify_package_path(p::FromPackageController)

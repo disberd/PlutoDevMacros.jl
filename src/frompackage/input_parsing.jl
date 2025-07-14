@@ -36,9 +36,14 @@ end
 
 # This function will parse the input expression and eventually
 function process_input_expr(p::FromPackageController, ex)
-    # Eventually remove `@exclude_using`
-    exclude_usings = should_exclude_using_names!(ex)
-    return process_import_statement(p, ex; exclude_usings, inner=false)
+    try
+        # Eventually remove `@exclude_using`
+        exclude_usings = should_exclude_using_names!(ex)
+        return process_import_statement(p, ex; exclude_usings, inner=false)
+    catch
+        @error "Error processing input expression" ex
+        rethrow()
+    end
 end
 
 function excluded_names(p::FromPackageController)

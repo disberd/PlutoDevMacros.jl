@@ -49,7 +49,7 @@ end
 
 ## Misc ##
 # Returns the name (as Symbol) of the variable where the controller will be stored within the generated module
-variable_name(p::FromPackageController) = (@nospecialize; :_frompackage_controller_)
+variable_name(p::FromPackageController) = (@nospecialize; return :_frompackage_controller_)
 
 # This is a callback to add any new loaded package to the Main._FromPackage_TempModule_._LoadedModules_ module
 function mirror_package_callback(modkey::Base.PkgId)
@@ -190,9 +190,7 @@ function register_target_as_root(p::FromPackageController)
     @lock Base.require_lock begin
         # Set the uuid of this module with the C API. This is required to get the correct UUID just from the module within `register_root_module`
         ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), m, uuid)
-        @static if VERSION >= v"1.11.99" # We need to also set the module as parent of itself in 1.12
-            ccall(:jl_set_module_parent, Cvoid, (Any, Any), m, m) 
-        end
+        VERSION > v"1.11.99" && ccall(:jl_set_module_parent, Cvoid, (Any, Any), m, m) # We need to also set the module as parent of itself in 1.12
         # Register this module as root
         logger = verbose ? Logging.current_logger() : Logging.NullLogger()
         Logging.with_logger(logger) do

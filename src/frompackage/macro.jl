@@ -22,12 +22,7 @@ function frompackage(ex, target_file, caller_module; macroname, cell_id, extra_a
     args = extract_input_args(ex)
     for (i, arg) in enumerate(args)
         arg isa Expr || continue
-        args[i] = try
-            process_input_expr(p, arg)
-        catch
-            @error "Error processing input expression" ex
-            rethrow()
-        end
+        args[i] = process_input_expr(p, arg)
     end
     text = "Reload $macroname"
     out = quote

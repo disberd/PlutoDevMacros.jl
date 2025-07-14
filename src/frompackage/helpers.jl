@@ -53,7 +53,7 @@ end
 
 function _popup_style()
 #! format: off
-"""
+return """
 fromparent-container {
   height: 20px;
   position: fixed;
@@ -171,9 +171,19 @@ function extract_target_path(ex, caller_module::Module; calling_file, notebook_l
     return path
 end
 
+# Mostly like fullname, but for modules we generated we always have the path from Main
+function _fullname(m::Module)
+    ref = fullname(m) |> collect
+    rootname = first(ref)
+    rootname === :Main && return ref # This is already fine
+    temp_mod = get_temp_module()
+    return invokelatest(isdefined, temp_mod, rootname) ? prepend!(ref, fullname(temp_mod)) : ref
+end
+
 function beautify_package_path(p::FromPackageController)
     @nospecialize
     modpath..., name = fullname(get_temp_module(p))
+    isempty(modpath) && return "" # If the module was loaded as roootmodule, on 1.12 it also becomes it's own parent so we don't have modpath
     modpath = map(enumerate(modpath)) do (i, s)
         Base.isgensym(s) || return String(s)
         return "var\"$s\""
@@ -267,7 +277,7 @@ end
 
 function populate_manifest_deps!(p::FromPackageController)
     @nospecialize
-    (;manifest_deps) = p
+    (; manifest_deps) = p
     d = TOML.parsefile(get_manifest_file(p))
     for (name, data) in d["deps"]
         # We use `only` here because I believe the entry will always contain a single dict wrapped in an array. If we encounter a case where this is not true the only will throw instead of silently taking just the first
@@ -285,13 +295,15 @@ function get_manifest_file(p::FromPackageController)
     proj_file = project.file
     envdir = dirname(abspath(proj_file))
     manifest_file = if mode in (:instantiate, :resolve)
-        context_kwargs = options.verbose ? (;) : (; io = devnull)
-        c = Context(;env = EnvCache(proj_file), context_kwargs...)
+        context_kwargs = options.verbose ? (;) : (; io=devnull)
+        c = Context(; env=EnvCache(proj_file), context_kwargs...)
         resolve = mode === :resolve
         if resolve
+            options.verbose && @info "Resolving Manifest as explicitly requested"
             Pkg.resolve(c)
         else
-            Pkg.instantiate(c; update_registry = false, allow_build = false, allow_autoprecomp = false)
+            options.verbose && @info "Instantiating Manifest as explicitly requested"
+            Pkg.instantiate(c; update_registry=false, allow_build=false, allow_autoprecomp=false)
         end
         joinpath(envdir, "Manifest.toml")
     else
@@ -338,8 +350,8 @@ function extract_nested_module(starting_module::Module, nested_path; first_dot_s
         m = if name === :.
             first_dot_skipped ? parentmodule(m) : m
         else
-            @assert isdefined(m, name) "The module `$name` could not be found inside parent module `$(nameof(m))`"
-            getproperty(m, name)::Module
+            @assert invokelatest(isdefined, m, name) "The module `$name` could not be found inside parent module `$(nameof(m))`"
+            invokelatest(getproperty, m, name)::Module
         end
         first_dot_skipped = true
     end
@@ -351,20 +363,24 @@ unique_module_name(m::Module) = Symbol(Base.PkgId(m))
 unique_module_name(uuid::Base.UUID, name::AbstractString) = Symbol(Base.PkgId(uuid, name))
 
 function get_temp_module()
-    if isdefined(Main, TEMP_MODULE_NAME)
-        getproperty(Main, TEMP_MODULE_NAME)::Module
-    else
-        Core.eval(Main, :(module $TEMP_MODULE_NAME
-        module _LoadedModules_ end
-        module _DirectDeps_ end
-        end))::Module
+    invokelatest() do
+        if isdefined(Main, TEMP_MODULE_NAME)
+            getproperty(Main, TEMP_MODULE_NAME)::Module
+        else
+            Core.eval(Main, :(module $TEMP_MODULE_NAME
+            module _LoadedModules_ end
+            module _DirectDeps_ end
+            end))::Module
+        end
     end
 end
 get_temp_module(s::Symbol) = get_temp_module([s])
 function get_temp_module(names::Vector{Symbol})
-    temp = get_temp_module()
-    out = extract_nested_module(temp, names)::Module
-    return out
+    invokelatest(names) do names
+        temp = get_temp_module()
+        out = extract_nested_module(temp, names)::Module
+        return out
+    end
 end
 function get_temp_module(::FromPackageController{name}) where {name}
     @nospecialize
@@ -374,30 +390,36 @@ end
 get_loaded_modules_mod() = get_temp_module(:_LoadedModules_)::Module
 get_direct_deps_mod() = get_temp_module(:_DirectDeps_)::Module
 
-function populate_loaded_modules(; verbose=false)
-    loaded_modules = get_loaded_modules_mod()
-    @lock Base.require_lock begin
-        for (id, m) in Base.loaded_modules
-            name = Symbol(id)
-            isdefined(loaded_modules, name) && continue
-            Core.eval(loaded_modules, :(const $name = $m))
+function populate_loaded_modules(p::Union{FromPackageController, Nothing} = nothing; verbose=false)
+    invokelatest() do
+        loaded_modules = get_loaded_modules_mod()
+        @lock Base.require_lock begin
+            for (id, m) in Base.loaded_modules
+                # We check and eventually skip the target package from the loaded modules
+                if p isa FromPackageController
+                    p.project.name == id.name && p.project.uuid == id.uuid && continue
+                end
+                name = Symbol(id)
+                isdefined(loaded_modules, name) && continue
+                Core.eval(loaded_modules, :(const $name = $m))
+            end
         end
-    end
-    callbacks = Base.package_callbacks
-    if mirror_package_callback ∉ callbacks
-        for i in reverse(eachindex(callbacks))
-            # This part is only useful when developing this package itself
-            f = callbacks[i]
-            nameof(f) === :mirror_package_callback || continue
-            owner = parentmodule(f)
-            nameof(owner) === nameof(@__MODULE__) || continue
-            isdefined(owner, :IS_DEV) && owner.IS_DEV || continue
-            # We delete this as it's a previous version of the mirror_package_callback function
-            verbose && @warn "Deleting previous version of package_callback function"
-            deleteat!(callbacks, i)
+        callbacks = Base.package_callbacks
+        if mirror_package_callback ∉ callbacks
+            for i in reverse(eachindex(callbacks))
+                # This part is only useful when developing this package itself
+                f = callbacks[i]
+                nameof(f) === :mirror_package_callback || continue
+                owner = parentmodule(f)
+                nameof(owner) === nameof(@__MODULE__) || continue
+                isdefined(owner, :IS_DEV) && owner.IS_DEV || continue
+                # We delete this as it's a previous version of the mirror_package_callback function
+                verbose && @warn "Deleting previous version of package_callback function"
+                deleteat!(callbacks, i)
+            end
+            # Add the package callback if not already present
+            push!(callbacks, mirror_package_callback)
         end
-        # Add the package callback if not already present
-        push!(callbacks, mirror_package_callback)
     end
 end
 
@@ -405,7 +427,7 @@ end
 function get_dep_from_loaded_modules(key::Symbol)
     loaded_modules = get_loaded_modules_mod()
     isdefined(loaded_modules, key) || error("The module $key can not be found in the loaded modules.")
-    m = getproperty(loaded_modules, key)::Module
+    m = invokelatest(getproperty, loaded_modules, key)::Module
     return m
 end
 # This is internally calls the previous function, allowing to control which packages can be loaded (by default only direct dependencies and stdlibs are allowed)
@@ -443,10 +465,10 @@ end
 
 # Basically Base.names but ignores names that are not defined in the module and allows to restrict to only exported names (since 1.11 added also public names as out of names). It also defaults `all` and `imported` to true (to be more precise, to the opposite of `only_exported`)
 function _names(m::Module; only_exported=false, all=!only_exported, imported=!only_exported, kwargs...)
-    mod_names = names(m; all, imported, kwargs...)
+    mod_names = invokelatest(names, m; all, imported, kwargs...)
     filter!(mod_names) do nm
-        isdefined(m, nm) || return false
-        only_exported && return Base.isexported(m, nm)
+        invokelatest(isdefined, m, nm) || return false
+        only_exported && return invokelatest(Base.isexported, m, nm)
         return true
     end
 end

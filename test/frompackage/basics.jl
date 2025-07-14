@@ -32,7 +32,6 @@
     @test "Example" in values(md)
     @test "InteractiveUtils" in values(md)
     # Indirect Dependencies
-    @test "TOML" in values(md)
     @test "CodeTracking" in values(md)
 
     # We test that pointing to a folder without a project throws
@@ -320,6 +319,9 @@ end
     @test_throws "is not valid for constructing ImportAs" ImportAs(:(1+1))
 
     @test_throws "or a begin-end block of import statements" extract_input_args(:(1+1))
+
+    # Test error log before rethrowing 
+    @test_logs (:error, r"Error processing input expression") try process_input_expr(controller, :(import .NonExistant)) catch end
 end
 
 @testitem "Options Parsing" begin

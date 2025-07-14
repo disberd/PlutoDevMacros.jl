@@ -186,7 +186,7 @@ end
     # Do the tests
     ss = ServerSession(; options)
     path = abspath(target_dir, "inception_notebook.jl")
-    nb = SessionActions.open(ss, path; run_async=false)
+    nb = SessionActions.open(ss, path; run_async=false);
     # We test that no errors are present
     for cell in nb.cells
         @test noerror(cell)
@@ -198,7 +198,7 @@ end
         end
     end
     # We check that the manifest has been created from the cell, and the messages has been logged in the 3rd cell (which is the one calling @fromparent)
-    @test has_log_msg(nb.cells[3], r"Updating .*Manifest.toml")
+    @test has_log_msg(nb.cells[3], r"Instantiating Manifest")
     # We check that the cell importing SimplePlutoInclude has logs for loading the SingleExtension
     @test has_log_msg(nb.cells[10], "Loading code of extension SingleExtension")
     # We check that the cell importing Example has logs for loading the DualExtension

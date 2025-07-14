@@ -76,6 +76,8 @@ abstract type AbstractEvalController end
     cell_id::Union{Nothing, Base.UUID} = nothing
     "Options to customize loading"
     options::FromPackageOptions = FromPackageOptions()
+    "Time when the controller was created"
+    nloads::Int = -1
 end
 
 # Default constructor

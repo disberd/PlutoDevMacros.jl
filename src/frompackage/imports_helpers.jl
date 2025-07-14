@@ -111,10 +111,10 @@ function process_modpath!(mwn::ModuleWithNames, p::FromPackageController{name}; 
     if root_name in (:ParentModule, :<)
         @assert !isnothing(p.target_module) "You can't import from the Parent Module when the calling file is not a file `included` in the target package."
         m = p.target_module
-        prepend!(path, fullname(m))
+        prepend!(path, _fullname(m))
     elseif root_name in (:PackageModule, :^, name)
         m = get_temp_module(p)
-        prepend!(path, fullname(m))
+        prepend!(path, _fullname(m))
     elseif root_name === :>
         # Deps import
         @assert !is_catchall(mwn) "You can't use the catch-all expression when importing from dependencies"
@@ -128,13 +128,13 @@ function process_modpath!(mwn::ModuleWithNames, p::FromPackageController{name}; 
         imported = mwn.imported
         @assert isempty(imported) "You can't use the catchall import statement `import *` with explicitly imported names"
         m = @something p.target_module get_temp_module(p)
-        prepend!(path, fullname(m))
+        prepend!(path, _fullname(m))
         push!(mwn.imported, ImportAs(:*))
     elseif root_name === :.
         @assert inner || !isnothing(p.target_module) "You can't use relative imports when the calling file is not a file `included` in the target package."
         starting_module = @something p.target_module get_temp_module(p)
         m = extract_nested_module(starting_module, path; first_dot_skipped=true)
-        modname.original = fullname(m) |> collect
+        modname.original = _fullname(m) |> collect
     else
         error("The provided import statement is not a valid input for the @frompackage macro.\nIf you want to import from a dependency of the target package, prepend `>.` in front of the package name, e.g. `using >.BenchmarkTools`.")
     end
@@ -156,7 +156,7 @@ end
 # This function will include all the names of the module as explicit imports in the import statement. It will modify the provided mwn in place and unless usings are excluded, it will also add all the using statements being parsed while evaluating the target module
 function catchall_import_expression!(mwn::ModuleWithNames, p::FromPackageController, m::Module; exclude_usings::Bool)
     @nospecialize
-    mwn.imported = filterednames(p, m) .|> ImportAs
+    mwn.imported = invokelatest(filterednames, p, m) .|> ImportAs
     ex = reconstruct_import_statement(mwn; head=:import)
     # If we exclude using, we simply return the expression
     exclude_usings && return ex
@@ -188,7 +188,8 @@ function complete_imported_names!(mwn::ModuleWithNames, p::FromPackageController
         # Here we do not modify the list of explicitily imported names, as it's better to get an error if you explicitly import something that was already defined in the notebook
         return reconstruct_import_statement(mwn; head=:import)
     end
-    m = extract_nested_module(Main, mwn.modname.original)
+    nested_path = mwn.modname.original
+    m = extract_nested_module(Main, nested_path)
     if catchall
         # We extract all the names, potentially include usings encountered
         return catchall_import_expression!(mwn, p, m; exclude_usings)

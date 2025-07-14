@@ -171,9 +171,23 @@ function extract_target_path(ex, caller_module::Module; calling_file, notebook_l
     return path
 end
 
+# Mostly like fullname, but for modules we generated we always have the path from Main
+function _fullname(m::Module)
+    ref = fullname(m) |> collect
+    rootname = first(ref)
+    rootname === :Main && return ref # This is already fine
+    temp_mod = get_temp_module()
+    invokelatest(isdefined, temp_mod, rootname) && return prepend!(ref, fullname(temp_mod))
+    loaded_mod = get_loaded_modules_mod()
+    invokelatest(isdefined, loaded_mod, rootname) && return prepend!(ref, fullname(loaded_mod))
+    # If we get here, we try looking into the loaded dependencies module
+    return ref
+end
+
 function beautify_package_path(p::FromPackageController)
     @nospecialize
     modpath..., name = fullname(get_temp_module(p))
+    isempty(modpath) && return "" # If the module was loaded as roootmodule, on 1.12 it also becomes it's own parent so we don't have modpath
     modpath = map(enumerate(modpath)) do (i, s)
         Base.isgensym(s) || return String(s)
         return "var\"$s\""
@@ -289,8 +303,10 @@ function get_manifest_file(p::FromPackageController)
         c = Context(; env=EnvCache(proj_file), context_kwargs...)
         resolve = mode === :resolve
         if resolve
+            options.verbose && @info "Resolving Manifest as explicitly requested"
             Pkg.resolve(c)
         else
+            options.verbose && @info "Instantiating Manifest as explicitly requested"
             Pkg.instantiate(c; update_registry=false, allow_build=false, allow_autoprecomp=false)
         end
         joinpath(envdir, "Manifest.toml")
@@ -378,11 +394,15 @@ end
 get_loaded_modules_mod() = get_temp_module(:_LoadedModules_)::Module
 get_direct_deps_mod() = get_temp_module(:_DirectDeps_)::Module
 
-function populate_loaded_modules(; verbose=false)
+function populate_loaded_modules(p::Union{FromPackageController, Nothing} = nothing; verbose=false)
     invokelatest() do
         loaded_modules = get_loaded_modules_mod()
         @lock Base.require_lock begin
             for (id, m) in Base.loaded_modules
+                # We check and eventually skip the target package from the loaded modules
+                if p isa FromPackageController
+                    p.project.name == id.name && p.project.uuid == id.uuid && continue
+                end
                 name = Symbol(id)
                 isdefined(loaded_modules, name) && continue
                 Core.eval(loaded_modules, :(const $name = $m))
@@ -411,7 +431,7 @@ end
 function get_dep_from_loaded_modules(key::Symbol)
     loaded_modules = get_loaded_modules_mod()
     isdefined(loaded_modules, key) || error("The module $key can not be found in the loaded modules.")
-    m = getproperty(loaded_modules, key)::Module
+    m = invokelatest(getproperty, loaded_modules, key)::Module
     return m
 end
 # This is internally calls the previous function, allowing to control which packages can be loaded (by default only direct dependencies and stdlibs are allowed)
@@ -449,10 +469,10 @@ end
 
 # Basically Base.names but ignores names that are not defined in the module and allows to restrict to only exported names (since 1.11 added also public names as out of names). It also defaults `all` and `imported` to true (to be more precise, to the opposite of `only_exported`)
 function _names(m::Module; only_exported=false, all=!only_exported, imported=!only_exported, kwargs...)
-    mod_names = names(m; all, imported, kwargs...)
+    mod_names = invokelatest(names, m; all, imported, kwargs...)
     filter!(mod_names) do nm
-        isdefined(m, nm) || return false
-        only_exported && return Base.isexported(m, nm)
+        invokelatest(isdefined, m, nm) || return false
+        only_exported && return invokelatest(Base.isexported, m, nm)
         return true
     end
 end

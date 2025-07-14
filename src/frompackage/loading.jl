@@ -83,8 +83,10 @@ function try_load_extensions!(p::FromPackageController)
             options.verbose && @info "Loading code of extension $name for package $package_name"
             entry_path = find_ext_path(p.project, name)
             # Set the module to the package module parent, which is a temp module in the Pluto workspace
-            p.current_module = get_temp_module(p) |> parentmodule
+            p.current_module = get_temp_module()
             try
+                # We have to recreate the module of the extension, as ExprSplitter will not recreate it if it's already there and it will still have inside a reference to an old version of the package of interest. Not sure if this was a non-found bug before or it's only a problem with either julia 1.12 or JuliaIntepreterv0.10
+                Core.eval(p.current_module, :(module $(name |> Symbol) end))
                 # Load the extension module inside the package module
                 process_include_expr!(p, entry_path)
                 push!(p.loaded_extensions, name)
@@ -132,7 +134,7 @@ function load_module!(p::FromPackageController{name}; reset=true) where {name}
     maybe_call_init(get_temp_module(p))
     # We populate the loaded modules
     (; verbose) = p.options
-    populate_loaded_modules(;verbose)
+    populate_loaded_modules(p ;verbose)
     # Try loading extensions
     try_load_extensions!(p)
     # We increment the number of loads
@@ -188,6 +190,9 @@ function register_target_as_root(p::FromPackageController)
     @lock Base.require_lock begin
         # Set the uuid of this module with the C API. This is required to get the correct UUID just from the module within `register_root_module`
         ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), m, uuid)
+        @static if VERSION >= v"1.11.99" # We need to also set the module as parent of itself in 1.12
+            ccall(:jl_set_module_parent, Cvoid, (Any, Any), m, m) 
+        end
         # Register this module as root
         logger = verbose ? Logging.current_logger() : Logging.NullLogger()
         Logging.with_logger(logger) do

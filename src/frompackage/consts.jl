@@ -7,3 +7,5 @@ end
 const PREV_CONTROLLER_NAME = Symbol(:_Previous_Controller_, IS_DEV ? "DEV_" : "")
 
 const CURRENT_FROMPACKAGE_CONTROLLER = Ref{FromPackageController}()
+
+const LOADED_TIMES = Dict{Symbol, Int}()

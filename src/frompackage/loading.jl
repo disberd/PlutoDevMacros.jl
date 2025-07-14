@@ -135,6 +135,9 @@ function load_module!(p::FromPackageController{name}; reset=true) where {name}
     populate_loaded_modules(;verbose)
     # Try loading extensions
     try_load_extensions!(p)
+    # We increment the number of loads
+    LOADED_TIMES[name] = get!(LOADED_TIMES, name, 0) + 1
+    p.nloads = LOADED_TIMES[name]
     return p
 end
 

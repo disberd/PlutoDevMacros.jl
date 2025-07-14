@@ -53,7 +53,7 @@ end
 
 function _popup_style()
 #! format: off
-"""
+return """
 fromparent-container {
   height: 20px;
   position: fixed;

@@ -11,6 +11,18 @@
 
 This is a package containing macros/functions to help develop Packages using [Pluto](https://github.com/fonsp/Pluto.jl) notebooks testing/prototyping aids.
 
+## Quickstart
+
+```julia
+using PlutoDevMacros
+
+@fromparent begin
+	import ^:*
+end
+```
+
+## Overview
+
 The major feature contribution of this package is the `@fromparent` macro, which allows to load a local package in Pluto and have its code re-parsed and updated upon manual re-run of the cell containing the macro call.
 This is simlar to a `Revise`-based workflow but provides a few notable advantages:
 - Package code can be re-evaluated correctly without requiring a julia restart even when re-defining structs or constants

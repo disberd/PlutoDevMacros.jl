@@ -11,6 +11,8 @@ The major feature contribution of this package is the @fromparent macro, which a
 To load the parent package of a notebook, i.e. the package that is in the same directory or parent directory of a notebook file use:
 
 ```julia
+using PlutoDevMacros
+
 @fromparent begin
 	import YourPkgModuleName:*
 end
@@ -19,6 +21,8 @@ end
 As a shorthand for importing the package module of the parent package, you can also write `^`. The import then becomes:
 
 ```julia
+using PlutoDevMacros
+
 @fromparent begin
 	import ^:*
 end

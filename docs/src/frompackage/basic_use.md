@@ -37,7 +37,7 @@ The main module of the package identified by the `target` path will be used as t
 
 The second argument to the macro is supposed to be either a single `using`/`import` statement, or multiple statements wrapped inside a `begin...end` block.
 
-These statements are used to select which parts of the loaded Package module have to be evaluated and which of its variables have te be imported within the notebook scope.
+These statements are used to select which parts of the loaded Package module have to be evaluated and which of its variables have to be imported within the notebook scope.
 Most of these import statements are only relevant when called within Pluto, so
 `@frompackage` simply avoid loading the target Package and deletes these import
 statements **in most cases** when called oustide of Pluto. There is a specific

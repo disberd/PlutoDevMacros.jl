@@ -16,9 +16,7 @@ This is a package containing macros/functions to help develop Packages using [Pl
 ```julia
 using PlutoDevMacros
 
-@fromparent begin
-	import ^:*
-end
+@fromparent import *
 ```
 
 ## Overview

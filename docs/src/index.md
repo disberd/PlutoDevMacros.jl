@@ -13,20 +13,10 @@ To load the parent package of a notebook, i.e. the package that is in the same d
 ```julia
 using PlutoDevMacros
 
-@fromparent begin
-	import YourPkgModuleName:*
-end
+@fromparent import *
 ```
 
-As a shorthand for importing the package module of the parent package, you can also write `^`. The import then becomes:
-
-```julia
-using PlutoDevMacros
-
-@fromparent begin
-	import ^:*
-end
-```
+In Pluto you will then see a `Reload` button which can be used to reload the module on any changes.
 
 For more information please refer to the explanations linked below.
 

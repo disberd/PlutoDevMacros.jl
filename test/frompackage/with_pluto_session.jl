@@ -231,7 +231,7 @@ end
     target_dir = joinpath(@__DIR__, "../Issue67")
     # Do the tests
     ss = ServerSession(; options)
-    path = abspath(target_dir, "test_notebook.jl")
+    path = abspath(target_dir, "notebooks/test_notebook.jl")
     nb = SessionActions.open(ss, path; run_async=false);
     # We test that no errors are present
     for cell in nb.cells

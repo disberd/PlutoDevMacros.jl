@@ -223,3 +223,18 @@ end
     # We now try to 
     SessionActions.shutdown(ss, nb)
 end
+
+@testitem "Issue67" begin
+    # Include the setup
+    include(joinpath(@__DIR__, "with_pluto_helpers.jl"))
+    # We test @exclude_using (issue 11)
+    target_dir = joinpath(@__DIR__, "../Issue67")
+    # Do the tests
+    ss = ServerSession(; options)
+    path = abspath(target_dir, "test_notebook.jl")
+    nb = SessionActions.open(ss, path; run_async=false);
+    # We test that no errors are present
+    for cell in nb.cells
+        @test noerror(cell)
+    end
+end

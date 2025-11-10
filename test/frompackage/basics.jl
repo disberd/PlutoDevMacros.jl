@@ -221,10 +221,10 @@ end
     ex = :(using DataFrames)
     @test_throws "The provided import statement is not a valid input" f(ex)
 
-    # Test indirect import
-    ex = f(:(using >.JSON))
-    # We now test that Tricks is loaded in DepsImports
-    @test has_symbol(:json, ex)
+    # Test indirect import, using CodeTracking as an example package
+    ex = f(:(using >.CodeTracking))
+    # We now test that a symbol exported by CodeTracking is explicitly imported in the transformed expression
+    @test has_symbol(:code_expr, ex)
 
     # We test that trying to load a package that is not a dependency throws an error saying so
     @test_throws "The package with name DataFrames could not" f(:(using >.DataFrames))

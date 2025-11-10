@@ -101,6 +101,33 @@ function add_imported_names!(p::FromPackageController, mwn::ModuleWithNames)
     end
 end
 
+# This function will make all root module imports inside of a package code be relative, as it seems that since 1.12 things don't work well with plain root module imports (See issue #67). It returns a potentially modified expression if it contained the root module as first element of the import path
+function make_rootmodule_imports_relative!(ia::ImportAs, rootname::Symbol, submodule_level::Int)
+    if first(ia.original) === rootname
+        for _ in 0:submodule_level # We start from 0 as we always have to add 1 additional .
+            pushfirst!(ia.original, :.)
+        end
+    end
+    return ia
+end
+function make_rootmodule_imports_relative!(mwn::ModuleWithNames, rootname::Symbol, submodule_level::Int)
+    make_rootmodule_imports_relative!(mwn.modname, rootname, submodule_level)
+    return reconstruct_import_statement(mwn)
+end
+function make_rootmodule_imports_relative!(jm::JustModules, rootname::Symbol, submodule_level::Int)
+    foreach(jm.modnames) do ia
+        make_rootmodule_imports_relative!(ia, rootname, submodule_level)
+    end
+    return reconstruct_import_statement(jm)
+end
+# This is the actual outer function being called
+function make_rootmodule_imports_relative(ex::Expr, p::FromPackageController{name}) where {name}
+    @nospecialize
+    sm_level = submodule_level(p)
+    sm_level > 0 || return ex
+    return make_rootmodule_imports_relative!(extract_import_data(ex), name, sm_level)
+end
+
 # This function will update the modname_path to make always start from Main. The inner flag specifies whether the provided import expression was found inside the package/extension code, or inside the code given as input to the macro
 function process_modpath!(mwn::ModuleWithNames, p::FromPackageController{name}; inner::Bool=false) where {name}
     @nospecialize

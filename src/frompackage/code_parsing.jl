@@ -42,6 +42,8 @@ function custom_walk!(p::AbstractEvalController, ex::Expr, ::Val{:using})
         # We are inside an extension code, we do not need to track usings
         handle_extensions_imports(p, ex)
     else # Here we want to track the using expressions
+        # We make all internal imports relative
+        ex = make_rootmodule_imports_relative(ex, p)
         # We add the expression to the set for the current module
         expr_set = get!(Set{Expr}, p.using_expressions, p.current_module)
         push!(expr_set, ex)
@@ -53,7 +55,12 @@ end
 
 function custom_walk!(p::AbstractEvalController, ex::Expr, ::Val{:import})
     @nospecialize
-    return handle_extensions_imports(p, ex)
+    if inside_extension(p)
+        handle_extensions_imports(p, ex)
+    else
+        # We make all internal imports relative
+        ex = make_rootmodule_imports_relative(ex, p)
+    end
 end
 
 # For function and macro calls, we want to be able to specialize on the name of the function being called

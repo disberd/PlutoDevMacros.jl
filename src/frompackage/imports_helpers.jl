@@ -145,7 +145,12 @@ function process_modpath!(mwn::ModuleWithNames, p::FromPackageController{name}; 
     elseif root_name === :>
         # Deps import
         @assert !is_catchall(mwn) "You can't use the catch-all expression when importing from dependencies"
-        m = get_dep_from_loaded_modules(p, first(path); allow_manifest=true)
+        modname = first(path)
+        m = if modname in (:Base, :Core)
+            modname == :Base ? Base : Core
+        else
+            get_dep_from_loaded_modules(p, first(path); allow_manifest=true)
+        end
         # Replace the deps name with the uuid_name symbol from loaded modules
         path[1] = unique_module_name(m)
         # Add the loaded module path

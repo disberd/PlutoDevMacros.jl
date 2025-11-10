@@ -31,6 +31,9 @@ t2 = Issue67.SubModule.construct_thing(1)
 # ╔═╡ f4ffef2c-52e2-4530-b749-749be699e051
 t == t2 || error("They should be equivalent")
 
+# ╔═╡ cb0e6d56-08dd-4861-a035-c4d908f17545
+Issue67.SubModule2.SubSubModule.SubThing == Issue67.SubModule.SubThing || error("Also these should be equivalent!")
+
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
@@ -53,5 +56,6 @@ project_hash = "71853c6197a6a7f222db0f1978c7cb232b87c5ee"
 # ╠═4cad00d8-e685-4fd4-a3b9-969e08d972da
 # ╠═0c0203b0-f88e-44f3-bdf7-c39c4d0dca80
 # ╠═f4ffef2c-52e2-4530-b749-749be699e051
+# ╠═cb0e6d56-08dd-4861-a035-c4d908f17545
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

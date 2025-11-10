@@ -19,6 +19,22 @@ function inside_extension(p::FromPackageController{name}) where {name}
     return false
 end
 
+# Find the nested level of the submodule being evaluated into compared to the root of the package
+function submodule_level(p::FromPackageController{name}) where {name}
+    @nospecialize
+    m = p.current_module
+    nm = nameof(m)
+    level = 0
+    while nm !== name
+        level += 1
+        parent = parentmodule(m)
+        parent == m && error("We reached the root module, and it should not happen")
+        m = parent
+        nm = nameof(m)
+    end
+    return level
+end
+
 #=
 We don't use manual rerun so we just comment this till after we can use it
 ## simulate manual rerun

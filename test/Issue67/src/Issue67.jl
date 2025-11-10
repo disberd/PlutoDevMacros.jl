@@ -13,12 +13,22 @@ end
 
 module SubModule
 
-    using ..Issue67: MyThing
+    struct SubThing end
+
+    using Issue67: MyThing
 
     function construct_thing(a)
         return MyThing(a)
     end
 
+    export SubThing
 end
+
+module SubModule2
+    module SubSubModule    
+        using Issue67.SubModule
+    end
+end
+
 
 end # module Issue67

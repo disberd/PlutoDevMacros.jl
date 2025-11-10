@@ -3,6 +3,9 @@ module TestPackage
 import PlutoDevMacros
 export toplevel_variable
 
+using Base.Threads: Threads, Event
+using Core: MethodTable
+
 const TEST_INIT = Ref{Int}(0)
 
 toplevel_variable = 15

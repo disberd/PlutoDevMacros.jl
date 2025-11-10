@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Fixed
+- Fixed an issue when importing from submodules of the imported package without using relative imports.
+- Fixed an issue when trying to import (either directly or indirectly via `import *`) from Base or Core.
+
 ## [0.9.1] - 2025-07-14
 This is the first version were the CHANGELOG was added
 

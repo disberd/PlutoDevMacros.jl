@@ -14,3 +14,8 @@ This macro allows in fact to load the module of a local package within a running
 - Support for the package extensions functionality added in julia 1.9, which together with the point on notebook environment above simplify the testing and development of extensions on the local package under development.
 
 More details on the synthax and functionality of these macros is given in the following sections.
+
+```@docs
+PlutoDevMacros.FromPackage.@frompackage
+PlutoDevMacros.FromPackage.@fromparent
+```

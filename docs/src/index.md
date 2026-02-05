@@ -20,7 +20,7 @@ In Pluto you will then see a `Reload` button which can be used to reload the mod
 
 For more information please refer to the explanations linked below.
 
-## @frompackage/@fromparent
+## `@frompackage`/`@fromparent`
 ```@contents
 Pages = [
     "frompackage/introduction.md",

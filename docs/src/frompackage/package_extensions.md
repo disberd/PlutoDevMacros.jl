@@ -1,6 +1,6 @@
 # Package Extensions
 
-The `@frompackage` macro supports [package extensions](https://pkgdocs.julialang.org/v1.9/creating-packages/#Conditional-loading-of-code-in-packages-(Extensions)) defined within the packages loaded by the macro within the [`import_block`](../basic_use.html#import_block)
+The `@frompackage` macro supports [package extensions](https://pkgdocs.julialang.org/v1.9/creating-packages/#Conditional-loading-of-code-in-packages-(Extensions)) defined within the packages loaded by the macro within the [`import_block`](@ref)
 
 We specify two possible types of extensions within the context of `@frompackage`:
 - **Direct Extensions**: These are extensions that are defined directly within the local `target` package loaded by the macro
@@ -38,8 +38,8 @@ Check the relevant example notebook located at [test/TestDirectExtension/test_ex
 
 
 ## Indirect Extensions
-Indirect extensions are mostly handled correctly by julia directly, but some issues may arise when a package added to the notebook environment triggers the load of an extension of a package loaded as a [direct dependency](../import_statements.html#Imports-from-Direct-dependencies) within the [`import_block`](../basic_use.html#import_block).
+Indirect extensions are mostly handled correctly by julia directly, but some issues may arise when a package added to the notebook environment triggers the load of an extension of a package loaded as a [direct dependency](@ref "Imports from Direct dependencies") within the [`import_block`](@ref).
 
-If the notebook package triggering the extension is loaded **after** the direct dependency has already been loaded by the `@frompackage` macro, an extension compilation error is generated because the direct dependency is not in the `LOAD_PATH` (See the [Use with PlutoPkg](../use_with_plutopk.md) section)
+If the notebook package triggering the extension is loaded **after** the direct dependency has already been loaded by the `@frompackage` macro, an extension compilation error is generated because the direct dependency is not in the `LOAD_PATH` (See the [Use with PlutoPkg](@ref) section)
 
 The way to solve this issue is to simply reload the local code by using the re-executing the cell containing the macro call. This will trigger a call to `Base.retry_load_extensions`.

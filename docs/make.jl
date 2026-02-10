@@ -1,12 +1,13 @@
 using PlutoDevMacros
 using Documenter
+using Documenter.Remotes: GitHub
 
 DocMeta.setdocmeta!(PlutoDevMacros, :DocTestSetup, :(using PlutoDevMacros); recursive=true)
 
 makedocs(;
-    modules= Module[],
+    modules=[PlutoDevMacros],
     authors="Alberto Mengali <disberd@gmail.com>",
-    repo="https://github.com/disberd/PlutoDevMacros.jl/blob/{commit}{path}#{line}",
+    repo=GitHub("disberd/PlutoDevMacros.jl"),
     sitename="PlutoDevMacros.jl",
     format=Documenter.HTML(;
         prettyurls=get(ENV, "CI", "false") == "true",
@@ -27,6 +28,7 @@ makedocs(;
         "Other Exports" => "other_functions.md",
         # "PlutoHTLCombine" => "htl_combine.md",
     ],
+    warnonly=[:cross_references, :missing_docs]
 )
 
 # This controls whether or not deployment is attempted. It is based on the value

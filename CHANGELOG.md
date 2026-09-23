@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- `@frompackage`/`@fromparent` find versioned manifests (e.g. `Manifest-v1.13.toml`), an explicit `manifest` entry in `Project.toml` and workspace manifests. The lookup uses the same rules as Julia's own package loading.
+
 ## [0.9.2] - 2025-11-10
 
 ### Fixed

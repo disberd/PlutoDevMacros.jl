@@ -321,16 +321,10 @@ function get_manifest_file(p::FromPackageController)
             options.verbose && @info "Instantiating Manifest as explicitly requested"
             Pkg.instantiate(c; update_registry=false, allow_build=false, allow_autoprecomp=false)
         end
-        joinpath(envdir, "Manifest.toml")
+        c.env.manifest_file
     else
-        manifest_file = ""
-        for name in ("Manifest.toml", "JuliaManifest.toml")
-            path = joinpath(envdir, name)
-            if isfile(path)
-                manifest_file = path
-                break
-            end
-        end
+        # Base knows the versioned names (e.g. `Manifest-v1.13.toml`) and their priority
+        manifest_file = something(Base.project_file_manifest_path(proj_file), "")
         #! format: off
         @assert !isempty(manifest_file) "A manifest could not be found at the project's location.
 You have to provide an instantiated environment or set the `manifest` option to `:resolve` or `:instantiate`.

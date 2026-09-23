@@ -59,4 +59,6 @@ The cell loads your package and imports all its names into the notebook. Click
 the reload button in the top-right corner of the notebook after you change the
 code of the package.
 
-<!-- The GIF of the reload button goes here. -->
+```@raw html
+<!-- TODO: add the GIF of the reload button here (docs/src/assets/reload_button.gif). -->
+```

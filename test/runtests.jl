@@ -9,5 +9,6 @@ end
 @testitem "Basics" begin include("basics.jl") end
 include("frompackage/with_pluto_session.jl")
 include("frompackage/pluto_package_extensions.jl")
+include("frompackage/docs_examples.jl")
 
 @run_package_tests verbose=true

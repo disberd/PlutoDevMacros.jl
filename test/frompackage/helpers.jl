@@ -36,9 +36,18 @@ function instantiate_from_path(path::AbstractString; resolve = true)
     Pkg.instantiate(c; update_registry = false, allow_build = false, allow_autoprecomp = false)
 end
 
+# Copy the package at `path` to a temp folder, without its manifests
+function temp_copy_without_manifests(path::AbstractString)
+    target_dir = joinpath(mktempdir(), last(splitpath(path)))
+    cp(path, target_dir)
+    foreach(f -> startswith(f, "Manifest") && rm(joinpath(target_dir, f)), readdir(target_dir))
+    return target_dir
+end
+
+has_manifest(path::AbstractString) = !isnothing(Base.project_file_manifest_path(Base.current_project(path)))
+
 function delete_manifest(path::AbstractString)
-    envdir = dirname(Base.current_project(path))
-    manifest_file = joinpath(envdir, "Manifest.toml")
-    isfile(manifest_file) && rm(manifest_file)
+    manifest_file = Base.project_file_manifest_path(Base.current_project(path))
+    isnothing(manifest_file) || rm(manifest_file)
     return nothing
 end

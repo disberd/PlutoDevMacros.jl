@@ -68,34 +68,88 @@ function _combined(ex, target, calling_file, caller_module; macroname, extra_arg
 end
 
 """
-	@frompackage target import_block
+    @frompackage target import_block [option = value ...]
 
-This macro takes a local Package (derived from the `target` path, which can be
-an `AbstractString` or a `@raw_str`), loads it as a submodule of the current
-Pluto workspace and then process the various import/using statements inside
-`import_block` to extract varables/functions from the local Package into the
-notebook workspace.
+Load the target package into the Pluto notebook and run the import statements
+of `import_block` against it.
 
-Its main use is allowing to load a local package under development within a
-running Pluto notebook in order to facilitate prototyping and testing.
+The target package is the package of the first `Project.toml` in the folder of
+`target` or in one of its parent folders. `target` is a path to a file or a
+folder. A relative path starts from the folder of the notebook file. Outside of
+a notebook, `target` must be a `String` or a `raw"..."` string. Inside a
+notebook, `target` can be any expression that returns a path, for example
+`@__FILE__`.
 
-The following julia code inside a Pluto notebook cell:
+Each call parses and evaluates the code of the target package again, as a
+submodule of the notebook workspace. The macro also shows a reload button in
+the cell output. Click it to load the target package again after you change
+its code.
+
+Use [`@fromparent`](@ref) when the notebook file is inside the folder of the
+target package. `@fromparent import_block` is the short form of
+`@frompackage @__FILE__ import_block`.
+
+This cell loads the package in the folder `path/to/MyPkg`, imports all its
+names, and loads `LocalDependency`, a dependency of `MyPkg`:
+
 ```julia
-@frompackage local_package_path begin
-	import ^: *
-	using >.LocalDependency
+@frompackage "path/to/MyPkg" begin
+    import ^: *
+    using >.LocalDependency
 end
 ```
-takes the main module definition code for the package located at
-`local_package_path`, creates the corresponding module in the notebook workspace
-and imports all of the names defined within (That is what the `import ^:*`
-statement does).
 
-Additionally, it loads the package called `LocalDependency` (must be a
-dependency of the local package) as if the `using LocalDependency` code was used
-within the notebook, but without adding `LocalDependency` to the notebook environment.
+`LocalDependency` does not have to be in the notebook environment.
 
-See the package [documentation](https://disberd.github.io/PlutoDevMacros.jl/dev/frompackage/introduction/#Introduction) for more details.
+# Import syntax
+
+`import_block` is one `import` or `using` statement, or a `begin ... end` block
+of statements. The first name of the module path selects the source module:
+
+| Syntax | Source | Example |
+|:-------|:-------|:--------|
+| `PackageModule` or `^` | The top module of the target package. | `import ^: func` |
+| The name of the target package | The top module of the target package. | `using MyPkg.SubModule` |
+| `ParentModule` or `<` | The module that `include`s the `target` file. | `import <: func` |
+| `.` (relative import) | A path relative to the module that `include`s the `target` file. | `import ..Sibling: func` |
+| `>.` | A dependency of the target package, direct or indirect. | `using >.JSON` |
+| `*` (catch-all) | `ParentModule` if the target package `include`s the `target` file, otherwise `PackageModule`. | `import *` |
+
+Some rules apply to these statements:
+
+- `ParentModule`, `<`, and relative imports work only when the target package
+  `include`s the `target` file.
+- A catch-all import `import Module: *` imports all the names that `Module`
+  defines or imports. It also imports the names that `using` statements inside
+  `Module` bring into scope. You cannot use `*` with `>.` or with a list of
+  other names.
+- Put `@exclude_using` before a catch-all import to leave out the names from
+  `using` statements, for example `@exclude_using import *`.
+- A statement without a list of names (`import *`, `using ^.SubModule`, or
+  `import ^.SubModule`) does not import a name that the notebook defines
+  already. The macro skips these names and does not show a warning. A statement
+  with a list of names, as `import ^: func`, imports all the names in the list.
+- One statement can contain more than one module, for example
+  `using >.JSON, >.Markdown`.
+
+Outside of Pluto, the macro keeps only relative imports without `*` and
+`>.` imports of direct dependencies. It removes all other statements. For
+example, `import >.JSON` becomes `import JSON` when `JSON` is a direct
+dependency of the target package.
+
+# Settings
+
+Put settings after `import_block` in the form `name = value`:
+
+```julia
+@fromparent import * verbose = true manifest = :instantiate
+```
+
+| Setting | Default | Effect |
+|:--------|:--------|:-------|
+| `manifest::Symbol` | `:none` | `:none` uses the manifest in the environment of the target package and gives an error if there is no manifest. `:resolve` runs `Pkg.resolve` on that environment first. `:instantiate` runs `Pkg.instantiate` on it first. |
+| `rootmodule::Bool` | `false` | `true` registers the loaded module as a root module, so it behaves more like a module loaded with `using MyPkg`. This setting uses Julia internals. |
+| `verbose::Bool` | `false` | `true` shows log messages about the load steps, for example changes to `LOAD_PATH` and loaded extensions. |
 
 See also: [`@fromparent`](@ref)
 """
@@ -106,18 +160,19 @@ macro frompackage(target::Union{AbstractString,Expr,Symbol}, ex, extra_args...)
 end
 
 """
-This macro is equivalent to [`@frompackage`](@ref) but assumes the calling file as the `target` argument. So the code 
-```
+    @fromparent import_block [option = value ...]
+
+Short form of [`@frompackage`](@ref) that uses the calling file as `target`.
+These two calls are equal:
+
+```julia
 @fromparent import_block
-``` 
-is equivalent to
-```
 @frompackage @__FILE__ import_block
 ```
 
-Refer to the [`@frompackage`](@ref) docstring and the package
-[documentation](https://disberd.github.io/PlutoDevMacros.jl/dev/frompackage/introduction/#Introduction)
-for understanding its use.
+The target package is the package that contains the notebook file. The
+[`@frompackage`](@ref) docstring describes the import syntax and the settings.
+
 See also: [`@addmethod`](@ref)
 """
 macro fromparent(ex, extra_args...)

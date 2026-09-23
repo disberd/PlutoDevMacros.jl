@@ -10,11 +10,13 @@ on:
 jobs:
   build:
     permissions:
-      contents: write
+      contents: write # push to gh-pages
+      pull-requests: read # Documenter checks if a PR comes from a fork
+      statuses: write # Documenter sets the preview commit status
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: julia-actions/setup-julia@v2
+      - uses: julia-actions/setup-julia@v3
         with:
           version: '1'
       - name: Install dependencies
@@ -24,3 +26,19 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # If authenticating with GitHub Actions token
           DOCUMENTER_KEY: ${{ secrets.DOCUMENTER_KEY }} # If authenticating with SSH deploy key
         run: julia --color=yes --project=docs/ docs/make.jl
+
+  preview-comment:
+    needs: build
+    # Documenter does not deploy previews for pull requests from forks.
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    permissions:
+      pull-requests: write
+    runs-on: ubuntu-latest
+    steps:
+      - uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
+        with:
+          header: docs-preview
+          message: |
+            Docs preview for this PR: https://disberd.github.io/PlutoDevMacros.jl/previews/PR${{ github.event.number }}/
+
+            GitHub Pages can take a few minutes to show the latest build.

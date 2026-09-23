@@ -1,9 +1,7 @@
 @testitem "Project/Manifest" begin
     include(joinpath(@__DIR__, "basics_helpers.jl"))
-    # We test parsing the project of the TestUsingNames folder
-    target_dir = abspath(@__DIR__, "../TestUsingNames/")
-    # We delete the manifest if it exists
-    delete_manifest(target_dir)
+    # We test parsing the project of a copy of the TestUsingNames folder without manifests
+    target_dir = temp_copy_without_manifests(abspath(@__DIR__, "../TestUsingNames/"))
     # We test that by default it throws since there is no manifest
     controller = FromPackageController(target_dir, @__MODULE__; cell_id = Base.UUID(0))
     @test controller.options.manifest ∉ (:instantiate, :resolve)
@@ -20,12 +18,12 @@
     controller.options.verbose = true
     controller.options.manifest = :resolve
     populate_manifest_deps!(controller)
-    @test isfile(joinpath(target_dir, "Manifest.toml"))
+    @test has_manifest(target_dir)
     delete_manifest(target_dir)
-    @test !isfile(joinpath(target_dir, "Manifest.toml"))
+    @test !has_manifest(target_dir)
     controller.options.manifest = :instantiate
     populate_manifest_deps!(controller)
-    @test isfile(joinpath(target_dir, "Manifest.toml"))
+    @test has_manifest(target_dir)
 
     md = controller.manifest_deps
 
@@ -36,6 +34,28 @@
 
     # We test that pointing to a folder without a project throws
     @test_throws "No project was found" FromPackageController(homedir(), @__MODULE__)
+end
+
+@testitem "Versioned Manifest" begin
+    include(joinpath(@__DIR__, "basics_helpers.jl"))
+    # We make a copy of TestUsingNames whose only manifest is `Manifest-vX.Y.toml`
+    target_dir = temp_copy_without_manifests(abspath(@__DIR__, "../TestUsingNames/"))
+    instantiate_from_path(target_dir)
+    versioned_name = "Manifest-v$(VERSION.major).$(VERSION.minor).toml"
+    mv(joinpath(target_dir, "Manifest.toml"), joinpath(target_dir, versioned_name))
+
+    # We call `@fromparent` as if it was called from a Pluto cell of `src/test1.jl`
+    caller_module = Core.eval(@__MODULE__, :(module $(gensym(:VersionedManifest)) end))
+    cell_file = joinpath(target_dir, "src", "test1.jl") * "#==#$(Base.UUID(0))"
+    ex = Expr(:macrocall, Symbol("@fromparent"), LineNumberNode(1, Symbol(cell_file)), :(import >.Example))
+    Core.eval(caller_module, :(using PlutoDevMacros))
+    # Inside Pluto, errors are returned as a `CapturedException` instead of thrown
+    @test !(Core.eval(caller_module, ex) isa CapturedException)
+
+    controller = getproperty(caller_module, PREV_CONTROLLER_NAME)
+    @test get_manifest_file(controller) == joinpath(target_dir, versioned_name)
+    @test "Example" in values(controller.manifest_deps)
+    @test isdefined(caller_module, :Example)
 end
 
 @testitem "extract_target_path" begin
@@ -74,7 +94,7 @@ end
 
     f_compare(ex_out, ex_in) = compare_exprs(ex_out, process_outside_pluto(controller, ex_in))
 
-    # We test some some specific imports
+    # We test some specific imports
     ex_out = quote
         import BenchmarkTools as BT
     end

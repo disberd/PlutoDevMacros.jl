@@ -20,6 +20,9 @@ jobs:
   test:
     name: Julia ${{ matrix.version }} - ${{ matrix.os }} - ${{ github.event_name }}
     runs-on: ${{ matrix.os }}
+    env:
+      # Pkg 1.13 auto-GC deletes packages of the test environments at once
+      JULIA_PKG_GC_AUTO: false
     strategy:
       fail-fast: false
       matrix:

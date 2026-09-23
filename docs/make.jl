@@ -32,9 +32,10 @@ makedocs(;
 )
 
 # This controls whether or not deployment is attempted. It is based on the value
-# of the `SHOULD_DEPLOY` ENV variable, which defaults to the `CI` ENV variables or
-# false if not present.
-should_deploy = get(ENV,"SHOULD_DEPLOY", get(ENV, "CI", "") === "true")
+# of the `SHOULD_DEPLOY` ENV variable, which defaults to the `CI` ENV variable or
+# false if not present. CI sets `CI=true`, also on pull request builds, which
+# `deploydocs` needs to push the preview.
+should_deploy = get(ENV, "SHOULD_DEPLOY", get(ENV, "CI", "false")) == "true"
 
 if should_deploy
     @info "Deploying"

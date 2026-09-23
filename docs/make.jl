@@ -1,5 +1,6 @@
 using PlutoDevMacros
 using Documenter
+using DocumenterLandingPage
 using Documenter.Remotes: GitHub
 
 DocMeta.setdocmeta!(PlutoDevMacros, :DocTestSetup, :(using PlutoDevMacros); recursive=true)
@@ -14,21 +15,33 @@ makedocs(;
         edit_link="master",
         assets=String[],
     ),
+    plugins=[LandingPage()],
+    # `is_notebook_local` has a docstring but is internal, so check only exported names.
+    checkdocs=:exports,
     pages=[
         "Home" => "index.md",
-        "@frompackage/@fromparent" => Any[
-            "Introduction" => "frompackage/introduction.md",
-            "Basic Use" => "frompackage/basic_use.md",
-            "Supported import statements" => "frompackage/import_statements.md",
-            "Skipping Package Parts" => "frompackage/skipping_parts.md",
-            "Use with PlutoPkg" => "frompackage/use_with_plutopkg.md",
-            "Package Extensions" => "frompackage/package_extensions.md",
-            "Custom Settings" => "frompackage/custom_settings.md",
+        "Tutorials" => [
+            "Develop your first package in a notebook" => "tutorials/first_package.md",
+            "Develop a package extension in a notebook" => "tutorials/package_extension.md",
         ],
-        "Other Exports" => "other_functions.md",
-        # "PlutoHTLCombine" => "htl_combine.md",
+        "How-to guides" => [
+            "Import specific names and submodules" => "howto/import_names.md",
+            "Use packages that only the notebook needs" => "howto/notebook_only_packages.md",
+            "Instantiate the environment" => "howto/instantiate_environment.md",
+            "Load as a root module" => "howto/root_module.md",
+            "Find loading problems" => "howto/loading_problems.md",
+            "Run code only inside or outside the notebook" => "howto/notebook_only_code.md",
+            "Add methods from the notebook" => "howto/addmethod.md",
+        ],
+        "Reference" => [
+            "@frompackage and @fromparent" => "reference/frompackage.md",
+            "Other exports" => "reference/other_exports.md",
+        ],
+        "Explanation" => [
+            "How @frompackage loads the target package" => "explanation/loading.md",
+            "How package extensions load" => "explanation/extensions.md",
+        ],
     ],
-    warnonly=[:cross_references, :missing_docs]
 )
 
 # This controls whether or not deployment is attempted. It is based on the value

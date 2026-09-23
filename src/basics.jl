@@ -36,7 +36,7 @@ end
 	plutodump(x::Union{Symbol, Expr}; maxdepth = 8)
 Dumps a symbol or expression directly as text on the pluto cell output instead of in the stdout
 
-See also: [`Meta.dump`](@ref)
+See also: `Meta.dump`
 """
 function plutodump(x::Union{Symbol, Expr}; maxdepth = 8)
 	i = IOBuffer()
@@ -68,23 +68,23 @@ macro current_pluto_notebook_file()
 end
 
 """
-	only_in_nb(ex)
+	@only_in_nb ex
 Executes the expression `ex` only if the macro is called from a running Pluto instance and ran directly from the source notebook file.
 
 This is more strict than `PlutoHooks.@skip_as_script` as including a notebook with `@skip_as_script ex` from another notebook would still execute `ex`.\\
 `@only_in_nb ex` instead only evaluates `ex` if the calling notebook is the original source notebook file.
 
-See also: [`@only_out_nb`](@ref). [`PlutoHooks.@skip_as_script`](@ref).
+See also: [`@only_out_nb`](@ref), `PlutoHooks.@skip_as_script`.
 """
 macro only_in_nb(ex) 
 	is_notebook_local(String(__source__.file::Symbol)) ? esc(ex) : nothing 
 end
 
 """
-	only_out_nb(ex)
+	@only_out_nb ex
 Opposite of `@only_in_nb`
 
-See also: [`@only_in_nb`](@ref). [`PlutoHooks.@only_as_script`](@ref).
+See also: [`@only_in_nb`](@ref), `PlutoHooks.@only_as_script`.
 """
 macro only_out_nb(ex) 
 	is_notebook_local(String(__source__.file::Symbol)) ? nothing : esc(ex) 

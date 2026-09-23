@@ -1,14 +1,53 @@
-# PlutoDevMacros
+```@raw html
+---
+layout: home
 
-Documentation for [PlutoDevMacros](https://github.com/disberd/PlutoDevMacros.jl).
+hero:
+  name: PlutoDevMacros.jl
+  text: Develop a Julia package from a Pluto notebook
+  tagline: Load the code of your package into a notebook, change it, and click reload to test the change.
+  actions:
+    - theme: brand
+      text: First tutorial
+      link: /tutorials/first_package/
+    - theme: alt
+      text: Reference
+      link: /reference/frompackage/
+    - theme: alt
+      text: View on GitHub
+      link: https://github.com/disberd/PlutoDevMacros.jl
 
-This is a package containing macros/functions to help develop Packages using [Pluto](https://github.com/fonsp/Pluto.jl) notebooks testing/prototyping aids.
-
-The major feature contribution of this package is the @fromparent macro, which allows to load a local package in Pluto and have its code re-parsed and updated upon manual re-run of the cell containing the macro call.
+features:
+  - icon: 🔄
+    title: Reload button
+    details: "`@fromparent` loads the target package and shows a button that loads it again after you change the code."
+    link: /tutorials/first_package/
+  - icon: 📦
+    title: Import syntax
+    details: Import all names with `import *`, or import specific names, submodules, and dependencies.
+    link: /reference/frompackage/
+  - icon: 🧩
+    title: Package extensions
+    details: The extensions of the target package load when the notebook loads their trigger packages.
+    link: /tutorials/package_extension/
+  - icon: ⚙️
+    title: Settings
+    details: Resolve or instantiate the environment of the target package, and show log messages about each load step.
+    link: /reference/frompackage/
+  - icon: 📓
+    title: Notebook-only code
+    details: "`@only_in_nb` and `@only_out_nb` run code only inside or only outside the notebook."
+    link: /reference/other_exports/
+  - icon: ➕
+    title: Add methods
+    details: "`@addmethod` adds methods to functions of the target package from a notebook cell."
+    link: /reference/other_exports/
+---
+```
 
 ## Quickstart
 
-To load the parent package of a notebook, i.e. the package that is in the same directory or parent directory of a notebook file use:
+Put a Pluto notebook in the folder of your package and run this code in a cell:
 
 ```julia
 using PlutoDevMacros
@@ -16,19 +55,8 @@ using PlutoDevMacros
 @fromparent import *
 ```
 
-In Pluto you will then see a `Reload` button which can be used to reload the module on any changes.
+The cell loads your package and imports all its names into the notebook. Click
+the reload button in the top-right corner of the notebook after you change the
+code of the package.
 
-For more information please refer to the explanations linked below.
-
-## `@frompackage`/`@fromparent`
-```@contents
-Pages = [
-    "frompackage/introduction.md",
-    "frompackage/basic_use.md",
-    "frompackage/import_statements.md",
-    "frompackage/skipping_parts.md",
-    "frompackage/use_with_plutopkg.md",
-    "frompackage/package_extensions.md",
-]
-Depth = 1
-```
+<!-- The GIF of the reload button goes here. -->

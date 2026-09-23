@@ -1,4 +1,4 @@
-import Base: stacktrace, catch_backtrace
+import Base: catch_backtrace
 
 function wrap_parse_error(e)
     # Just return the error if we are not in 1.10 or is not a ParseError
@@ -58,7 +58,8 @@ function _combined(ex, target, calling_file, caller_module; macroname, extra_arg
         @info html_reload_button(cell_id; name = macroname, err=true)
         # Wrap ParseError in LoadError (see https://github.com/disberd/PlutoDevMacros.jl/issues/30)
         we = wrap_parse_error(e)
-        bt = stacktrace(catch_backtrace())
+        # `CapturedException` expects the raw backtrace; Julia 1.13 errors on processed `StackFrame`s
+        bt = catch_backtrace()
         # Outputting the CaptureException as last statement allows pretty printing of errors inside Pluto
         push!(out.args, :(CapturedException($we, $bt)))
         out

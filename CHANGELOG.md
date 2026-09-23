@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - `@frompackage`/`@fromparent` find versioned manifests (e.g. `Manifest-v1.13.toml`), an explicit `manifest` entry in `Project.toml` and workspace manifests. The lookup uses the same rules as Julia's own package loading.
 
+### Fixed
+- Errors from `@frompackage`/`@fromparent` inside Pluto show correctly on Julia 1.13. Before this fix, a `MethodError` in `CapturedException` hid the real error.
+
 ## [0.9.2] - 2025-11-10
 
 ### Fixed

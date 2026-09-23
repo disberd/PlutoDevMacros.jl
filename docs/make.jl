@@ -42,6 +42,10 @@ if should_deploy
 
 deploydocs(
     repo = "github.com/disberd/PlutoDevMacros.jl.git",
+    devbranch = "master",
+    # Pull request builds go to previews/PR<number>/. Documenter skips this
+    # for pull requests from forks.
+    push_preview = true,
 )
 
 end

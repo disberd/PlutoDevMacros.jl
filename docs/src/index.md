@@ -37,11 +37,11 @@ features:
   - icon: 📓
     title: Notebook-only code
     details: "`@only_in_nb` and `@only_out_nb` run code only inside or only outside the notebook."
-    link: /reference/other_exports/
+    link: /howto/notebook_only_code/
   - icon: ➕
     title: Add methods
     details: "`@addmethod` adds methods to functions of the target package from a notebook cell."
-    link: /reference/other_exports/
+    link: /howto/addmethod/
 ---
 ```
 

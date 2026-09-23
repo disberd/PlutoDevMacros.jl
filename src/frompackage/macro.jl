@@ -82,7 +82,7 @@ notebook, `target` can be any expression that returns a path, for example
 
 Each call parses and evaluates the code of the target package again, as a
 submodule of the notebook workspace. The macro also shows a reload button in
-the cell output. Click it to load the target package again after you change
+the top-right corner of the notebook. Click it to load the target package again after you change
 its code.
 
 Use [`@fromparent`](@ref) when the notebook file is inside the folder of the

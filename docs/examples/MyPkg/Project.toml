@@ -1,0 +1,10 @@
+name = "MyPkg"
+uuid = "b7aa91dd-3e4a-4898-bac1-d5d59ccd13a8"
+version = "0.1.0"
+authors = ["Alberto Mengali <disberd@gmail.com>"]
+
+[weakdeps]
+Example = "7876af07-990d-54b4-ab0e-23690620f79a"
+
+[extensions]
+MyPkgExampleExt = "Example"

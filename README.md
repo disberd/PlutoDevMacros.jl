@@ -6,12 +6,15 @@
 [![Coverage](https://codecov.io/gh/disberd/PlutoDevMacros.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/disberd/PlutoDevMacros.jl)
 [![Aqua QA](https://raw.githubusercontent.com/JuliaTesting/Aqua.jl/master/badge.svg)](https://github.com/JuliaTesting/Aqua.jl)
 
-> [!WARNING]
-> This package went through a significant refactoring for 0.9.0, the documentation is still outdated and will be updated (together with the README) once I get some time to do so. For the time being, you can check the presentation I gave at JuliaCon2024 [here](https://www.youtube.com/watch?v=eHRURW6Wfpc) and the corresponding slides [in this repo](https://github.com/disberd/JuliaCon2024). Despite this, a lot of the documentation is still applicable and can still give a decent idea on the purpose and useage of this package.
-
-This is a package containing macros/functions to help develop Packages using [Pluto](https://github.com/fonsp/Pluto.jl) notebooks testing/prototyping aids.
+Develop a Julia package from a [Pluto](https://github.com/fonsp/Pluto.jl)
+notebook. Load the code of your package into the notebook, change it, and
+click a button to load it again. The cells that use the package then run
+again with the new code.
 
 ## Quickstart
+
+Put a Pluto notebook in the folder of your package and run this code in a
+cell:
 
 ```julia
 using PlutoDevMacros
@@ -19,13 +22,32 @@ using PlutoDevMacros
 @fromparent import *
 ```
 
-## Overview
+The cell loads your package and imports all its names into the notebook.
+After you change the code of the package, click the reload button in the
+top-right corner of the notebook.
 
-The major feature contribution of this package is the `@fromparent` macro, which allows to load a local package in Pluto and have its code re-parsed and updated upon manual re-run of the cell containing the macro call.
-This is simlar to a `Revise`-based workflow but provides a few notable advantages:
-- Package code can be re-evaluated correctly without requiring a julia restart even when re-defining structs or constants
-- Local code reload, triggered manually via a floating button in the Pluto notebook, automatically triggers execution of all dependent cells, simplifying the process of testing changes of code on specific runtime paths
-- Possibilty of adding packages to the notebook environment which are not dependencies of the local package, very useful for testing plotting or benchmarking of the local package code without having to put the related packages in either the global or package-local environment
-- Support for the package extensions functionality added in julia 1.9, which together with the point on notebook environment above simplify the testing and development of extensions on the local package under development.
+The package needs a manifest file. For a new package, run `Pkg.instantiate()`
+in its environment first, or use `@fromparent import * manifest = :instantiate`.
 
-See the [documentation](https://disberd.github.io/PlutoDevMacros.jl/) for more details.
+## Features
+
+- A reload button that loads the package again, also after a change to a
+  struct.
+  See the [first tutorial](https://disberd.github.io/PlutoDevMacros.jl/dev/tutorials/first_package/).
+- Import syntax for specific names, submodules, and dependencies of the
+  package.
+  See [Import specific names and submodules](https://disberd.github.io/PlutoDevMacros.jl/dev/howto/import_names/).
+- Packages that only the notebook uses, from the Pluto package manager.
+  See [Use packages that only the notebook needs](https://disberd.github.io/PlutoDevMacros.jl/dev/howto/notebook_only_packages/).
+- Package extensions that load when the notebook loads their trigger
+  packages.
+  See the [extension tutorial](https://disberd.github.io/PlutoDevMacros.jl/dev/tutorials/package_extension/).
+- `@only_in_nb`, `@only_out_nb`, and `@addmethod` for notebooks that are
+  also package code.
+  See the [reference of the other exports](https://disberd.github.io/PlutoDevMacros.jl/dev/reference/other_exports/).
+
+The [documentation](https://disberd.github.io/PlutoDevMacros.jl/) has
+tutorials, how-to guides, the reference, and explanations.
+
+Talk: [PlutoDevMacros at JuliaCon 2024](https://www.youtube.com/watch?v=eHRURW6Wfpc)
+([slides](https://github.com/disberd/JuliaCon2024)).
